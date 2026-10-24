@@ -1,3 +1,5 @@
+import { launchExpedition } from '../region/Exploration.js';
+import { sendGift } from '../diplomacy/Diplomacy.js';
 import { leaveJob } from '../economy/Employment.js';
 import { needsCourthouse } from '../law/Courts.js';
 import { byId } from '../core/EntityRegistry.js';
@@ -19,6 +21,18 @@ const fail = (reason) => ({ ok: false, message: reason });
 const done = (message) => ({ ok: true, message });
 
 export const COUNCIL_ACTIONS = {
+  /** Pay for a scouting party to map the region. */
+  scout(state) {
+    const res = launchExpedition(state, { reason: 'the council, at your request,' });
+    return res.ok ? done(res.message) : fail(res.message);
+  },
+
+  /** Send a diplomatic gift to a kingdom. */
+  gift(state, kingdomId) {
+    const res = sendGift(state, kingdomId);
+    return res.ok ? done(res.message) : fail(res.message);
+  },
+
   /** Buy food from local sellers and hand it to the hungriest citizens. */
   foodAid(state) {
     const hungry = [...state.citizens].sort((a, b) => a.needs.hunger - b.needs.hunger).slice(0, COUNCIL.foodAidUnits);

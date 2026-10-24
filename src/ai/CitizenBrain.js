@@ -38,7 +38,7 @@ import { recordTrip, crowdFactor, ensureNavigation } from '../navigation/Traffic
 const clamp = (v) => Math.max(0, Math.min(100, v));
 
 const LABELS = {
-  eat_own: 'Eating', steal: 'Stealing food', eat_stock: 'Eating from stock', buy_food: 'Buying food', sleep: 'Sleeping', work: 'Working', build: 'Building',
+  eat_own: 'Eating', steal: 'Stealing food', court: 'At court', see_caravan: 'Overseeing a caravan', eat_stock: 'Eating from stock', buy_food: 'Buying food', sleep: 'Sleeping', work: 'Working', build: 'Building',
   seek_job: 'Looking for work', forage: 'Foraging in the forest', sell_goods: 'Selling goods', socialize: 'Socialising',
   tavern: 'At the tavern', help: 'Helping a neighbour', festival: 'Enjoying the festival', buy_plot: 'Buying property',
   start_project: 'Starting a building project', explore: 'Wandering', idle: 'Taking a moment',
@@ -224,6 +224,11 @@ function begin(state, c, k) {
       const b = businessById(state, k.businessId);
       return activity('buy_food', `Buying ${GOODS[k.good].label.toLowerCase()} at ${b.name}`, businessLocation(state, b), 2, { businessId: b.id, good: k.good, payer: k.payer });
     }
+    case 'court': {
+      const court = state.plots.find((p) => p.building?.type === 'courthouse') ?? state.plots.find((p) => p.building?.type === 'townhall' || p.building?.type === 'hall');
+      return activity('court', state.law?.judgeId === c.id ? 'Hearing cases' : 'At court', frontOf(court, range(state, -1.6, 1.6), range(state, 0.2, 1)), 8, { caseId: k.caseId });
+    }
+    case 'see_caravan': return activity('see_caravan', 'Overseeing the caravan', { x: 9 + range(state, -1, 1), z: 4.5 + range(state, -0.5, 0.5) }, 6, { caravanId: k.caravanId });
     case 'steal': {
       const b = businessById(state, k.businessId);
       return b ? activity('steal', `Hanging about ${b.name}`, businessLocation(state, b), 2, { businessId: b.id, good: k.good }) : null;

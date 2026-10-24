@@ -86,7 +86,7 @@ export function makeVillager(c, stage = 'adult') {
 }
 
 const WORKING = new Set(['work', 'build', 'forage']);
-const SOCIAL = new Set(['socialize', 'tavern', 'festival', 'help']);
+const SOCIAL = new Set(['socialize', 'tavern', 'festival', 'help', 'court', 'see_caravan']);
 
 export class Villagers {
   constructor(scene) {

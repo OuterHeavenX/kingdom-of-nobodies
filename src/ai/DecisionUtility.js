@@ -1,3 +1,4 @@
+import { courtToday } from '../law/Courts.js';
 import { attendanceScore } from '../culture/Festivals.js';
 import { byId } from '../core/EntityRegistry.js';
 import { TIME, GOODS, FOOD_GOODS, BUILD, LIFE } from '../core/Config.js';
@@ -252,6 +253,15 @@ export function generateCandidates(state, c, plan) {
       out.push(candidate('govern', 57 + trait(c, 'hardworking') * 8, [[`as ${gov.title} the village's business needs me`, 57]]));
     }
   }
+
+  // --- Court and caravans ----------------------------------------------------
+  const hearing = !minor && h >= 8 && h < 11 ? courtToday(state, c) : null;
+  if (hearing && c.activity?.kind !== 'court') {
+    const role = state.law.judgeId === c.id ? 'I sit as judge today' : `my case against ${hearing.plaintiff.id === c.id || hearing.plaintiff.ownerId === c.id ? hearing.defendant.name : hearing.plaintiff.name} is heard today`;
+    out.push(candidate('court', 88, [[role, 88]], { caseId: hearing.id }));
+  }
+  const loading = !minor && (state.trade?.caravans ?? []).find((cv) => cv.ownerId === c.id && cv.at === 'hearth' && (cv.status === 'LOADING' || cv.status === 'UNLOADING'));
+  if (loading) out.push(candidate('see_caravan', 55 + trait(c, 'hardworking') * 10, [[`my caravan is ${loading.status === 'LOADING' ? 'loading' : 'unloading'} in the square`, 55]], { caravanId: loading.id }));
 
   // --- Festival ------------------------------------------------------------
   if (state.council.festivalUntil > state.tick && !isNight(state)) {

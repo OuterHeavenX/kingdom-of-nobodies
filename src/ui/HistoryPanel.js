@@ -6,8 +6,8 @@ import { lifespanLabel } from '../history/Archive.js';
 import { person } from '../citizens/FamilyTree.js';
 import { esc, clock, capital } from './util.js';
 
-const ICONS = { citizen: '👤', business: '🏪', property: '📍', economy: '🪙', relationships: '💞', construction: '🔨', council: '⚖️' };
-const MODES = [['eras', 'Eras & founders'], ['timeline', 'Timeline'], ['people', 'The departed']];
+const ICONS = { citizen: '👤', business: '🏪', property: '📍', economy: '🪙', relationships: '💞', construction: '🔨', council: '⚖️', region: '🗺️', trade: '🐂', diplomacy: '🤝', law: '📜', culture: '🎉' };
+const MODES = [['eras', 'Eras'], ['timeline', 'Timeline'], ['people', 'Departed'], ['culture', 'Culture']];
 
 function modeChips(mode) {
   return `<div class="segmented" style="margin-bottom:4px">${MODES.map(([k, l]) => `<button class="${k === mode ? 'active' : ''}" data-act="hist-mode" data-id="${k}">${l}</button>`).join('')}</div>`;
@@ -17,6 +17,7 @@ export function historyPanel(sim, view) {
   const mode = view.historyMode ?? 'eras';
   if (mode === 'timeline') return timeline(sim, view);
   if (mode === 'people') return departed(sim, view);
+  if (mode === 'culture') return culture(sim);
   return eras(sim);
 }
 
@@ -110,4 +111,17 @@ export function biographyView(sim, id) {
     ${b.living ? `<button class="btn" data-act="citizen" data-id="${b.id}">👤 Their life now</button>` : ''}
   </div>`;
   return { title: b.name, html };
+}
+
+function culture(sim) {
+  const s = sim.state;
+  const c = s.culture;
+  const f = c.current;
+  const now = f && f.phase !== 'DONE' && f.phase !== 'CANCELLED' ? `<div class="card festival-card"><h3>${esc(f.name)}</h3><p>${f.phase === 'ACTIVE' ? `Under way in the square: ${f.attendees.length} villagers so far.` : `Being prepared for ${esc(dateLabel(f.day))}: ${Math.round(f.budget)} coins budgeted${f.sponsor ? `, ${f.sponsor.gift} from the ${esc(f.sponsor.house)} family` : ''}.`}</p>${f.traditions.length ? `<p class="muted">Traditions: ${esc(f.traditions.join(', '))}</p>` : ''}</div>` : '';
+  const traditions = c.traditions.map((t) => `<div class="belief"><strong>${esc(t.name)}</strong>${t.active ? '' : ' <span class="muted">(lapsed)</span>'} · since Year ${t.foundedYear}${t.observed ? `, kept ${t.observed} time${t.observed > 1 ? 's' : ''}` : ''}<br><span class="muted">${esc(t.origin)}</span></div>`).join('');
+  const history = [...c.history].reverse().slice(0, 12).map((h) => `<div class="belief">Year ${h.year} · <strong>${esc(h.name)}</strong>: ${h.attendance} of ${h.population} came, ${h.fed} fed, stalls took ${h.sales}🪙, cost ${h.cost}🪙${h.sponsor ? ` (sponsored by the ${esc(h.sponsor)} family)` : ''}</div>`).join('');
+  const html = `${modeChips('culture')}${now}
+    <div class="card"><h3>Traditions</h3>${traditions || '<p class="muted">Traditions grow from the village\'s own history: a family that keeps sponsoring the feast, a fire nobody forgets, the day the last founder dies.</p>'}</div>
+    <div class="card"><h3>Festivals</h3>${history || '<p class="muted">The first festival is still to come.</p>'}</div>`;
+  return { title: 'History · Culture', html };
 }

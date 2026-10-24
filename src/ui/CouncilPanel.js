@@ -5,6 +5,8 @@ import { esc } from './util.js';
 
 export function councilPanel(sim, ctx) {
   const s = sim.state;
+  const roadRows = (s.roadProjects ?? []).filter((p) => p.status === 'BUILDING' || p.status === 'PROPOSED').map((p) => `<div class="belief"><strong>${esc(p.name)}</strong> · ${esc(p.kind)} · ${p.status === 'BUILDING' ? `${Math.round(Math.min(1, p.work / p.need.work) * 100)}% built${p.waiting ? ` (${esc(p.waiting.toLowerCase())})` : ''}` : 'proposed'}<br><span class="muted">${esc(p.reason)}</span></div>`).join('');
+  const scoutOut = (s.region?.expeditions ?? []).some((e) => e.status === 'OUT');
   const t = balance(s, 'treasury');
   const tot = s.ledgerTotals;
   const selectedCitizen = sim.selected.kind === 'citizen' ? s.citizens.find((c) => c.id === sim.selected.id) : null;
@@ -34,6 +36,14 @@ export function councilPanel(sim, ctx) {
   ${action('🏠 Fund a public cottage', `Builders and timber paid from the treasury; adds two beds so newcomers can settle.`, '~30🪙', 'publicCottage', {}, t < COUNCIL.publicCottageBudget || !freeCottageLand)}
   ${action('🤝 Support a business', struggling ? `Grant ${esc(struggling.name)} ${COUNCIL.businessGrant} coins.` : 'No citizen-owned business to support yet.', `${COUNCIL.businessGrant}🪙`, 'supportBusiness', { id: struggling?.id ?? '' }, !struggling || t < COUNCIL.businessGrant)}
   ${action('🏛️ Establish a marketplace', s.council.marketplace ? 'Established. Caravans visit every two days and distance matters less to shoppers.' : 'Market stalls around the square: caravans visit more often and shoppers travel further.', `${COUNCIL.marketplaceCost}🪙`, 'marketplace', {}, s.council.marketplace || t < COUNCIL.marketplaceCost)}
+  <div class="card">
+    <h3>Region & roads</h3>
+    ${roadRows || '<p class="muted">No road works proposed. Villagers petition for paths to their doors and the council paves busy tracks.</p>'}
+    <div class="grid2" style="margin-top:8px">
+      <button class="btn" data-act="council" data-action="scout" ${scoutOut ? 'disabled' : ''}>🧭 ${scoutOut ? 'Scouts are out' : 'Fund scouts'}</button>
+      <button class="btn" data-act="region-tab" data-id="diplomacy">🎁 Diplomacy</button>
+    </div>
+  </div>
   <div class="grid2">
     <button class="btn" data-act="tab-filter" data-id="economy" data-filter="sale">📍 Inspect land</button>
     <button class="btn" data-act="tab" data-id="economy">📊 Review finances</button>

@@ -112,6 +112,7 @@ export function deliverContract(state, c, caravan) {
   c.deliveredDay = state.day;
   c.profit = pay - (c.paidSeller ?? 0) - tariff - (c.transportCost ?? 0);
   const t = ensureTrade(state);
+  if (t.merchants[c.merchantId]) t.merchants[c.merchantId].profit += c.profit;
   t.stats.deliveries++;
   t.stats.volume += n;
   t.stats.value += pay;

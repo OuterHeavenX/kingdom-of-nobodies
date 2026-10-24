@@ -2,7 +2,7 @@ import { CHRONICLE } from '../core/Config.js';
 
 // The Chronicle is the permanent history of the kingdom. Systems call record()
 // at the moment they change state, so every entry mirrors a real event.
-export const CATEGORIES = ['citizen', 'business', 'property', 'economy', 'relationships', 'construction', 'council'];
+export const CATEGORIES = ['citizen', 'business', 'property', 'economy', 'relationships', 'construction', 'council', 'region', 'trade', 'diplomacy', 'law', 'culture'];
 
 /**
  * @param {object} refs - stable entity references { citizens:[ids], business, plot }

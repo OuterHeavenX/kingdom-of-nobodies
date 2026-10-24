@@ -153,7 +153,7 @@ export function buildTerrain(scene) {
     return g;
   };
   return {
-    fire, fireLight, lamps, lampGlass, ground,
+    fire, fireLight, lamps, lampGlass, ground, petals, roadMaterials: surface,
     leafMaterials: [mat(P.leaf), mat(P.leafDark), mat(P.pine)],
     /** Match the drawn roads to the simulation's roads (new, paved or removed). */
     syncRoads(list) {

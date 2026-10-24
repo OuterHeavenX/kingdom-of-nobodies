@@ -6,6 +6,8 @@ import { FACTIONS, factionMembers } from '../politics/Opinion.js';
 import { currentLeader } from '../politics/Government.js';
 import { person } from '../citizens/FamilyTree.js';
 import { esc, meter, portrait } from './util.js';
+import { HEARTH, KINGDOMS } from '../region/RegionData.js';
+import { relationScore, activeTreaties, embargoBetween, TREATY_KINDS, partyName, tariffRate } from '../diplomacy/Diplomacy.js';
 
 export function politicsPanel(sim) {
   const s = sim.state;
@@ -21,7 +23,7 @@ export function politicsPanel(sim) {
   const spark = (gov.approvalHistory ?? []).map((v) => `<span style="height:${Math.max(6, v)}%" class="${v < 35 ? 'neg' : ''}"></span>`).join('');
   const policyRows = Object.entries(POLICIES).map(([k, d]) => {
     const v = gov.policies[k];
-    const label = k === 'taxLevel' ? d.describe(v) : v ? 'in force' : 'not in force';
+    const label = d.describe ? d.describe(v ?? d.default) : v ? 'in force' : 'not in force';
     return `<dt>${esc(d.label)}</dt><dd>${esc(label)}</dd>`;
   }).join('');
   const factions = Object.entries(FACTIONS).map(([k, f]) => {
@@ -54,4 +56,24 @@ export function politicsPanel(sim) {
   ${scandals || protests ? `<div class="card"><h3>Trouble</h3>${scandals}${protests}</div>` : ''}
   <div class="card"><h3>Past leaders</h3>${[...gov.elections].reverse().slice(0, 12).map((e) => `<div class="belief">Year ${e.year}: <strong>${esc(name(e.winnerId))}</strong> elected ${esc(e.title)} (${e.candidates.find((c) => c.id === e.winnerId)?.votes ?? 0} of ${e.turnout})</div>`).join('') || '<p class="muted">None yet.</p>'}</div>`;
   return { title: 'Politics', html };
+}
+
+/** Politics → Foreign: First Hearth's standing with each kingdom. */
+export function foreignPanel(sim) {
+  const s = sim.state;
+  const gov = s.government;
+  const rows = Object.keys(KINGDOMS).map((id) => {
+    const score = relationScore(s, HEARTH, id);
+    const treaties = activeTreaties(s, HEARTH, id).map((t) => TREATY_KINDS[t.kind].label);
+    const embargo = embargoBetween(s, HEARTH, id);
+    const rel = s.diplomacy.relations[[HEARTH, id].sort().join('|')];
+    return `<button class="item" data-act="kingdom" data-id="${id}"><span class="portrait" style="background:${KINGDOMS[id].color}">${esc(KINGDOMS[id].name[0])}</span><span class="main"><strong>${esc(KINGDOMS[id].name)} · ${score > 0 ? '+' : ''}${Math.round(score)}</strong><small>${treaties.length ? esc(treaties.join(', ')) : 'no treaty'}${embargo ? ` · ⛔ ${esc(partyName(embargo.by))} embargo` : ''}</small>${rel?.log.length ? `<small>${esc(rel.log.at(-1).why)}</small>` : ''}</span><span class="side">tariff ${Math.round(tariffRate(s, id, HEARTH) * 100)}%</span></button>`;
+  }).join('');
+  const html = `<div class="card"><dl class="kv">
+    <dt>Our import tariffs</dt><dd>${esc(gov?.policies?.tariffLevel ?? 'normal')}</dd>
+    <dt>Seeking treaties</dt><dd>${(gov?.policies?.openDiplomacy ?? true) ? 'yes' : 'no'}</dd>
+  </dl><p class="muted" style="font-size:12px">The elected government sets tariffs and whether to seek treaties; merchants and exporters want open markets, owners undercut by imports want protection.</p></div>
+  <div class="list">${rows}</div>
+  <button class="btn" data-act="region-tab" data-id="diplomacy">🗺️ Full diplomacy in the Region tab</button>`;
+  return { title: 'Foreign relations', html };
 }

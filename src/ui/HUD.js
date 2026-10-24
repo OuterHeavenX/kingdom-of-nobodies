@@ -6,7 +6,10 @@ import { citizenList, citizenDetail } from './CitizenPanel.js';
 import { economyOverview, businessDetail } from './BusinessPanel.js';
 import { buildingsList, plotDetail } from './PropertyPanel.js';
 import { familiesList, houseDetail, familyTree } from './FamilyPanel.js';
-import { politicsPanel } from './PoliticsPanel.js';
+import { politicsPanel, foreignPanel } from './PoliticsPanel.js';
+import { regionPanel, kingdomDetail, caravanDetail, landmarkDetail } from './RegionPanel.js';
+import { tradePanel } from './TradePanel.js';
+import { lawPanel, caseDetail } from './LawPanel.js';
 import { historyPanel, biographyView } from './HistoryPanel.js';
 import { dateLabel, yearOf } from '../core/Calendar.js';
 import { settlementStage } from '../population/Expansion.js';
@@ -27,7 +30,7 @@ export class HUD {
     this.toasts = new Notifications($('toasts'));
     this.sheet = new BottomSheet($('sheet'), { onClose: () => { this.view.detail = null; this.stack = []; } });
     this.sheet.onChange = () => setTimeout(() => this.renderTabs(), 300);
-    this.view = { tab: 'citizens', detail: null, plotFilter: 'all', chronicle: {}, econMode: 'business', historyMode: 'eras', historyYear: null, historyQuery: '', citizenQuery: '' };
+    this.view = { tab: 'citizens', detail: null, plotFilter: 'all', chronicle: {}, econMode: 'business', historyMode: 'eras', historyYear: null, historyQuery: '', citizenQuery: '', regionMode: 'map', polMode: 'government' };
     this.stack = [];
     this.lastTop = 0;
     this.lastBody = 0;
@@ -101,7 +104,11 @@ export class HUD {
     const { act, id } = el.dataset;
     const g = this.game;
     switch (act) {
-      case 'citizen': case 'business': case 'plot': case 'house': case 'tree': case 'bio': this.openDetail(act, id); break;
+      case 'citizen': case 'business': case 'plot': case 'house': case 'tree': case 'bio': case 'kingdom': case 'caravan': case 'case': case 'landmark': this.openDetail(act, id); break;
+      case 'region-mode': this.view.regionMode = id; this.view.detail = null; this.stack = []; this.renderSheet(true); $('sheet-body').scrollTop = 0; break;
+      case 'region-tab': this.view.regionMode = id; this.openTab('region'); break;
+      case 'pol-mode': this.view.polMode = id; this.renderSheet(true); $('sheet-body').scrollTop = 0; break;
+      case 'follow-caravan': g.world?.followCaravan(id); this.sheet.set('peek'); break;
       case 'econ-mode': this.view.econMode = id; this.renderSheet(true); break;
       case 'hist-mode': this.view.historyMode = id; this.view.chronicle = {}; this.view.historyQuery = ''; this.renderSheet(true); $('sheet-body').scrollTop = 0; break;
       case 'hist-year': this.view.historyYear = Number(id); this.renderSheet(true); break;
@@ -178,13 +185,23 @@ export class HUD {
     if (detail?.kind === 'house') return houseDetail(this.sim, detail.id);
     if (detail?.kind === 'tree') return familyTree(this.sim, detail.id);
     if (detail?.kind === 'bio') return biographyView(this.sim, detail.id);
+    if (detail?.kind === 'kingdom') return kingdomDetail(this.sim, detail.id);
+    if (detail?.kind === 'caravan') return caravanDetail(this.sim, detail.id);
+    if (detail?.kind === 'case') return caseDetail(this.sim, detail.id);
+    if (detail?.kind === 'landmark') return landmarkDetail(this.sim, detail.id);
+    if (tab === 'region') return regionPanel(this.sim, this.view);
     if (tab === 'economy') {
-      const seg = `<div class="segmented">${[['business', 'Businesses'], ['land', 'Land & buildings']].map(([k, l]) => `<button class="${this.view.econMode === k ? 'active' : ''}" data-act="econ-mode" data-id="${k}">${l}</button>`).join('')}</div>`;
-      const inner = this.view.econMode === 'land' ? buildingsList(this.sim, this.view.plotFilter) : economyOverview(this.sim);
+      const seg = `<div class="segmented">${[['business', 'Businesses'], ['trade', 'Trade'], ['land', 'Land']].map(([k, l]) => `<button class="${this.view.econMode === k ? 'active' : ''}" data-act="econ-mode" data-id="${k}">${l}</button>`).join('')}</div>`;
+      const inner = this.view.econMode === 'land' ? buildingsList(this.sim, this.view.plotFilter) : this.view.econMode === 'trade' ? tradePanel(this.sim) : economyOverview(this.sim);
       return { title: inner.title, html: seg + inner.html };
     }
     if (tab === 'families') return familiesList(this.sim);
-    if (tab === 'politics') return politicsPanel(this.sim);
+    if (tab === 'politics') {
+      const mode = this.view.polMode;
+      const seg = `<div class="segmented">${[['government', 'Government'], ['law', 'Laws & courts'], ['foreign', 'Foreign']].map(([k, l]) => `<button class="${mode === k ? 'active' : ''}" data-act="pol-mode" data-id="${k}">${l}</button>`).join('')}</div>`;
+      const inner = mode === 'law' ? lawPanel(this.sim) : mode === 'foreign' ? foreignPanel(this.sim) : politicsPanel(this.sim);
+      return { title: inner.title, html: seg + inner.html };
+    }
     if (tab === 'history') return historyPanel(this.sim, this.view);
     if (tab === 'council') return councilPanel(this.sim, { settings: this.game.settings, build: this.game.build, lastSaved: this.game.lastSavedText(), source: this.game.loadSource });
     return citizenList(this.sim, this.view);
