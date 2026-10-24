@@ -19,7 +19,7 @@ import { achieve } from '../citizens/Citizen.js';
 
 export const projectById = (state, id) => state.projects.find((p) => p.id === id) ?? null;
 
-function stagesFor(kind) {
+export function stagesFor(kind) {
   if (kind === 'construction') return STAGES;
   if (kind === 'refit') return [REFIT_STAGE];
   if (kind === 'upgrade') return [{ name: 'EXPANSION', work: 10, timber: 4 }];

@@ -46,9 +46,10 @@ export function councilPanel(sim, ctx) {
       <button class="btn" data-act="save">💾 Save now</button>
       <button class="btn" data-act="export">⬇ Export save</button>
       <button class="btn" data-act="import">⬆ Import save</button>
+      <button class="btn" data-act="restore">↺ Restore yearly snapshot</button>
       <button class="btn danger" data-act="new">✦ New kingdom</button>
     </div>
-    <p class="muted" style="font-size:12px;margin-top:8px">Autosaves every minute and when you leave the page. ${ctx.lastSaved ? `Last saved ${ctx.lastSaved}.` : ''} ${ctx.source ? `Loaded from: ${esc(ctx.source)}.` : ''}</p>
+    <p class="muted" style="font-size:12px;margin-top:8px">Autosaves every minute and when you leave the page; a recovery snapshot is kept once per game year. ${ctx.lastSaved ? `Last saved ${ctx.lastSaved}.` : ''} ${ctx.source ? `Loaded from: ${esc(ctx.source)}.` : ''}</p>
   </div>
   <p class="version">Kingdom of Nobodies · v0.3.0 Legacy &amp; Generations · build ${esc(ctx.build)}</p>`;
   return { title: 'The Council', html };

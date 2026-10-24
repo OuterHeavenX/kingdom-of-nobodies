@@ -151,7 +151,7 @@ export function citizenDetail(sim, id) {
   </div>
 
   <div class="grid2">
-    <button class="btn" data-act="focus-citizen" data-id="${c.id}">📍 Show in village</button>
+    <button class="btn" data-act="focus-citizen" data-id="${c.id}">📍 Follow in village</button>
     <button class="btn" data-act="history" data-kind="citizen" data-id="${c.id}">📜 Their history</button>
     <button class="btn primary" data-act="council" data-action="aid" data-id="${c.id}" ${balance(s, 'treasury') < 10 ? 'disabled' : ''}>✧ Grant 10🪙 aid</button>
     <button class="btn" data-act="tab" data-id="citizens">👥 All citizens</button>

@@ -76,12 +76,16 @@ const BUILDERS = {
     const fw = Math.min(o.w - 1, 10), fd = Math.min(o.d - 1.5, 7);
     part(g, G.plane(), mat(P.field), [fw, 1, fd * 0.75], [-0.5, 0.03, -fd * 0.12], null, false);
     const rows = 7, per = 9;
-    const crops = new THREE.InstancedMesh(G.cone(5), mat(o.open === false ? '#a39566' : P.crop), rows * per);
+    // Crops follow the seasons: young shoots, full growth, ripe gold, winter stubble.
+    const season = o.season ?? 1;
+    const cropColor = o.open === false ? '#a39566' : [P.crop, P.crop, P.cropRipe, '#9a8a66'][season];
+    const growth = [0.55, 1, 1.05, 0.3][season];
+    const crops = new THREE.InstancedMesh(G.cone(5), mat(cropColor), rows * per);
     const m = new THREE.Matrix4();
     let i = 0;
     for (let r = 0; r < rows; r++) for (let k = 0; k < per; k++) {
-      m.compose(new THREE.Vector3(-fw / 2 + 0.6 + k * (fw - 1.2) / (per - 1) - 0.5, 0.32, -fd * 0.12 - fd * 0.33 + r * (fd * 0.66) / (rows - 1)),
-        new THREE.Quaternion(), new THREE.Vector3(0.38, 0.55 + ((r + k) % 3) * 0.1, 0.38));
+      m.compose(new THREE.Vector3(-fw / 2 + 0.6 + k * (fw - 1.2) / (per - 1) - 0.5, 0.32 * growth, -fd * 0.12 - fd * 0.33 + r * (fd * 0.66) / (rows - 1)),
+        new THREE.Quaternion(), new THREE.Vector3(0.38, (0.55 + ((r + k) % 3) * 0.1) * growth, 0.38));
       crops.setMatrixAt(i++, m);
     }
     crops.castShadow = true;

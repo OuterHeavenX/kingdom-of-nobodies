@@ -75,6 +75,12 @@ export class HUD {
     $('sheet-body').scrollTop = 0;
   }
 
+  /** Tapping the Founders' Memorial in the square opens the History tab on it. */
+  showMemorial() {
+    this.view.historyMode = 'eras';
+    this.openTab('history');
+  }
+
   openDetail(kind, id, { push = true } = {}) {
     if (push && this.view.detail) this.stack.push(this.view.detail);
     this.view.detail = { kind, id };
@@ -106,7 +112,7 @@ export class HUD {
       case 'chronicle-filter': this.view.chronicle = { ...this.view.chronicle, category: id || null }; this.renderSheet(true); break;
       case 'chronicle-clear': this.view.chronicle = {}; this.renderSheet(true); break;
       case 'history': this.view.tab = 'history'; this.view.historyMode = 'timeline'; this.view.detail = null; this.stack = []; this.view.chronicle = { [el.dataset.kind]: id }; this.renderSheet(true); $('sheet-body').scrollTop = 0; break;
-      case 'focus-citizen': { const c = byId(this.sim.state.citizens, id); if (c) { g.world?.focusOn(c.x, c.z); this.sheet.set('peek'); } break; }
+      case 'focus-citizen': { const c = byId(this.sim.state.citizens, id); if (c) { g.world?.follow(c.id); this.sheet.set('peek'); } break; }
       case 'focus-plot': { const p = plotById(this.sim.state, id); if (p) { this.sim.select('plot', id); g.world?.focusOn(p.x, p.z); this.sheet.set('peek'); } break; }
       case 'council': {
         const res = this.sim.council(el.dataset.action, id || undefined);
@@ -121,6 +127,7 @@ export class HUD {
       case 'save': g.save(true); break;
       case 'export': g.saves.exportFile(this.sim.state); this.toasts.show('Save file downloaded.'); break;
       case 'import': $('import-file').click(); break;
+      case 'restore': if (confirm('Roll back to the recovery snapshot taken at the start of the latest saved year? Progress since then will be lost.')) g.restoreSnapshot(); break;
       case 'new': if (confirm('Start a new kingdom? Your current village will be replaced. (Export it first if you want to keep it.)')) g.newKingdom(); break;
       default: break;
     }
@@ -136,8 +143,8 @@ export class HUD {
     this.lastTop = performance.now();
     const s = this.sim.state;
     const clockEl = $('clock');
-    const text = `${dateLabel(s.day)} · ${clock(s.minute)}`;
-    const name = `${settlementStage(s.citizens.length) === 'Hamlet' ? 'Kingdom of Nobodies' : `Kingdom of Nobodies · ${settlementStage(s.citizens.length)}`}`;
+    const text = `${dateLabel(s.day, { short: true })} · ${clock(s.minute)} · ${settlementStage(s.citizens.length)}`;
+    const name = 'Kingdom of Nobodies';
     if ($('kingdom-name').textContent !== name) $('kingdom-name').textContent = name;
     if (clockEl.textContent !== text) clockEl.textContent = text;
     const stats = `<span class="stat" title="Treasury">🪙 ${balance(s, 'treasury')}</span><span class="stat" title="Food in the village">🍞 ${this.sim.food}</span>` +
