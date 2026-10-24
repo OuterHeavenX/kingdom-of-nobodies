@@ -1,31 +1,121 @@
-const initialPeople = [
- ['Ada','Farmer','Generous','#f5aa7d','Build a flourishing homestead'],
- ['Bram','Woodcutter','Ambitious','#a9c7f6','Own a thriving workshop'],
- ['Cora','Builder','Curious','#e4b7df','Create a beautiful village'],
- ['Dain','Forager','Stubborn','#eed68f','Explore the forest'],
- ['Elin','Farmer','Friendly','#a7e5ca','Bring everyone together']
-];
-const clamp=(v)=>Math.max(0,Math.min(100,v));
-const random=(a,b)=>a+Math.random()*(b-a);
+import { TIME, ECONOMY } from '../core/Config.js';
+import { createKingdom } from './Setup.js';
+import { updateCitizen } from '../ai/CitizenBrain.js';
+import { closeDay, economySnapshot } from '../economy/EconomyManager.js';
+import { restockAll, caravanVisit, villageFood, villageWood, spoilCarriedFood } from '../economy/Marketplace.js';
+import { updateProjects } from '../property/Construction.js';
+import { softenListings } from '../property/Ownership.js';
+import { checkBreakups } from '../citizens/Relationships.js';
+import { recomputeStanding } from '../society/Reputation.js';
+import { decayRumors, createFact } from '../society/Gossip.js';
+import { maybeImmigrate, assignHomes } from '../citizens/CitizenManager.js';
+import { COUNCIL_ACTIONS, councilDaily } from '../council/Council.js';
+import { balance, totalMoney } from '../economy/Transactions.js';
+
+// The simulation orchestrator. It owns the plain-JSON game state and advances
+// it in fixed ticks (10 in-game minutes). It has no DOM or WebGL dependencies,
+// so it runs identically in the browser and in headless tests.
+
 export class Simulation {
- constructor(saved=null){this.state=saved??this.fresh();this.listeners=new Set();this.notifications=[];this.selected=0;this.paused=false;this.speed=1;this.accum=0;this.elapsed=0;this.announce('Five strangers lit the first hearth. Their story begins.',false);}
- fresh(){return {version:2,day:1,hour:8,tick:0,food:38,wood:16,gold:22,chronicle:[],buildings:[{id:1,type:'hall',name:'Hearth Hall',x:0,z:0},{id:2,type:'farm',name:'Sunfield Farm',x:-12,z:-7},{id:3,type:'forest',name:'Timber Grove',x:14,z:-10},{id:4,type:'market',name:'Trading Stall',x:10,z:9}],people:initialPeople.map(([name,job,trait,color,dream],id)=>({id,name,job,trait,color,dream,x:random(-2,2),z:random(-2,2),destination:null,task:'Finding my place',hunger:70,energy:85,social:65,mood:72,friendships:{},steps:0}))};}
- subscribe(callback){this.listeners.add(callback);return ()=>this.listeners.delete(callback)}
- emit(){for(const listener of this.listeners)listener(this)}
- announce(message,emit=true){this.state.chronicle.unshift({day:this.state.day,message});this.state.chronicle=this.state.chronicle.slice(0,60);if(emit)this.emit()}
- get people(){return this.state.people}
- get averageMood(){return Math.round(this.people.reduce((sum,p)=>sum+p.mood,0)/this.people.length)}
- choose(p){const s=this.state; if(p.hunger<35&&s.food>=2)return this.assign(p,'Eating at the hall',0,0);if(p.energy<23)return this.assign(p,'Resting at the hall',0,0);if(p.social<37){const others=this.people.filter(o=>o.id!==p.id);const friend=others[Math.floor(Math.random()*others.length)];return this.assign(p,`Visiting ${friend.name}`,friend.x,friend.z,friend.id)}
- if(Math.random()<.17)return this.assign(p,'Exploring the village',random(-18,18),random(-17,16));
- const sites={Farmer:[-12,-7,'Tending the crops'],Woodcutter:[14,-10,'Cutting timber'],Forager:[14,-10,'Gathering berries'],Builder:[0,0,'Repairing homes']};const [x,z,task]=sites[p.job];this.assign(p,task,x,z);}
- assign(p,task,x,z,targetId=null){p.task=task;p.destination={x,z,targetId};}
- arrive(p){const s=this.state,t=p.task;if(t==='Tending the crops')s.food+=3;else if(t==='Cutting timber')s.wood+=2;else if(t==='Gathering berries')s.food+=2;else if(t==='Repairing homes'){p.mood=clamp(p.mood+3);if(s.wood>0&&Math.random()<.2)s.wood--;}else if(t==='Eating at the hall'){s.food-=2;p.hunger=clamp(p.hunger+45);p.mood=clamp(p.mood+3)}else if(t==='Resting at the hall')p.energy=clamp(p.energy+49);else if(t.startsWith('Visiting ')){const o=this.people.find(q=>q.id===p.destination.targetId);if(o){p.social=clamp(p.social+37);o.social=clamp(o.social+14);p.friendships[o.id]=(p.friendships[o.id]||0)+1;o.friendships[p.id]=(o.friendships[p.id]||0)+1;if(p.friendships[o.id]===3)this.announce(`${p.name} and ${o.name} have become close friends.`)}}p.destination=null;p.task='Considering the next step';p.mood=clamp(p.mood+.5);}
- step(){const s=this.state;s.tick++;s.hour+=.125;if(s.hour>=24){s.hour-=24;s.day++;s.food=Math.max(0,s.food-3);for(const p of this.people){p.hunger=clamp(p.hunger-7);p.energy=clamp(p.energy+8);if(s.food===0)p.mood=clamp(p.mood-10)}if(s.day%4===0)this.announce(['A traveler brought distant news.','The settlement gathered beside the hearth.','A crisp wind swept the valley.'][Math.floor(Math.random()*3)]);if(s.day%7===0){s.gold+=3;this.announce('Trade taxes added 3 gold to the treasury.')}}for(const p of this.people){p.hunger=clamp(p.hunger-.16);p.energy=clamp(p.energy-.10);p.social=clamp(p.social-.13);if(!p.destination)this.choose(p);const d=p.destination;if(d){const dx=d.x-p.x,dz=d.z-p.z,len=Math.hypot(dx,dz);if(len<.55)this.arrive(p);else{const amount=Math.min(.30,len);p.x+=dx/len*amount;p.z+=dz/len*amount;p.steps++;}}if(p.hunger<12||p.energy<8)p.mood=clamp(p.mood-.4)}this.emit();}
- update(dt){if(this.paused)return;this.accum+=Math.min(.1,dt)*this.speed;let n=0;while(this.accum>=.22&&n++<12){this.step();this.accum-=.22;}}
- setSpeed(){this.speed=this.speed===1?3:this.speed===3?6:1;this.emit()}
- togglePause(){this.paused=!this.paused;this.emit()}
- feast(){if(this.state.food<8)return;this.state.food-=8;for(const p of this.people){p.mood=clamp(p.mood+13);p.social=clamp(p.social+20)}this.announce('The first great feast brought the village together.');}
- aid(){if(this.state.gold<5)return;this.state.gold-=5;const p=this.people[this.selected];p.mood=clamp(p.mood+20);p.energy=clamp(p.energy+15);this.announce(`The council helped ${p.name} with a gift of 5 gold.`)}
- build(){if(this.state.wood<10)return;this.state.wood-=10;const number=this.state.buildings.filter(b=>b.type==='cottage').length+1;const x=-17+((number-1)%4)*9,z=13+Math.floor((number-1)/4)*7;this.state.buildings.push({id:10+number,type:'cottage',name:`Cottage ${number}`,x,z});this.announce(`Cottage ${number} was constructed. The village is growing.`);}
- select(id){if(id<0||id>=this.people.length)return;this.selected=id;this.emit()}
+  constructor(state = null) {
+    this.state = state ?? createKingdom();
+    this.state.events = [];
+    this.listeners = new Set();
+    this.selected = { kind: 'citizen', id: this.state.citizens[0]?.id ?? null };
+    this.recent = [];
+  }
+
+  subscribe(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
+  emit() { for (const fn of this.listeners) fn(this); }
+
+  get citizens() { return this.state.citizens; }
+  get averageMood() { return Math.round(this.state.citizens.reduce((s, c) => s + c.mood, 0) / Math.max(1, this.state.citizens.length)); }
+  get food() { return villageFood(this.state); }
+  get wood() { return villageWood(this.state); }
+  get treasury() { return balance(this.state, 'treasury'); }
+
+  /** Advance one tick. */
+  step() {
+    const s = this.state;
+    s.tick++;
+    s.minute += TIME.minutesPerTick;
+    if (s.minute >= 1440) {
+      s.minute -= 1440;
+      this.endOfDay();
+      s.day++;
+      this.startOfDay();
+    }
+    if (s.minute % 60 === 0) this.hourly();
+    for (const c of s.citizens) updateCitizen(s, c);
+    this.processEvents();
+  }
+
+  hourly() {
+    const s = this.state;
+    const h = s.minute / 60;
+    updateProjects(s);
+    if (h === 6 || h === 12) restockAll(s);
+    const caravanEvery = s.council.marketplace ? 2 : ECONOMY.caravanEveryDays;
+    if (h === 12 && s.day - s.lastCaravanDay >= caravanEvery) caravanVisit(s);
+    if (h === 10) maybeImmigrate(s);
+  }
+
+  endOfDay() {
+    const s = this.state;
+    closeDay(s);
+    s.history.push({
+      day: s.day, treasury: balance(s, 'treasury'), food: villageFood(s), wood: villageWood(s), population: s.citizens.length,
+      mood: this.averageMood, open: s.businesses.filter((b) => b.status === 'OPEN' || b.status === 'STRUGGLING').length,
+      wallets: s.citizens.reduce((t, c) => t + balance(s, c.id), 0),
+    });
+    if (s.history.length > 120) s.history.shift();
+  }
+
+  startOfDay() {
+    const s = this.state;
+    for (const c of s.citizens) c.shiftsToday = 0;
+    councilDaily(s);
+    checkBreakups(s);
+    recomputeStanding(s);
+    decayRumors(s);
+    softenListings(s);
+    assignHomes(s);
+    spoilCarriedFood(s);
+    s.commons.forest = Math.min(s.commons.forestCap, s.commons.forest + 9);
+    s.commons.berries = Math.min(s.commons.berriesCap, s.commons.berries + 16);
+  }
+
+  processEvents() {
+    const s = this.state;
+    if (!s.events.length) return;
+    for (const e of s.events) {
+      if (e.type === 'rumor') {
+        const a = s.citizens.find((c) => c.id === e.subject), b = s.citizens.find((c) => c.id === e.other);
+        if (a && b) {
+          const text = e.kind === 'courting' ? `${a.firstName} and ${b.firstName} are courting.` : `${a.firstName} and ${b.firstName} broke up.`;
+          createFact(s, e.kind, a.id, text, [a.id, b.id], b.id);
+        }
+      } else if (e.type === 'chronicle') {
+        this.recent.push(e.entry);
+      }
+    }
+    if (this.recent.length > 30) this.recent.splice(0, this.recent.length - 30);
+    s.events = [];
+  }
+
+  /** Run many ticks without rendering (tests, catch-up). */
+  runTicks(n) { for (let i = 0; i < n; i++) this.step(); }
+  runDays(days) { this.runTicks(days * TIME.ticksPerDay); }
+
+  council(action, ...args) {
+    const fn = COUNCIL_ACTIONS[action];
+    const result = fn ? fn(this.state, ...args) : { ok: false, message: 'Unknown action' };
+    this.processEvents();
+    this.emit();
+    return result;
+  }
+
+  select(kind, id) { this.selected = { kind, id }; this.emit(); }
+
+  snapshot() { return { ...economySnapshot(this.state), money: totalMoney(this.state) }; }
 }
