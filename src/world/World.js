@@ -13,7 +13,7 @@ import { isTrading } from '../economy/Businesses.js';
 
 export class WebGLUnavailableError extends Error {}
 
-const OUTLINE = { FOR_SALE: '#f2c14e', BUILDING: '#ff9a3c', OWNED: '#f4efe2', COUNCIL: '#9fc3e6', SELECTED: '#ffffff' };
+const OUTLINE = { FOR_SALE: '#cdb36a', BUILDING: '#ff9a3c', OWNED: '#f4efe2', COUNCIL: '#9fc3e6', SELECTED: '#ffffff' };
 
 export class World {
   constructor(container, sim, { quality = 'high', labels = true } = {}) {
@@ -142,8 +142,8 @@ export class World {
     hit.userData.plotId = plot.id;
     g.add(hit);
     const color = selected ? OUTLINE.SELECTED : OUTLINE[status];
-    const edge = mat(color, { emissive: color, emissiveIntensity: selected ? 0.6 : 0.15 });
-    const t = selected ? 0.22 : 0.12;
+    const edge = mat(color, { emissive: color, emissiveIntensity: selected ? 0.6 : 0.08 });
+    const t = selected ? 0.22 : status === 'FOR_SALE' ? 0.07 : 0.12;
     for (const sz of [-1, 1]) part(g, G.box(), edge, [plot.w, 0.05, t], [0, 0.05, sz * plot.d / 2], null, false);
     for (const sx of [-1, 1]) part(g, G.box(), edge, [t, 0.05, plot.d], [sx * plot.w / 2, 0.05, 0], null, false);
     const inner = new THREE.Group();

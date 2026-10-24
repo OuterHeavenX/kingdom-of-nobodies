@@ -8,7 +8,7 @@ export class Notifications {
     t.className = `toast${bad ? ' bad' : ''}`;
     t.innerHTML = esc(text);
     this.el.appendChild(t);
-    while (this.el.children.length > 3) this.el.firstChild.remove();
+    while (this.el.children.length > 2) this.el.firstChild.remove();
     setTimeout(() => { t.classList.add('leaving'); setTimeout(() => t.remove(), 450); }, ms);
   }
 }
