@@ -1,0 +1,6 @@
+import * as THREE from 'three';
+export class Villagers {
+ constructor(scene,sim){this.sim=sim;this.nodes=new Map();this.root=new THREE.Group();scene.add(this.root);for(const p of sim.people){const body=new THREE.Mesh(new THREE.CylinderGeometry(.45,.58,1.15,7),new THREE.MeshStandardMaterial({color:p.color,roughness:.85}));body.position.y=.81;body.castShadow=true;const head=new THREE.Mesh(new THREE.SphereGeometry(.38,10,8),new THREE.MeshStandardMaterial({color:'#f2cfab'}));head.position.y=1.71;head.castShadow=true;const cap=new THREE.Mesh(new THREE.ConeGeometry(.42,.32,7),new THREE.MeshStandardMaterial({color:'#745545'}));cap.position.y=2.10;const group=new THREE.Group();group.add(body,head,cap);group.position.set(p.x,0,p.z);group.userData.personId=p.id;this.root.add(group);this.nodes.set(p.id,group)}}
+ update(dt,time){for(const p of this.sim.people){const group=this.nodes.get(p.id);const vx=p.x-group.position.x,vz=p.z-group.position.z;const move=Math.hypot(vx,vz)>.03;group.position.lerp(new THREE.Vector3(p.x,0,p.z),Math.min(1,dt*7));if(move)group.rotation.y=Math.atan2(vx,vz);group.children[0].position.y=.81+(move?Math.sin(time*9+p.id)*.06:0);group.scale.setScalar(this.sim.selected===p.id?1.14:1)}}
+ pick(object){while(object){if(Number.isInteger(object.userData.personId))return object.userData.personId;object=object.parent;}return null}
+}
