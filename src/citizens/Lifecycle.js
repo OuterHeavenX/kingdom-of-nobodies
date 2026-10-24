@@ -152,6 +152,8 @@ export function die(state, c, cause) {
 /** Children whose guardian died are taken in by the other parent, a grown sibling, a grandparent, or the council. */
 export function reassignWards(state, guardian) {
   for (const child of state.citizens) {
+    // Grown children keep their own homes; guardianship only matters for minors.
+    if (ageOf(state, child) >= LIFE.adultAge) continue;
     if (child.family.guardianId !== guardian.id && !(child.family.parentIds.includes(guardian.id) && ageOf(state, child) < LIFE.adultAge)) continue;
     if (child.family.guardianId && child.family.guardianId !== guardian.id && state.citizens.some((x) => x.id === child.family.guardianId)) continue;
     const alive = (id) => state.citizens.find((x) => x.id === id && x !== guardian);

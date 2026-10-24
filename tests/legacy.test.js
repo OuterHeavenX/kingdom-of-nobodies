@@ -13,7 +13,7 @@ import { ageOf, stageOf } from '../src/citizens/Citizen.js';
 import { ancestorIds, linkParent, person } from '../src/citizens/FamilyTree.js';
 import { die } from '../src/citizens/Lifecycle.js';
 import { marry, giveBirth } from '../src/citizens/Families.js';
-import { settleEstate } from '../src/economy/Inheritance.js';
+import { settleEstate, transferBusiness } from '../src/economy/Inheritance.js';
 import { isTrading } from '../src/economy/Businesses.js';
 import { balance, transfer } from '../src/economy/Transactions.js';
 import { collectTithe } from '../src/council/Council.js';
@@ -311,4 +311,33 @@ test('a real Milestone 2 save (version 3) migrates into a working Milestone 3 wo
   const sim = new Simulation(s);
   advanceDays(sim, DAYS_PER_YEAR);
   assert.equal(checkInvariants(sim.state, 'm2', 1), 0);
+});
+
+test('a guardian\'s death re-homes minors only, never grown children', () => {
+  const s = cloneSim(grown()).state;
+  const parent = s.citizens.find((p) => p.family.childIds.some((id) => { const k = s.citizens.find((x) => x.id === id); return k && ageOf(s, k) >= LIFE.adultAge; }));
+  assert.ok(parent, 'someone has a grown child');
+  const grownKids = s.citizens.filter((k) => parent.family.childIds.includes(k.id) && ageOf(s, k) >= LIFE.adultAge);
+  for (const k of grownKids) k.family.guardianId = parent.id; // a guardian link left over from childhood
+  const homes = grownKids.map((k) => k.homePlotId);
+  die(s, parent, 'old age');
+  assert.deepEqual(grownKids.map((k) => k.homePlotId), homes);
+});
+
+test('an expansion under way on an inherited business continues under the heir', () => {
+  const s = cloneSim(grown()).state;
+  const b = s.businesses.find((x) => isTrading(x) && s.citizens.some((c) => c.id === x.ownerId) && !s.plots.find((p) => p.id === x.plotId)?.projectId);
+  const owner = s.citizens.find((c) => c.id === b.ownerId);
+  const plot = s.plots.find((p) => p.id === b.plotId);
+  plot.building.level = 1;
+  transfer(s, 'outside', owner.id, 200, 'test', 'funds for the expansion');
+  s.council.timber = (s.council.timber ?? 0) + 10;
+  const r = startProject(s, { plotId: plot.id, ownerId: owner.id, kind: 'upgrade' });
+  assert.ok(r && !r.error, `upgrade started (${r?.error})`);
+  const project = s.projects.find((p) => p.id === plot.projectId);
+  const heir = s.citizens.find((c) => c !== owner && ageOf(s, c) >= LIFE.adultAge);
+  transferBusiness(s, b, owner, heir, 'successor', 'test');
+  assert.equal(project.ownerId, heir.id);
+  updateProjects(s);
+  assert.ok(s.projects.includes(project) && plot.projectId === project.id, 'the project was not abandoned');
 });

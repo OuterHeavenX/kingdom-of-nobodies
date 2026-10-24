@@ -58,7 +58,13 @@ export function transferBusiness(state, b, from, to, outcome, why) {
   b.inTrust = outcome === 'trust';
   b.trusteeId = outcome === 'trust' ? (to.family.guardianId ?? null) : null;
   const plot = plotById(state, b.plotId);
-  if (plot) { plot.ownerId = to.id; plotHistory(state, plot, `${b.name} passed to ${to.firstName} (${why}).`); }
+  if (plot) {
+    plot.ownerId = to.id;
+    // Any expansion or repair under way on the premises continues under the new owner.
+    const project = plot.projectId ? state.projects.find((j) => j.id === plot.projectId) : null;
+    if (project) project.ownerId = to.id;
+    plotHistory(state, plot, `${b.name} passed to ${to.firstName} (${why}).`);
+  }
   if (outcome === 'successor') {
     if (to.employment && to.employment.businessId !== b.id) leaveJob(state, to, `took over ${b.name}`);
     if (to.employment?.businessId === b.id) b.employees = b.employees.filter((id) => id !== to.id);

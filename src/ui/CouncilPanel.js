@@ -35,7 +35,7 @@ export function councilPanel(sim, ctx) {
   ${action('🤝 Support a business', struggling ? `Grant ${esc(struggling.name)} ${COUNCIL.businessGrant} coins.` : 'No citizen-owned business to support yet.', `${COUNCIL.businessGrant}🪙`, 'supportBusiness', { id: struggling?.id ?? '' }, !struggling || t < COUNCIL.businessGrant)}
   ${action('🏛️ Establish a marketplace', s.council.marketplace ? 'Established. Caravans visit every two days and distance matters less to shoppers.' : 'Market stalls around the square: caravans visit more often and shoppers travel further.', `${COUNCIL.marketplaceCost}🪙`, 'marketplace', {}, s.council.marketplace || t < COUNCIL.marketplaceCost)}
   <div class="grid2">
-    <button class="btn" data-act="tab-filter" data-id="buildings" data-filter="sale">📍 Inspect land</button>
+    <button class="btn" data-act="tab-filter" data-id="economy" data-filter="sale">📍 Inspect land</button>
     <button class="btn" data-act="tab" data-id="economy">📊 Review finances</button>
   </div>
   <div class="card">
