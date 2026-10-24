@@ -10,7 +10,7 @@ test('10. relationships, businesses and construction persist through save/load',
   const sim = makeSim(2);
   sim.runDays(20);
   const s = sim.state;
-  const ada = byName(s, 'Ada'), elin = byName(s, 'Elin');
+  const [ada, elin] = s.citizens;
   const before = { ...rel(s, ada.id, elin.id) };
   const loaded = deserialize(serialize(s));
   assert.deepEqual(loaded.relationships[`${ada.id}|${elin.id}`], before);

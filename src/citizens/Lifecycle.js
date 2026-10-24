@@ -13,6 +13,7 @@ import { trait } from '../ai/Personality.js';
 import { record } from '../society/Chronicle.js';
 import { remember } from '../ai/MemorySystem.js';
 import { plotById } from '../property/LandRegistry.js';
+import { noteDiseaseDeath } from '../events/Disasters.js';
 
 // Ageing, life stages, retirement and mortality. Ages are derived from birth
 // days, so this module only reacts to transitions; it never counts years.
@@ -143,6 +144,7 @@ export function die(state, c, cause) {
   state.citizens = state.citizens.filter((x) => x !== c);
   if (balance(state, c.id) === 0) delete state.accounts[c.id];
   state.stats.deaths++;
+  if (cause === 'illness') noteDiseaseDeath(state);
   record(state, 'citizen', `${c.firstName} ${c.lastName} died of ${cause} at the age of ${age}.${c.founder ? ' One of the five founders has passed.' : ''}`, { citizens: [c.id] }, c.founder || age < 18 ? 3 : 2);
   return state.archive[c.id];
 }

@@ -1,6 +1,7 @@
 import { ECONOMY, GOODS } from '../core/Config.js';
 import { openAccount } from './Transactions.js';
 import { byId } from '../core/EntityRegistry.js';
+import { harvestMultiplier } from '../events/Disasters.js';
 import { addGoods, removeGoods, qty } from './Inventory.js';
 
 // Business archetypes and their production chains. One "batch" converts
@@ -99,7 +100,13 @@ export function wholesalePrice(b, good) {
 export function produce(state, b, productivity) {
   const def = BUSINESS_TYPES[b.type];
   if (!def.output) return 0;
-  let batches = Math.floor(def.batchesPerShift * productivity + 0.5);
+  let perShift = def.batchesPerShift;
+  if (b.type === 'farm') perShift *= harvestMultiplier(state) * (state.discoveries?.improvedPlow ? 1.2 : 1);
+  if (b.type === 'bakery' && state.discoveries?.watermill) perShift += 1;
+  const plot = state.plots.find((p) => p.id === b.plotId);
+  if ((plot?.building?.condition ?? 100) < 60) perShift *= 0.6;
+  perShift *= 1 + ((b.level ?? 1) - 1) * 0.15;
+  let batches = Math.floor(perShift * productivity + 0.5);
   const hasTool = def.usesTools && qty(b.inventory, 'tools') > 0;
   if (hasTool) batches = Math.round(batches * ECONOMY.toolBoost);
   const storageCap = def.target * 3;
@@ -115,7 +122,7 @@ export function produce(state, b, productivity) {
     addGoods(b.inventory, def.output, def.outputPerBatch);
     made += def.outputPerBatch;
   }
-  if (hasTool && made > 0 && ++b.toolWear >= ECONOMY.toolUses) {
+  if (hasTool && made > 0 && ++b.toolWear >= ECONOMY.toolUses * (state.discoveries?.betterTools ? 1.5 : 1)) {
     removeGoods(b.inventory, 'tools', 1);
     b.toolWear = 0;
   }

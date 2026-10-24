@@ -27,7 +27,7 @@ export const NEEDS = {
   criticalEnergy: 6,
 };
 
-export const MOVE = { unitsPerTick: 1.6, arriveDistance: 0.6 };
+export const MOVE = { unitsPerTick: 2.6, arriveDistance: 0.6 };
 
 export const POPULATION = {
   max: 250,
@@ -62,6 +62,7 @@ export const ECONOMY = {
   taxMood: { low: 1.5, normal: 0, high: -3 },
   tithe: { low: 0.01, normal: 0.02, high: 0.04 }, // daily share of savings above titheFloor
   titheFloor: 60,
+  treasuryComfort: 300,
   caravanEveryDays: 3,
   caravanBuyFactor: 0.75,
   caravanMaxUnitsPerGood: 10,

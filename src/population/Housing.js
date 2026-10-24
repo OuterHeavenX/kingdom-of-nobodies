@@ -24,12 +24,14 @@ export function rehouseFamilies(state) {
   for (const c of state.citizens) {
     if (done.has(c.id) || ageOf(state, c) < LIFE.adultAge) continue;
     const home = plotById(state, c.homePlotId);
-    if (home && home.building?.type !== 'hall') continue;
     const family = householdOf(state, c);
+    const sharingWithStrangers = home?.building?.type === 'cottage' && home.ownerId === 'council' && home.residents.some((id) => !family.some((m) => m.id === id));
+    if (home && home.building?.type !== 'hall' && home.building?.type !== 'townhall' && !sharingWithStrangers) continue;
     family.forEach((m) => done.add(m.id));
     if (family.length < 2) continue;
-    const free = state.plots.find((p) => p.building?.type === 'cottage' && p.constructionStatus === 'COMPLETE' &&
-      (p.ownerId === 'council' || family.some((m) => m.id === p.ownerId)) && bedsAt(state, p) - p.residents.length >= family.length);
+    const free = state.plots.find((p) => p !== home && p.building?.type === 'cottage' && p.constructionStatus === 'COMPLETE' &&
+      (p.ownerId === 'council' || family.some((m) => m.id === p.ownerId)) && bedsAt(state, p) - p.residents.length >= family.length + (sharingWithStrangers ? 1 : 0) &&
+      (!sharingWithStrangers || p.residents.length === 0));
     if (free) for (const m of family) moveHome(state, m, free);
   }
 }

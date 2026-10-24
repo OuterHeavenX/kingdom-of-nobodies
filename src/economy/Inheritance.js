@@ -128,6 +128,8 @@ export function settleEstate(state, c) {
   }
   for (const p of state.plots.filter((x) => x.ownerId === c.id)) {
     const heir = p.id === c.homePlotId && spouse ? spouse : primary;
+    const project = p.projectId ? state.projects.find((j) => j.id === p.projectId) : null;
+    if (project) project.ownerId = heir ? heir.id : 'council';
     if (heir) {
       p.ownerId = heir.id;
       p.reservedBy = null;

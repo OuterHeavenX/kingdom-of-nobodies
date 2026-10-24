@@ -87,6 +87,10 @@ export function emptyState(seed) {
     eras: [{ name: 'The Founding Years', startDay: 1, reason: 'Five strangers lit the first hearth.' }],
     populationCap: POPULATION.max,
     yearly: [],
+    eventLog: [],
+    fires: [],
+    research: {},
+    monuments: [{ id: 'founders', name: "Founders' Memorial", day: 1 }],
   };
 }
 

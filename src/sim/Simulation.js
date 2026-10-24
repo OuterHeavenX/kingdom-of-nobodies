@@ -18,9 +18,15 @@ import { ageOf } from '../citizens/Citizen.js';
 import { LIFE } from '../core/Config.js';
 import { rehouseFamilies } from '../population/Housing.js';
 import { maybeExpand } from '../population/Expansion.js';
+import { dailyGovernment, onCitizenGone } from '../politics/Government.js';
+import { dailyDisasters, updateFires } from '../events/Disasters.js';
+import { dailyDiscovery } from '../events/Discoveries.js';
+import { yearlyReview } from '../history/Eras.js';
+import { councilInfrastructure } from '../council/Council.js';
 
 lifecycleHooks.teen.push((state, c) => { chooseTrade(state, c); findMaster(state, c); });
 lifecycleHooks.adulthood.push((state, c) => onAdulthood(state, c));
+lifecycleHooks.death.push((state, c) => onCitizenGone(state, c));
 import { balance, totalMoney } from '../economy/Transactions.js';
 
 // The simulation orchestrator. It owns the plain-JSON game state and advances
@@ -65,6 +71,7 @@ export class Simulation {
     const s = this.state;
     const h = s.minute / 60;
     updateProjects(s);
+    updateFires(s);
     if (h === 6 || h === 12) restockAll(s);
     const caravanEvery = s.council.marketplace ? 2 : ECONOMY.caravanEveryDays;
     if (h === 12 && s.day - s.lastCaravanDay >= caravanEvery) caravanVisit(s);
@@ -95,6 +102,12 @@ export class Simulation {
         findMaster(s, c);
       }
     }
+    yearlyReview(s);
+    dailyGovernment(s);
+    dailyDisasters(s);
+    dailyDiscovery(s);
+    councilInfrastructure(s);
+    if (s.eventLog.length > 300) s.eventLog.splice(0, s.eventLog.length - 300);
     councilDaily(s);
     maybeExpand(s);
     maybeImmigrate(s);

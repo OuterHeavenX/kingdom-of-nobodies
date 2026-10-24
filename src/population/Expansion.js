@@ -30,9 +30,13 @@ export function openedBlocks(state) { return state.districts?.opened ?? []; }
 export function needsLand(state) {
   const vacant = state.plots.filter((p) => !p.building && !p.projectId && p.marketStatus === 'FOR_SALE');
   const freeHomeLand = vacant.filter((p) => p.landType === 'residential').length;
-  const beds = state.plots.reduce((s, p) => s + bedsAt(state, p), 0);
-  const residents = state.plots.reduce((s, p) => s + p.residents.length, 0);
-  return vacant.length <= 2 || (freeHomeLand === 0 && beds - residents <= 3);
+  const homeless = state.citizens.filter((c) => !c.homePlotId).length;
+  return vacant.length <= 2 || (freeHomeLand < 2 && (homeless > 0 || publicBeds(state) <= 2));
+}
+
+/** Beds a newcomer or homeless villager could actually move into (hall and council homes). */
+export function publicBeds(state) {
+  return state.plots.filter((p) => p.ownerId === 'council' || p.building?.type === 'hall').reduce((s, p) => s + Math.max(0, bedsAt(state, p) - p.residents.length), 0);
 }
 
 /** Daily: open the next district if land is short and the treasury can pay the road crews. */

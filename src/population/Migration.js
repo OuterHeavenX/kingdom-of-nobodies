@@ -13,6 +13,8 @@ import { familyWish, inheritTraits, inheritAppearance, randomTunic } from '../ci
 import { linkParent } from '../citizens/FamilyTree.js';
 import { reassignWards } from '../citizens/Lifecycle.js';
 import { householdOf } from './Housing.js';
+import { onCitizenGone } from '../politics/Government.js';
+import { publicBeds } from './Expansion.js';
 import { assignHomes } from '../citizens/CitizenManager.js';
 import { archiveCitizen } from '../history/Archive.js';
 import { villageFood } from '../economy/Marketplace.js';
@@ -33,8 +35,7 @@ const SKIN = ['#f2cfab', '#e0b48c', '#c68e64', '#9a6844', '#f5d9c0'];
 export function attractiveness(state) {
   const pop = state.citizens.length;
   if (pop >= state.populationCap) return { score: 0, reasons: ['the village is full'] };
-  const beds = state.plots.reduce((s, p) => s + bedsAt(state, p), 0);
-  const free = beds - state.plots.reduce((s, p) => s + p.residents.length, 0);
+  const free = publicBeds(state) - state.citizens.filter((c) => !c.homePlotId).length;
   if (free < 1) return { score: 0, reasons: ['no beds'] };
   const adults = state.citizens.filter((c) => ageOf(state, c) >= LIFE.adultAge);
   const jobless = adults.filter((c) => !c.employment && !c.retired && c.profession !== 'Builder' && c.profession !== 'Forager').length;
@@ -54,7 +55,7 @@ function neededTrade(state) {
     if (!open(type) && !planned(type)) return { profession: prof, dream: { type: 'business', businessType: type, text: `Open a ${BUSINESS_TYPES[type].label.toLowerCase()}` } };
   }
   const hiring = state.businesses.find((b) => isTrading(b) && b.openings > 0 && !BUSINESS_TYPES[b.type].civic);
-  const prof = hiring ? { farm: 'Farmer', lumberyard: 'Woodcutter', bakery: 'Baker', blacksmith: 'Blacksmith', general_store: 'Merchant', tavern: 'Innkeeper', school: 'Teacher' }[hiring.type] ?? 'Laborer' : pick(state, ['Laborer', 'Farmer', 'Builder', 'Laborer']);
+  const prof = hiring ? { farm: 'Farmer', lumberyard: 'Woodcutter', bakery: 'Baker', blacksmith: 'Blacksmith', general_store: 'Merchant', tavern: 'Innkeeper', school: 'Teacher' }[hiring.type] ?? 'Laborer' : (state.citizens.filter((c) => c.profession === 'Builder').length < Math.max(2, state.projects.length) ? 'Builder' : pick(state, ['Laborer', 'Farmer', 'Laborer']));
   return { profession: prof, dream: pick(state, [{ type: 'homestead', text: 'Build a home of my own' }, { type: 'wealth', target: 120, text: 'Save 120 coins' }, { type: 'partner', text: 'Find a life partner' }, { type: 'respected', text: 'Be respected by everyone' }]) };
 }
 
@@ -91,7 +92,7 @@ export function maybeImmigrate(state) {
   const members = [newPerson(state, { sex: firstSex, age: nextRandom(state) < 0.8 ? intRange(state, 18, 32) : intRange(state, 33, 46), lastName, profession: need.profession, dream: need.dream })];
   if (size >= 2) {
     const sameSex = members[0].attraction === 'same';
-    const other = newPerson(state, { sex: sameSex ? firstSex : (firstSex === 'F' ? 'M' : 'F'), age: Math.max(18, ageOf(state, members[0]) + intRange(state, -4, 4)), lastName, profession: pick(state, ['Laborer', 'Farmer', 'Builder', need.profession]), dream: { type: 'homestead', text: 'Raise a family in a home of my own' } });
+    const other = newPerson(state, { sex: sameSex ? firstSex : (firstSex === 'F' ? 'M' : 'F'), age: Math.max(18, ageOf(state, members[0]) + intRange(state, -4, 4)), lastName, profession: pick(state, ['Laborer', 'Farmer', need.profession]), dream: { type: 'homestead', text: 'Raise a family in a home of my own' } });
     for (const [x, y] of [[members[0], other], [other, members[0]]]) {
       x.family.spouseId = y.id; x.family.partnerId = y.id; x.romance.partnerId = y.id; x.romance.marriedDay = state.day; x.romance.since = state.day;
     }
@@ -139,6 +140,7 @@ export function emigrate(state, c) {
     for (const key of Object.keys(state.relationships)) if (key.startsWith(m.id + '|') || key.endsWith('|' + m.id)) delete state.relationships[key];
     archiveCitizen(state, m, 'emigrated', 'hard times');
   }
+  for (const m of household) onCitizenGone(state, m);
   const ids = new Set(household.map((m) => m.id));
   state.citizens = state.citizens.filter((x) => !ids.has(x.id));
   for (const m of household) { reassignWards(state, m); delete state.accounts[m.id]; }

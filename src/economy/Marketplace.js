@@ -47,8 +47,9 @@ export function rankSellers(state, c, good, { forFood = false } = {}) {
     const friendship = owner ? peekRel(state, c.id, owner.id)?.friendship ?? 20 : 25;
     const value = forFood ? GOODS[good].food / price : 10 / price;
     const priceSensitivity = 1 + trait(c, 'frugal') + (balance(state, c.id) < 10 ? 1 : 0);
-    const score = value * 10 * priceSensitivity - distance(c, loc) * distanceWeight + (honesty - 50) * 0.08 +
-      (friendship - 20) * 0.04 + b.quality * 3 + (GOODS[good].social ?? 0) * 0.1 * trait(c, 'friendly');
+    const urgency = forFood ? 1 + Math.max(0, 60 - (c.needs?.hunger ?? 60)) / 20 : 1;
+    const score = value * 10 * priceSensitivity - distance(c, loc) * distanceWeight * urgency + (honesty - 50) * 0.08 +
+      (friendship - 20) * 0.04 + b.quality * 3 + (b.licensed ? 1.5 : 0) + (GOODS[good].social ?? 0) * 0.1 * trait(c, 'friendly');
     offers.push({ business: b, good, price, loc, score, honesty });
   }
   return offers.sort((a, b) => b.score - a.score);
@@ -236,7 +237,7 @@ export function sellGathered(state, c, good) {
     return { ok: true, units, paid: unit * units, buyer: b.name };
   }
   if (good === 'berries' || good === 'grain') {
-    const room = ECONOMY.councilPantryMax - qty(state.council.pantry, good);
+    const room = ECONOMY.councilPantryMax * (state.plots.some((p) => p.building?.type === 'granary') ? 2 : 1) - qty(state.council.pantry, good);
     const units = Math.min(n, room, Math.floor((balance(state, 'treasury') - 20) / ECONOMY.councilPantryPrice));
     if (units > 0 && transfer(state, 'treasury', c.id, units * ECONOMY.councilPantryPrice, 'sale', `${units} ${good} to the council pantry`)) {
       moveGoods(c.inventory, state.council.pantry, good, units);
@@ -268,6 +269,7 @@ export function adjustPrices(b) {
  */
 export function caravanVisit(state) {
   let bought = 0, sold = 0;
+  const slump = (state.season?.recessionUntil ?? 0) > state.day ? 0.5 : 1;
   const hungry = villageFood(state) < state.citizens.length * 4;
   for (const b of state.businesses) {
     if (!isTrading(b)) continue;
@@ -276,7 +278,7 @@ export function caravanVisit(state) {
       if (hungry && FOOD_GOODS.includes(good)) continue;
       const surplus = qty(b.inventory, good) - Math.round(def.target * 0.8);
       if (surplus < 1) continue;
-      const unit = Math.max(1, Math.round(GOODS[good].base * ECONOMY.caravanBuyFactor));
+      const unit = Math.max(1, Math.round(GOODS[good].base * ECONOMY.caravanBuyFactor * slump));
       const units = Math.min(surplus, ECONOMY.caravanMaxUnitsPerGood, Math.floor(balance(state, 'outside') / unit));
       if (units > 0 && transfer(state, 'outside', b.id, unit * units, 'export', `${units} ${good} sold to the caravan`)) {
         removeGoods(b.inventory, good, units);
@@ -311,7 +313,7 @@ export function spoilCarriedFood(state) {
   for (const c of state.citizens) {
     for (const g of ['berries', 'bread', 'meal']) {
       const n = qty(c.inventory, g);
-      const lost = Math.floor(n * (g === 'berries' ? 0.25 : 0.15));
+      const lost = Math.floor(n * (g === 'berries' ? 0.25 : 0.15) * (state.discoveries?.improvedStorage ? 0.5 : 1) * (state.plots.some((p) => p.building?.type === 'granary') ? 0.6 : 1));
       if (lost > 0) removeGoods(c.inventory, g, lost);
     }
   }

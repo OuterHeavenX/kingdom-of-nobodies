@@ -5,7 +5,7 @@ import { qty, moveGoods, addGoods } from '../economy/Inventory.js';
 import { isTrading, BUSINESS_TYPES, wholesalePrice, createBusiness, businessName } from '../economy/Businesses.js';
 import { buyRetail, rankSellers } from '../economy/Marketplace.js';
 import { startProject } from '../property/Construction.js';
-import { plotById, setBuilding, plotHistory, bedsAt, allows } from '../property/LandRegistry.js';
+import { plotById, setBuilding, plotHistory, bedsAt, allows, BUILDING_INFO } from '../property/LandRegistry.js';
 import { record } from '../society/Chronicle.js';
 import { remember } from '../ai/MemorySystem.js';
 import { adjust } from '../citizens/Relationships.js';
@@ -54,7 +54,7 @@ export const COUNCIL_ACTIONS = {
 
   /** Commission a public cottage on council land, adding beds for newcomers. */
   publicCottage(state) {
-    const plot = state.plots.find((p) => p.ownerId === 'council' && p.landType === 'residential' && !p.building && !p.projectId);
+    const plot = state.plots.find((p) => p.ownerId === 'council' && p.landType === 'residential' && !p.building && !p.projectId && !(p.reservedBy && p.reservedUntil > state.tick));
     if (!plot) return fail('No free council land for a cottage.');
     if (balance(state, 'treasury') < COUNCIL.publicCottageBudget) return fail(`Needs at least ${COUNCIL.publicCottageBudget} coins in the treasury.`);
     const res = startProject(state, { plotId: plot.id, ownerId: 'council', kind: 'construction', buildingType: 'cottage', purpose: 'civic' });
@@ -73,7 +73,9 @@ export const COUNCIL_ACTIONS = {
 
   setTax(state, level) {
     if (!Object.hasOwn(ECONOMY.tax, level)) return fail('Unknown tax level.');
+    if (state.government?.leaderId) return fail(`Taxes are now set by the elected ${state.government.title}.`);
     state.council.taxLevel = level;
+    if (state.government) state.government.policies.taxLevel = level;
     record(state, 'council', `The council set the business levy to ${level} (${ECONOMY.tax[level]} coins a day per business).`, {}, 2);
     return done(`Taxes set to ${level}.`);
   },
@@ -130,11 +132,34 @@ export const COUNCIL_ACTIONS = {
 export function collectTithe(state) {
   const rate = ECONOMY.tithe[state.council.taxLevel] ?? ECONOMY.tithe.normal;
   let total = 0;
+  if (balance(state, 'treasury') > ECONOMY.treasuryComfort) return 0; // coffers are full: no tithe today
   for (const c of state.citizens) {
     const due = Math.floor((balance(state, c.id) - ECONOMY.titheFloor) * rate);
     if (due > 0 && transfer(state, c.id, 'treasury', due, 'tax', `${c.firstName}'s tithe`)) total += due;
   }
   return total;
+}
+
+/**
+ * Public infrastructure as the town grows, paid from the treasury through
+ * ordinary construction: a well (fire and fever protection), a granary
+ * (larger pantry, less spoilage) and, for a growing town, a Town Hall that
+ * replaces the old Hearth Hall.
+ */
+export function councilInfrastructure(state) {
+  if (state.day % 4 !== 0 || state.projects.some((p) => p.ownerId === 'council' && ['well', 'granary', 'townhall'].includes(p.buildingType))) return;
+  const t = balance(state, 'treasury');
+  const pop = state.citizens.length;
+  const have = (type) => state.plots.some((p) => p.building?.type === type);
+  const civicLand = () => state.plots.find((p) => p.ownerId === 'council' && !p.building && !p.projectId && p.landType === 'civic');
+  let plan = null;
+  if (pop >= 18 && !have('well') && t > 80) plan = { buildingType: 'well', plot: civicLand() };
+  else if (pop >= 30 && !have('granary') && t > 150) plan = { buildingType: 'granary', plot: civicLand() };
+  else if (pop >= 45 && !have('townhall') && t > 220) plan = { buildingType: 'townhall', plot: state.plots.find((p) => p.building?.type === 'hall' && !p.projectId), refit: true };
+  else if (pop >= 60 && state.plots.filter((p) => p.building?.type === 'well').length < 2 && t > 160) plan = { buildingType: 'well', plot: civicLand() };
+  if (!plan?.plot) return;
+  const res = startProject(state, { plotId: plan.plot.id, ownerId: 'council', kind: plan.refit ? 'refit' : 'construction', buildingType: plan.buildingType, purpose: 'civic' });
+  if (res.ok) record(state, 'council', `The council commissioned a ${BUILDING_INFO[plan.buildingType].label.toLowerCase()} on ${plan.plot.name}.`, { plot: plan.plot.id }, 2);
 }
 
 export function councilDaily(state) {
@@ -148,8 +173,9 @@ export function councilDaily(state) {
   for (const type of ['farm', 'lumberyard']) ensureEssential(state, type);
   // Standing policy: with a large surplus, back one struggling local business a day.
   if (balance(state, 'treasury') > COUNCIL.reserve + 120) {
-    const b = state.businesses.find((x) => x.status === 'STRUGGLING' && x.ownerId !== 'council');
-    if (b) COUNCIL_ACTIONS.supportBusiness(state, b.id);
+    const b = state.businesses.find((x) => x.status === 'STRUGGLING' && x.ownerId !== 'council' && state.day - (x.lastGrantDay ?? -99) >= 12 &&
+      x.history.slice(-6).reduce((t, h) => t + h.customers, 0) >= 3);
+    if (b) { b.lastGrantDay = state.day; COUNCIL_ACTIONS.supportBusiness(state, b.id); }
   }
   for (const c of state.citizens) {
     if (balance(state, c.id) >= 3 || c.needs.hunger > 30) continue;
@@ -173,10 +199,14 @@ export function councilDaily(state) {
   }
   const residents = state.plots.reduce((s, p) => s + p.residents.length, 0);
   const beds = state.plots.reduce((s, p) => s + bedsAt(state, p), 0);
-  const familiesWaiting = state.citizens.some((c) => c.family.spouseId && state.plots.find((p) => p.id === c.homePlotId)?.building?.type === 'hall');
-  if (surplus > COUNCIL.publicCottageBudget && (residents >= beds - 2 || familiesWaiting) && !state.projects.some((p) => p.ownerId === 'council')) {
+  // Housing programme: while families or homeless residents wait, keep up to
+  // three public cottages under construction (if the treasury and land allow).
+  const waiting = state.citizens.filter((c) => !c.homePlotId || (c.family.spouseId && plotById(state, c.homePlotId)?.building?.type === 'hall')).length;
+  const housingPolicy = state.government?.policies?.housingSupport ?? true;
+  const building = state.projects.filter((p) => p.ownerId === 'council' && p.buildingType === 'cottage').length;
+  if (housingPolicy && surplus > COUNCIL.publicCottageBudget && (residents >= beds - 2 || waiting > 0) && building < Math.min(3, 1 + Math.floor(waiting / 3))) {
     const res = COUNCIL_ACTIONS.publicCottage(state);
-    if (res.ok) record(state, 'council', 'With a healthy treasury, the council commissioned a public cottage for newcomers.', {}, 1);
+    if (res.ok) record(state, 'council', `The council commissioned a public cottage (${waiting} villagers waiting for homes).`, {}, 1);
   }
 }
 

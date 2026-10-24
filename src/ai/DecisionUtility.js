@@ -4,6 +4,7 @@ import { ageOf } from '../citizens/Citizen.js';
 import { stageForAge } from '../core/Calendar.js';
 import { guardianOf } from '../citizens/Families.js';
 import { schoolOpen } from '../education/Education.js';
+import { isCandidate, electionToday, currentLeader } from '../politics/Government.js';
 import { balance } from '../economy/Transactions.js';
 import { qty } from '../economy/Inventory.js';
 import { businessById, retailPrice } from '../economy/Businesses.js';
@@ -53,7 +54,7 @@ export function generateCandidates(state, c, plan) {
   if (stage === 'infant') return [candidate('cradle', 100, [['I am a baby and my family looks after me', 100]])];
   const minor = age < LIFE.adultAge;
   const guardian = minor ? guardianOf(state, c) : null;
-  const payer = minor ? guardian?.id ?? null : c.id;
+  const payer = minor ? guardian?.id ?? 'treasury' : c.id; // the council pays for its wards
   const money = payer ? balance(state, payer) : 0;
   const h = hourOf(state);
   const { hunger, energy, social } = c.needs;
@@ -174,6 +175,16 @@ export function generateCandidates(state, c, plan) {
       ...(evening ? [['evenings are for company', evening]] : [])], { citizenId: target?.id ?? null }));
   }
 
+  // --- Courtship: young singles seek out someone they are drawn to ----------
+  if (!minor && !sick && !isNight(state) && h >= 12 && !c.romance.partnerId && age < 42 && social < 95) {
+    const sweetheart = c.romance.courtingId ? byId(state.citizens, c.romance.courtingId) : bestSweetheart(state, c);
+    if (sweetheart) {
+      const r = peekRel(state, c.id, sweetheart.id);
+      const s = 36 + (r?.affection ?? 0) * 0.35 + trait(c, 'friendly') * 8 - trait(c, 'shy') * 10 + (c.romance.courtingId ? 12 : 0);
+      out.push(candidate('socialize', s, [[c.romance.courtingId ? `I'm courting ${sweetheart.firstName}` : `I'm drawn to ${sweetheart.firstName}`, s]], { citizenId: sweetheart.id }));
+    }
+  }
+
   // --- Helping others ------------------------------------------------------
   const generous = trait(c, 'generous');
   if (!minor && generous > 0.3 && money >= 22 && !isNight(state)) {
@@ -211,6 +222,28 @@ export function generateCandidates(state, c, plan) {
     out.push(candidate('family_time', 34 + (c.familyWish ?? 0.5) * 30, [['evenings belong to my children', 34 + (c.familyWish ?? 0.5) * 30]]));
   }
 
+  // --- Emergencies -----------------------------------------------------------
+  if (age >= 14 && !sick && state.fires?.length) {
+    for (const f of state.fires) {
+      const p = plotById(state, f.plotId);
+      if (!p || f.responders.length >= 8 || f.responders.includes(c.id)) continue;
+      const d = Math.hypot(p.x - c.x, p.z - c.z);
+      if (d < 30) out.push(candidate('fight_fire', 96 - d + trait(c, 'generous') * 5, [[`${p.building?.name ?? p.name} is on fire nearby`, 96 - d]], { plotId: p.id }));
+    }
+  }
+
+  // --- Politics --------------------------------------------------------------
+  if (!minor && !sick && !isNight(state) && h >= 7 && h < 19) {
+    const gov = state.government;
+    if (electionToday(state) && !gov.campaign.ballots[c.id]) {
+      out.push(candidate('vote', 74 + (c.skills.leadership ?? 0) * 5, [[`it's election day for ${gov.title}`, 74]]));
+    } else if (gov?.campaign && isCandidate(state, c) && c.shiftsToday < 2) {
+      out.push(candidate('campaign', 50 + trait(c, 'ambitious') * 18 + trait(c, 'friendly') * 6, [[`I'm standing for ${gov.title} and need votes`, 50], ['I want this badly', trait(c, 'ambitious') * 18]]));
+    } else if (currentLeader(state)?.id === c.id && (c.governedDay ?? 0) < state.day && h < 15) {
+      out.push(candidate('govern', 57 + trait(c, 'hardworking') * 8, [[`as ${gov.title} the village's business needs me`, 57]]));
+    }
+  }
+
   // --- Festival ------------------------------------------------------------
   if (state.council.festivalUntil > state.tick && !isNight(state)) {
     out.push(candidate('festival', 72 + trait(c, 'friendly') * 10, [['the council is hosting a festival in the square', 72]]));
@@ -229,6 +262,18 @@ export function generateCandidates(state, c, plan) {
   }
   out.push(candidate('idle', 4, [['taking a moment', 4]]));
   return out;
+}
+
+function bestSweetheart(state, c) {
+  let best = null, bestScore = 0;
+  for (const o of state.citizens) {
+    if (o === c || o.romance.partnerId || !attracted(c, o) || Math.abs(o.birthDay - c.birthDay) > 12 * 12 || ageOf(state, o) < LIFE.marriageMinAge) continue;
+    if (o.romance.courtingId && o.romance.courtingId !== c.id) continue;
+    const r = peekRel(state, c.id, o.id);
+    const s = pairHash(c.id, o.id) * 40 + (r?.affection ?? 0) + (r?.friendship ?? 0) * 0.3 - Math.hypot(o.x - c.x, o.z - c.z) * 0.15;
+    if (s > bestScore) { bestScore = s; best = o; }
+  }
+  return bestScore > 18 ? best : null;
 }
 
 function bestCompanion(state, c) {

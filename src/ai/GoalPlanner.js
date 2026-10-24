@@ -2,7 +2,7 @@ import { byId } from '../core/EntityRegistry.js';
 import { ECONOMY } from '../core/Config.js';
 import { balance } from '../economy/Transactions.js';
 import { BUSINESS_TYPES, businessById, isTrading } from '../economy/Businesses.js';
-import { plotById, plotsForSale, buildingClass, BUILDING_INFO } from '../property/LandRegistry.js';
+import { plotById, plotsForSale, buildingClass, BUILDING_INFO, bedsAt } from '../property/LandRegistry.js';
 import { projectById, estimateMaterialsCost, canStart } from '../property/Construction.js';
 import { ownedPlots } from '../property/Ownership.js';
 import { trait } from './Personality.js';
@@ -89,7 +89,8 @@ const PLANNERS = {
     const project = v.projectId ? projectById(state, v.projectId) : null;
     if (v.projectId && !project) v.projectId = null;
     const ownPlot = v.plotId ? plotById(state, v.plotId) : null;
-    if (ownPlot && ownPlot.ownerId !== c.id) { v.plotId = null; }
+    // Never treat one's own home as a business site.
+    if (ownPlot && (ownPlot.ownerId !== c.id || ownPlot.id === c.homePlotId || ownPlot.building?.type === 'cottage')) { v.plotId = null; }
     const saturated = state.businesses.filter((x) => x.type === type && isTrading(x)).length >= ECONOMY.maxOpenPerType;
     const steps = [step('Find employment', hasEarned(c))];
     if (project) {
@@ -152,10 +153,15 @@ const PLANNERS = {
       const land = plotsForSale(state, 'cottage', c.id).filter((p) => !p.building)[0];
       const required = land ? land.price + estimateMaterialsCost(state, 'construction') + 8 : 999;
       steps.push(step(`Save ${required} coins for land and timber (have ${money})`, money >= required), step('Buy a residential plot', false), step('Build a cottage', false));
-      if (land && money >= required) actions.push({ kind: 'buy_plot', plotId: land.id, score: 74, factors: [[`I can afford ${land.name} (${land.price}) and the timber`, 35]] });
+      if (land && money >= required) actions.push({ kind: 'buy_plot', plotId: land.id, home: true, score: 74, factors: [[`I can afford ${land.name} (${land.price}) and the timber`, 35]] });
       return { goal: land ? `Save for ${land.name}` : 'Wait for land to come up', need: Math.max(0, required - money), steps, actions };
     }
     steps.push(step('Build a cottage', true), step('Own a second property', owned.length >= 2 || owned.some((p) => p.businessId)));
+    // A growing family enlarges the cottage into a house.
+    const crowded = home.residents.length >= bedsAt(state, home) - 1 && (home.building.level ?? 1) < 2 && !home.projectId;
+    if (crowded && money >= 45 && !canStart(state, home, c.id, 'upgrade')) {
+      actions.push({ kind: 'start_project', plotId: home.id, projectKind: 'upgrade', score: 64, factors: [['our cottage is too small for the family', 30]] });
+    }
     return { goal: owned.length >= 2 ? 'Enjoy the homestead' : 'Tend the homestead', need: 0, steps, actions };
   },
 

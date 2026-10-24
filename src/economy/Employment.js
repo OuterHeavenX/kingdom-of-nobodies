@@ -51,6 +51,8 @@ export function hire(state, c, b, wage) {
   c.employment = { businessId: b.id, role: 'worker', wage, since: state.day, unpaid: 0 };
   b.employees.push(c.id);
   b.openings = Math.max(0, b.openings - 1);
+  const boss = byId(state.citizens, b.ownerId);
+  if (boss) boss.stats.maxStaff = Math.max(boss.stats.maxStaff ?? 0, b.employees.length);
   const profession = PROFESSION_FOR_BUSINESS[b.type];
   const changed = profession !== c.profession && c.profession !== 'Builder' && b.type !== 'works';
   if (changed) c.profession = profession;

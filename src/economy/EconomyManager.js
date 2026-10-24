@@ -17,7 +17,7 @@ import { createFact } from '../society/Gossip.js';
 // and the business life cycle OPEN → STRUGGLING → CLOSED/BANKRUPT.
 
 export function closeDay(state) {
-  const taxPerBusiness = ECONOMY.tax[state.council.taxLevel];
+  const taxPerBusiness = Math.max(0, ECONOMY.tax[state.council.taxLevel] - (state.government?.policies?.reducedFees ? 1 : 0));
   for (const b of state.businesses) {
     if (!isTrading(b)) continue;
     const startup = state.day - b.foundedDay < 4;

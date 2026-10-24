@@ -12,6 +12,7 @@ import { ownerAccount, noteSale } from '../economy/Marketplace.js';
 import { PROFESSION_FOR_BUSINESS } from '../citizens/Careers.js';
 import { adjustBoth } from '../citizens/Relationships.js';
 import { leaveJob } from '../economy/Employment.js';
+import { achieve } from '../citizens/Citizen.js';
 
 // Construction, refits and demolition. Projects advance through stages; each
 // stage needs timber delivered (bought by the owner) and labour (builder shifts).
@@ -53,6 +54,9 @@ export function startProject(state, { plotId, ownerId, kind, buildingType = null
   };
   state.projects.push(project);
   plot.projectId = project.id;
+  if (state.government?.policies?.constructionGrants && ownerId !== 'council' && kind !== 'demolition' && balance(state, 'treasury') > 60) {
+    transfer(state, 'treasury', ownerId, 8, 'grant', `Construction grant for ${plot.name}`);
+  }
   plot.marketStatus = 'NOT_FOR_SALE';
   plot.constructionStatus = kind === 'demolition' ? 'DEMOLISHING' : kind === 'upgrade' || kind === 'repair' ? 'COMPLETE' : 'PLANNING';
   const owner = byId(state.citizens, ownerId);
@@ -111,6 +115,12 @@ function procure(state, p) {
 
 /** Hourly: move projects out of planning and keep materials flowing. */
 export function updateProjects(state) {
+  // A site whose owner is gone, or that has made no progress for two years, is abandoned.
+  for (const p of [...state.projects]) {
+    const ownerGone = p.ownerId !== 'council' && !state.citizens.some((c) => c.id === p.ownerId);
+    p.lastProgress = p.lastProgress ?? state.day;
+    if (ownerGone || state.day - p.lastProgress > 24) abandonProject(state, p, ownerGone ? 'its owner is gone' : 'work stalled for two years');
+  }
   for (const p of state.projects) {
     if (p.stageIndex < 0) {
       if (procure(state, p)) advanceStage(state, p);
@@ -164,8 +174,9 @@ export function addWork(state, p, c) {
     const owner = byId(state.citizens, p.ownerId);
     if (owner) adjustBoth(state, c.id, owner.id, { friendship: 1.5, trust: 1, respect: 1 });
   }
-  const units = builder ? BUILD.builderWorkPerShift + Math.round((c.skills.building ?? 0) * 1.5) : BUILD.ownerWorkPerShift;
+  const units = (builder ? BUILD.builderWorkPerShift + Math.round((c.skills.building ?? 0) * 1.5) : BUILD.ownerWorkPerShift) + (state.discoveries?.constructionTechniques ? 1 : 0);
   p.work += units;
+  p.lastProgress = state.day;
   c.stats.shiftsWorked++;
   c.shiftsToday++;
   if (builder) c.skills.building = Math.min(1, Math.round(((c.skills.building ?? 0.3) + 0.015) * 1000) / 1000);
@@ -221,6 +232,18 @@ function complete(state, p) {
   }
 }
 
+export function abandonProject(state, p, why) {
+  const plot = plotById(state, p.plotId);
+  state.projects = state.projects.filter((x) => x !== p);
+  if (plot) {
+    plot.projectId = null;
+    plot.constructionStatus = plot.building ? 'COMPLETE' : 'NONE';
+    if (plot.ownerId !== 'council' && !state.citizens.some((c) => c.id === plot.ownerId)) { plot.ownerId = 'council'; plot.marketStatus = 'FOR_SALE'; }
+    plotHistory(state, plot, `Building work was abandoned (${why}).`);
+    record(state, 'construction', `Work on ${plot.name} was abandoned because ${why}.`, { plot: plot.id }, 1);
+  }
+}
+
 export function moveHome(state, c, plot) {
   const old = state.plots.find((p) => p.id === c.homePlotId);
   if (old) old.residents = old.residents.filter((id) => id !== c.id);
@@ -233,6 +256,7 @@ export function openBusiness(state, owner, plot, type) {
   const b = createBusiness(state, { type, ownerId: owner.id, plotId: plot.id, name: businessName(state, type, owner) });
   plot.businessId = b.id;
   plot.building.name = b.name;
+  if (state.government?.policies?.businessLicensing && transfer(state, owner.id, 'treasury', 6, 'tax', `Licence for ${b.name}`)) b.licensed = true;
   const capital = Math.min(ECONOMY.startingCapital, balance(state, owner.id) - 2);
   if (capital > 0) transfer(state, owner.id, b.id, capital, 'capital', `Starting capital for ${b.name}`);
   if (owner.employment) leaveJob(state, owner, `opened ${b.name}`);
@@ -241,6 +265,7 @@ export function openBusiness(state, owner, plot, type) {
   owner.profession = PROFESSION_FOR_BUSINESS[type];
   if (owner.venture) owner.venture.businessId = b.id;
   bump(owner, 'competence', 5);
+  achieve(state, owner, 'founded', `Founded ${b.name}`, { business: b.id });
   plotHistory(state, plot, `${b.name} opened for business.`);
   record(state, 'business', `${b.name} officially opened on ${plot.name}!`, { citizens: [owner.id], business: b.id, plot: plot.id }, 3);
   remember(state, owner, `Opened ${b.name}.`, 3, 'milestone');

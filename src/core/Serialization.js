@@ -42,7 +42,8 @@ export function migrateV3(s) {
     stats: s.stats ?? { births: 0, deaths: 0, immigrants: Math.max(0, s.citizens.length - 5), emigrants: 0, marriages: 0, elections: 0, fires: 0 },
     season: s.season ?? {}, discoveries: s.discoveries ?? {}, government: s.government ?? null,
     eras: s.eras ?? [{ name: 'The Founding Years', startDay: 1, reason: 'Five strangers lit the first hearth.' }],
-    populationCap: POPULATION.max, yearly: s.yearly ?? [],
+    populationCap: POPULATION.max, yearly: s.yearly ?? [], eventLog: s.eventLog ?? [], fires: s.fires ?? [], research: s.research ?? {},
+    monuments: s.monuments ?? [{ id: 'founders', name: "Founders' Memorial", day: 1 }],
   });
   s.accounts.outside += 46000; // the wider world becomes realistically large
   if (!s.businesses.some((b) => b.type === 'works')) createWorks(s);
