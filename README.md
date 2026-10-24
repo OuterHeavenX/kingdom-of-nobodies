@@ -1,13 +1,81 @@
-# Kingdom of Nobodies — Milestone 3: Legacy & Generations
+# Kingdom of Nobodies — Milestone 4: Beyond the Hearth
 
-A mobile-first, low-poly 3D medieval settlement that lives for generations. Five strangers light a hearth.
-Their children grow up, learn trades, marry, inherit the family bakery or sell it, run for office, survive
-fires and fevers, and are remembered in the chronicle long after they die. You are the council: you can
-nudge the society, but you can't control anyone.
+A mobile-first, low-poly 3D medieval settlement that lives for generations and trades with its neighbours.
+Five strangers light a hearth. Their descendants walk real roads, haul grain to hungry kingdoms, take each
+other to court over unpaid wages, and dance at the Harvest Festival. You are the council: you can nudge the
+society, but you can't control anyone.
 
-**Play:** https://outerheavenx.github.io/kingdom-of-nobodies/ · version 0.3.0
+**Play:** https://outerheavenx.github.io/kingdom-of-nobodies/ · version 0.4.0
 
-## What happens across the generations
+## Beyond the Hearth (Milestone 4)
+
+As before, the chronicle only reports what the simulation actually did: if it says a caravan delivered
+grain, the grain moved, and so did the coins.
+
+- **Roads and pathfinding.** Villagers walk on a 2-unit navigation grid built from the real building
+  footprints, the river and the roads.
+  - Routes come from A\* (8 neighbours, a binary heap), smoothed by cost-aware string-pulling and cached per
+    layout. When a building goes up or burns down, routes replan.
+  - An unreachable destination fails safely: the villager remembers it and picks something else to do.
+  - Road surfaces set the walking cost: footpath, dirt, stone, a bridge, or wading the ford.
+  - Roads are proposed for real reasons: owners petitioning for access, desire paths worn by heavy foot
+    traffic, paving the busiest dirt road, or a bridge once the ford is crowded. The council approves a
+    proposal and pays for it, and the works crew builds it over several shifts using timber and stone.
+- **The region.** Three kingdoms surround First Hearth: **Greenvale** (farms), **Ironhold** (mines and forges)
+  and **Saltmere** (a fishing port).
+  - Each is simulated in aggregate:
+    - population, prosperity and food cover;
+    - production with input chains (ore → iron → tools) that follows the seasons;
+    - spoilage;
+    - a leader whose stance shifts with circumstances;
+    - prices bounded between 0.45× and 3× of base.
+  - They are linked by six roads that differ in terrain and quality. One of them is hidden until it is
+    scouted.
+  - The Region tab has an SVG map with fog of war. Expeditions led by a real villager, who is away while
+    travelling, reveal corridors and landmarks.
+- **Trade.** Merchants look for opportunities and explain them, for example: *"Ironhold is short of food;
+  Greenvale sells at 1.51 a unit, Ironhold pays 3.45; 39 hours on the road; expected profit 79 coins"*.
+  These merchants are First Hearth villagers who buy carts at the lumberyard, plus houses from each kingdom.
+  - A contract holds the buyer's payment in escrow and reserves the seller's stock (a local seller's goods
+    are physically set aside).
+  - A caravan with a capacity loads the goods, pays drovers and tolls, and travels the regional roads in
+    simulated time. It is slowed by winter, storms and heavy loads. It waits out floods and landslides,
+    re-routes, or turns back.
+  - Perishable cargo spoils. On delivery, escrow pays the merchant less the tariff, and the buyer's stores
+    grow.
+  - Every unit loaded ends up delivered, sold, spoiled or still aboard (this is checked).
+  - Carts are drawn on the village road between the gate and the market. Tap one to follow it.
+- **Diplomacy.** Every change in a relationship has a recorded cause: profitable trade, high tariffs,
+  quarrels over tolls, gifts, embargoes, or old grievances fading with time.
+  - Treaties change the actual rules:
+    - trade treaties lower tariffs;
+    - transit treaties waive tolls;
+    - mutual assistance sends grain in a famine;
+    - non-aggression pacts prevent embargoes.
+  - Embargoes void contracts that haven't loaded yet and turn caravans back at the border. After one is
+    lifted, neither side imposes another for three years. Feuds cost a kingdom's leader support.
+  - People migrate between the settlements as identifiable individuals. An emigrant can come home with the
+    same identity and family links.
+- **Law and courts.** A legal code with enactment and effective dates. Founding laws cover property, wages,
+  theft, fraud and tariffs; the government proposes and votes on new laws for contracts, licensing,
+  building safety, permits and idle land.
+  - Claims come from real events, with evidence captured at the time: missing wage payments with the
+    employment record, a theft with its witnesses, a short delivery, a disputed estate, an embezzlement found
+    in the ledger.
+  - Cases are filed, scheduled and heard by an appointed judge. Courthouse capacity creates a backlog.
+  - A judgment is executed exactly once through the ledger: restitution, a fine, an enforced contract, a
+    property transfer or a licence suspension.
+- **Seasons and culture.** Farms yield most in autumn and least in winter, and winter raises appetite.
+  - Each season has a festival: the Festival of Renewal, the Midsummer Fair (which invites foreign
+    merchants), the Harvest Festival and the Hearthlight Gathering. The council budgets real coins for each,
+    a family may sponsor it, and food is bought from real sellers.
+  - Villagers decide for themselves whether to attend, based on company, loneliness, work they still owe
+    and distance. They eat from the feast and buy treats at the stalls.
+  - Traditions grow out of history: a family that sponsors two harvests in a row starts a feast,
+    Founders' Day begins once the last founder dies, there is a remembrance after a great fire, a
+    merchants' market, and tales told by travellers. Customs from the kingdoms spread through contact.
+
+## Earlier milestones: across the generations (Milestone 3)
 
 Every story in the chronicle comes from the simulation itself. If the chronicle says something happened,
 the state behind it changed.
@@ -61,10 +129,14 @@ the state behind it changed.
 3. Bottom tabs:
    - **People**: search, demographics and a population pyramid.
    - **Families**: houses and family trees.
-   - **Economy**: businesses, land and buildings.
-   - **Politics**: leader, approval, policies, factions and elections.
-   - **History**: eras, the Memorial, the timeline and the departed.
-   - **Council**: actions and settings.
+   - **Economy**: businesses, **trade** (market prices, contracts, caravans, merchants) and land.
+   - **Politics**: government, **laws & courts** (the legal code, proposals, cases with evidence and
+     judgments) and **foreign** relations (treaties, embargoes and the causes behind each relationship).
+   - **Region**: the map, kingdoms, caravans, diplomacy and exploration. Tap a kingdom, a caravan or a
+     landmark.
+   - **History**: eras, the Memorial, the timeline, the departed and **culture** (festivals and traditions).
+     The chronicle can be filtered by trade, diplomacy, law and culture.
+   - **Council**: actions (including scouting and diplomatic gifts), region & roads, and settings.
 4. Tap anyone, anywhere, to read their story. *Follow in village* keeps the camera on them until you drag the
    view. 🌳 opens a family tree centred on that person, and 📖 opens a biography.
 5. Use ⏸ and **1× / 3× / 6× / 20×** in the top bar. 20× is for watching generations pass.
@@ -78,7 +150,8 @@ Requires Node.js 20.19+ or 22.12+.
 ```bash
 npm ci
 npm run dev                  # development server
-npm test                     # unit, economy, property, save, simulation, legacy (Milestone 3) and build tests
+npm test                     # unit, economy, property, save, simulation, legacy, navigation, trade,
+                             # diplomacy, law, festival, regional (acceptance) and build tests
 npm run test:longevity -- 200 1,2,3   # headless 200-year stress test across seeds
 npm run build && npm run preview      # production build on http://localhost:4173/kingdom-of-nobodies/
 npm run test:e2e             # touch end-to-end test (needs Playwright + Chromium and the preview running)
@@ -102,16 +175,26 @@ src/
                FamilyTree, Genetics, Relationships, Careers, CitizenManager
   education/   Skills, Education (lessons, trades, apprenticeships, mentoring)
   economy/     Transactions (ledger), Businesses, Marketplace, Employment, EconomyManager, Inheritance
-  property/    LandRegistry, Ownership, Construction (build, refit, expand, repair), Demolition
+  property/    LandRegistry, Ownership, Construction (build, refit, expand, repair), Demolition, Footprints
   politics/    Government (offices, elections, scandals, protests), Policies, Opinion (factions)
   population/  Migration, Housing, Expansion (districts), SocialClasses
   events/      Disasters (fire, crop failure, winter, fever, recession), Discoveries
   history/     Archive, Biography, Eras (yearly review), Compaction (bounded state growth)
   society/     Chronicle, Gossip, Reputation
   council/     Council actions, standing duties, public infrastructure
-  world/       World (renderer, seasons, fires, memorial, camera follow, label LOD), Terrain (districts'
-               roads), Models, Villagers (age-scaled figures, distance LOD), Materials
-  ui/          HUD and the People/Families/Economy/Politics/History/Council panels, BottomSheet
+  world/       World (renderer, seasons, fires, memorial, camera follow, label LOD), Terrain (river and roads
+               by kind), Models (incl. bridge and courthouse), Caravans (carts), Festival (decorations),
+               Villagers (age-scaled figures, distance LOD), Materials
+  navigation/  RoadNetwork (road kinds, river, gates), NavigationGrid (footprints → cost grid), Pathfinding
+               (A*, smoothing, route cache), Traffic, RoadConstruction (proposals, approval, works), NavCache
+  region/      RegionData (kingdoms, commodities, routes), Settlement (aggregate kingdom simulation),
+               RegionManager (fog, routes, journeys, regional events), Exploration
+  trade/       Markets (prices, reservations, deliveries), Contracts (escrow), Caravans, TradeManager (merchants)
+  diplomacy/   Diplomacy (relations with causes, treaties, embargoes, tariffs, tolls, aid)
+  law/         LegalCode (laws, effective dates, lawmaking), Courts (claims, evidence, cases, judgments)
+  culture/     Festivals, Traditions (emergent traditions, cultural exchange)
+  ui/          HUD and the People/Families/Economy/Politics/Region/History/Council panels (with Trade, Law
+               and Region panels), BottomSheet
 tests/         node:test suites, longevity.mjs (stress test), e2e/mobile.e2e.cjs
 ```
 
@@ -124,25 +207,47 @@ Key design rules:
 - **Bounded growth**: each year, compaction keeps each person's 24 most significant relationships, reduces
   closed businesses to compact records, and trims archive records to their identity, family, career highlights
   and achievements. The archive keeps every person who ever lived.
+- **Money is a closed ledger.** The three kingdoms, escrow and the outside world are accounts too, so the
+  total never changes: it is checked every simulated year.
 - **Performance** for up to 250 citizens:
   - Lookups are cached by id. Expensive social summaries are computed once per day.
   - Villagers far from the view are hidden, and those at middle distance are moved but not animated.
   - Only the nearest ~14 unoverlapping name labels are drawn, plus the selected person's.
   - Buildings rebuild only when their state signature changes.
   - *Battery saver* lowers the pixel ratio, turns off shadows and tightens the level of detail.
+  - The kingdoms are simulated once a day in aggregate rather than as people. The navigation grid is
+    rebuilt only when the layout changes, and routes are cached per layout version.
+  - **Web Worker: evaluated, not adopted.** A 200-year run takes about 0.8 ms per simulated tick at
+    150 villagers in Node (see below). At 20× speed (80 ticks a second) that is about 6% of a second,
+    well within budget even if a phone is several times slower. Moving the simulation into a worker would
+    mean copying or proxying the whole state for every panel and pick, and would split saving and
+    determinism across two threads. That cost is not worth paying at this scale.
 
 ### Saves
 
-Saves are checksummed envelopes (format version 4) stored in IndexedDB:
+Saves are checksummed envelopes (format version 5) stored in IndexedDB:
 
 - Every write keeps the previous save in the same transaction.
 - Once per game year, a **recovery snapshot** is also kept, which you can restore from the Council tab.
 - A copy goes to localStorage.
 - Loading picks the newest valid copy.
 
-Older saves migrate automatically. A Milestone 2 village gains birth dates consistent with each person's age,
-sexes, family links, education, health, an archive, statistics and a government-ready council. Milestone 1
-saves still migrate through the Milestone 2 path first. Export and import use the same format.
+Older saves migrate automatically.
+
+- **A Milestone 3 village (version 4)** gains:
+  - the road network, including roads for districts it has already opened;
+  - the three kingdoms, funded from the outside account so no coins are created;
+  - trade, diplomacy, the founding laws, culture and navigation.
+
+  Every citizen, account and title is kept. `tests/fixtures/m3-save.json` is a real save produced by the
+  Milestone 3 code, and a test migrates it and runs it for a year.
+- **A Milestone 2 village** gains birth dates consistent with each person's age, sexes, family links,
+  education, health, an archive, statistics and a government-ready council.
+- **Milestone 1 saves** still migrate through the Milestone 2 path first.
+
+Export and import use the same format. A reload continues identically even mid-journey, mid-unloading, with a
+case pending, during road works, during a festival and across a season change. This is tested, and nothing is
+duplicated.
 
 ### Deployment and the white-screen fix
 
@@ -176,19 +281,52 @@ All six discoveries happened in every run. Eras included *The Marsh Dynasty*, *T
 Fire of Year 154* and *The Years of Recovery*. Times are for four runs in parallel on one machine. Births,
 deaths, disasters and the economy were all active.
 
+## Tuning decisions (Milestone 4)
+
+The extended stress test surfaced real problems, and each was fixed at its cause rather than by switching a
+system off:
+
+- **Famine from unemployment.** In one seed, by year 50 only 25 of 90 adults had work. Businesses were
+  closing and the pantry was empty. Children starved even though food was on sale, because their families
+  had no coins. Two causes:
+  - Owners of thriving businesses were emigrating "for a better life" and taking their households (and
+    their businesses) with them. A household with an open business now never leaves for vague prospects,
+    and savings over 90 coins weaken the pull abroad.
+  - Newcomers kept arriving despite the joblessness. Unemployment now counts 1.6× against the village's
+    appeal, and job openings attract outsiders only when locals aren't already out of work.
+- **Districts opening too fast.** All ten districts were open by year 25 at 87 people. A new district now
+  also needs population pressure: 10 + 7 × the districts already open, unless two or more villagers are
+  homeless.
+- **Diplomatic dead ends.** Some kingdoms stayed locked at −100 with each other, swapping embargoes forever.
+  Now:
+  - bitter relations fade toward indifference by 8% a season;
+  - after an embargo is lifted, neither side may impose another for three years;
+  - every active embargo costs the kingdom's leader approval;
+  - a people tired of feuds elects a cooperative leader.
+- **Trade economics.** Carriage costs 0.3 coins per hour of road. The distant world buys gluts cheaply and
+  sells grain dearly (2.2×), and only when a kingdom has less than one day of food left. Regional trade is
+  therefore the normal way food moves between settlements.
+- **Diagnostics recorded in the save.** Every hunger death records its cause (no food to be had, a family too
+  poor to buy food, out of work and penniless, stranded away from home). Every closed business records why
+  it closed (bankrupt, unprofitable, owner died, owner emigrated, building destroyed).
+
 ## Known limitations
 
-- Citizens walk in straight lines; there is no pathfinding around buildings.
+- The kingdoms are simulated in aggregate. Their people are numbers, not citizens, until someone migrates.
+- The regional map is schematic, and kingdoms are not rendered in 3D. Carts are drawn only within about
+  3 km of the village.
+- Unemployment can still run high in some seeds (around half of adults in one run). Emigration acts as the
+  release valve, which is plausible but not tuned for realism.
+- The council's treasury is often low, so festivals are sometimes scaled down or cancelled.
 - The simulation pauses while the page is closed. There is no offline catch-up.
-- The economy and demography are tuned for stability across seeds, not for historical realism. Immigration
-  does much of the work of keeping the population up, and births alone don't replace deaths.
-- Emigration exists but never triggered in the four 200-year runs: the welfare systems keep people content enough.
-- The district layout is a fixed set of ten blocks. After that, the town grows only by expanding buildings.
+- The district layout is still a fixed set of ten blocks, now linked by real roads. Citizens can pave and
+  bridge, but cannot lay out new blocks.
 
-## Toward Milestone 4
+## Toward Milestone 5
 
-- Neighbouring settlements, trade routes and diplomacy, which would give emigration somewhere to go.
-- Pathfinding and a road graph, so districts can be laid out by citizens rather than prebuilt blocks.
-- Laws and courts (crimes, trials) on top of the existing reputation and scandal systems.
-- Religion and festivals tied to the seasonal calendar.
-- Moving the simulation into a Web Worker for larger populations, and a server-side save backup.
+- Citizen-planned districts and streets on top of the road network.
+- The kingdoms as places: visit them in 3D, with named foreign citizens and rulers to negotiate with.
+- Credit, banks and loans, so merchants and businesses can borrow against their prospects.
+- Religion, guilds and a richer culture system, building on traditions and festivals.
+- Wars, alliances and border disputes built on top of treaties and embargoes.
+- A server-side save backup and an offline catch-up simulation.
