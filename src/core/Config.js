@@ -73,6 +73,8 @@ export const ECONOMY = {
   startingCapital: 14,
   struggleDays: 3,
   closeAfterStruggleDays: 7,
+  luxuryReserve: 200, // savings above this are slowly spent on goods from beyond the valley
+  luxuryShare: 0.01, // share of the excess spent each day
   maxOpenPerType: 3,
   maxActiveProjects: 3,
   minWage: 4,

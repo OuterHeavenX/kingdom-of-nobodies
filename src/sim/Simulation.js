@@ -5,7 +5,7 @@ import { dailyCourts, hourlyCourts } from '../law/Courts.js';
 import { TIME, ECONOMY } from '../core/Config.js';
 import { createKingdom } from './Setup.js';
 import { updateCitizen } from '../ai/CitizenBrain.js';
-import { closeDay, economySnapshot } from '../economy/EconomyManager.js';
+import { closeDay, economySnapshot, dailyLuxuries } from '../economy/EconomyManager.js';
 import { restockAll, villageFood, villageWood, spoilCarriedFood } from '../economy/Marketplace.js';
 import { updateProjects } from '../property/Construction.js';
 import { softenListings } from '../property/Ownership.js';
@@ -124,6 +124,7 @@ export class Simulation {
     if (s.eventLog.length > 300) s.eventLog.splice(0, s.eventLog.length - 300);
     councilDaily(s);
     maybeExpand(s);
+    dailyLuxuries(s);
     dailyRegion(s);
     dailyExploration(s);
     dailyTrade(s);

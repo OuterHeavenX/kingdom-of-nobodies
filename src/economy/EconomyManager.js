@@ -161,3 +161,21 @@ export function economySnapshot(state) {
 }
 
 export { BUSINESS_TYPES };
+
+/**
+ * Daily: the well-off buy things the valley cannot make (fine cloth, wine,
+ * spices from passing pedlars). Coins well above a comfortable reserve slowly
+ * leave for the wider world, so a trading village's wealth circulates rather
+ * than piling up forever.
+ */
+export function dailyLuxuries(state) {
+  for (const c of state.citizens) {
+    const excess = balance(state, c.id) - ECONOMY.luxuryReserve;
+    if (excess <= 0) continue;
+    const spend = Math.floor(excess * ECONOMY.luxuryShare);
+    if (spend > 0 && transfer(state, c.id, 'outside', spend, 'purchase', `${c.firstName} bought goods from a travelling pedlar`)) {
+      c.stats.spent += spend;
+      c.mood = Math.min(100, c.mood + 1);
+    }
+  }
+}

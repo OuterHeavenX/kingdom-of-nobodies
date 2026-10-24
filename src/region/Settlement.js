@@ -152,6 +152,15 @@ function distantWorld(state, k) {
       k.stats.overseasOut += unit * n;
     }
   }
+  // A prosperous kingdom does not hoard: coins well above its reserve are spent on
+  // goods from distant lands (cloth, wine, building), which keeps money moving
+  // through the wider world instead of piling up in one treasury.
+  const reserve = 2500 + k.population * 12;
+  const excess = balance(state, acct) - reserve;
+  if (excess > 50) {
+    const spend = Math.floor(excess * 0.02);
+    if (spend > 0 && transfer(state, acct, 'outside', spend, 'import', `${k.name} spent ${spend} coins on goods from distant lands`)) k.stats.overseasIn += spend;
+  }
   // Distant grain is a last resort: dear, and only when the stores are nearly empty.
   if (foodCover(state, k) < 1) {
     const n = Math.ceil(foodNeed(state, k) * 1.2);
