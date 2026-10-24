@@ -217,8 +217,8 @@ Key design rules:
   - *Battery saver* lowers the pixel ratio, turns off shadows and tightens the level of detail.
   - The kingdoms are simulated once a day in aggregate rather than as people. The navigation grid is
     rebuilt only when the layout changes, and routes are cached per layout version.
-  - **Web Worker: evaluated, not adopted.** A 200-year run takes about 0.8 ms per simulated tick at
-    150 villagers in Node (see below). At 20× speed (80 ticks a second) that is about 6% of a second,
+  - **Web Worker: evaluated, not adopted.** A 200-year run takes about 1.1 ms per simulated tick at
+    150 villagers in Node (see below). At 20× speed (80 ticks a second) that is about 9% of a second,
     well within budget even if a phone is several times slower. Moving the simulation into a worker would
     mean copying or proxying the whole state for every panel and pick, and would split saving and
     determinism across two threads. That cost is not worth paying at this scale.
@@ -266,20 +266,44 @@ instead of the Vite build. **Settings → Pages → Source must be "GitHub Actio
 
 ## Stress test results (200 in-game years)
 
-`npm run test:longevity -- 200 <seed>`, run on four seeds. Every invariant was checked each decade: unique ids,
-non-negative ages, valid and acyclic families, mutual marriages, employment only at trading businesses,
-plots owned by the living, valid elections, no NaN, and exact money conservation every year. All held.
+`npm run test:longevity -- 200 <seed>`, run on seeds 1–3 on the final Milestone 4 code. The checks:
 
-| Seed | Peak / final pop. | Births | Deaths | Immigrants | Marriages | Generations | Elections | Businesses opened / closed | Estates & sales | Fires | Hunger deaths | Save size | Time |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | 176 / 166 | 186 | 389 | 364 | 285 | 8 | 52 | 457 / 445 | 170 | 164 | 17 | 2.6 MB | 282 s |
-| 2 | 150 / 136 | 195 | 424 | 360 | 289 | 8 | 49 | 364 / 352 | 163 | 199 | 30 | 2.3 MB | 282 s |
-| 3 | 152 / 151 | 201 | 404 | 349 | 271 | 8 | 53 | 234 / 221 | 167 | 182 | 12 | 2.3 MB | 266 s |
-| 4 | 178 / 174 | 190 | 421 | 400 | 296 | 9 | 52 | 424 / 411 | 172 | 158 | 15 | 2.6 MB | 304 s |
+- **Every simulated year:** exact money conservation.
+- **Every decade:**
+  - unique ids;
+  - valid, acyclic families and mutual marriages;
+  - employment only at trading businesses;
+  - plots owned by the living;
+  - valid elections;
+  - no NaN;
+  - no negative inventory anywhere (businesses, set-aside stock, homes, the pantry, kingdoms, caravans,
+    festival stores);
+  - escrow equal to the sum of open contracts;
+  - every caravan's cargo tally balanced (loaded = delivered + sold + spoiled + aboard);
+  - no caravan stuck for more than 40 days;
+  - no judgment transaction executed twice;
+  - state under 6 MB.
 
-All six discoveries happened in every run. Eras included *The Marsh Dynasty*, *The Great Harvest*, *The Great
-Fire of Year 154* and *The Years of Recovery*. Times are for four runs in parallel on one machine. Births,
-deaths, disasters and the economy were all active.
+All checks held in every run. CI runs seed 1 on every pull request.
+
+| Seed | Peak / final pop. | Births | Deaths | Immigrants / emigrants | Generations | Elections | Hunger deaths | Save size | Time |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 183 / 165 | 230 | 356 | 781 / 495 | 8 | 53 | 2 | 2.9 MB | 407 s |
+| 2 | 181 / 179 | 228 | 346 | 736 / 444 | 8 | 52 | 8 | 2.9 MB | 397 s |
+| 3 | 161 / 148 | 243 | 340 | 788 / 548 | 9 | 52 | 10 | 2.8 MB | 371 s |
+
+Regional metrics after 200 years:
+
+| Seed | Caravan deliveries / failures | Goods moved | Trade value | Treaties / embargoes (ever) | Roads | Judgments | Festival attendance | Kingdom populations (G / I / S) | Wider world's coins |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 2,408 / 16 | 65,162 | 425,895 | 29 / 17 | 39 | 459 | 88% | 420 / 313 / 488 | 197,978 |
+| 2 | 1,926 / 5 | 52,140 | 353,031 | 37 / 14 | 40 | 1,233 | 92% | 417 / 276 / 483 | 192,404 |
+| 3 | 2,616 / 25 | 65,445 | 399,213 | 20 / 30 | 40 | 472 | 90% | 420 / 304 / 489 | 210,122 |
+
+- All six discoveries happened and all ten districts opened in every run.
+- Traditions numbered 6–7, and relations moved up and down rather than locking at the extremes.
+- The kingdoms stayed prosperous (0.86–0.98), at or near their population capacity.
+- Times are for three runs in parallel on one machine, about 1.1 ms per simulated tick at 150 villagers.
 
 ## Tuning decisions (Milestone 4)
 
@@ -303,6 +327,17 @@ system off:
   - after an embargo is lifted, neither side may impose another for three years;
   - every active embargo costs the kingdom's leader approval;
   - a people tired of feuds elects a cooperative leader.
+- **The distant world ran dry.** In the first full runs, the 50,000-coin "outside" purse (the wider world)
+  was empty by year 60. Greenvale had hoarded 25,000 coins and the village 30,000, and the purse can only
+  buy surpluses while it has coins. Once it was empty, Ironhold and Saltmere could no longer sell their
+  surpluses, and they starved down to their population floor. Three changes:
+  - prosperous kingdoms now spend 2% a day of the coins above their reserve on goods from distant lands;
+  - villagers with more than 1,500 coins spend 1% a day of the excess with travelling pedlars;
+  - the wider world starts with 250,000 coins.
+
+  Milestone 3 saves receive a one-time top-up to that amount when they migrate, recorded in
+  `migrationNotes`. Spending from more modest savings (above 200) was also tried. It sent the village's
+  cash out of the valley and hunger deaths rose to 92–158 per 200 years, so it was rejected.
 - **Trade economics.** Carriage costs 0.3 coins per hour of road. The distant world buys gluts cheaply and
   sells grain dearly (2.2×), and only when a kingdom has less than one day of food left. Regional trade is
   therefore the normal way food moves between settlements.
@@ -315,8 +350,10 @@ system off:
 - The kingdoms are simulated in aggregate. Their people are numbers, not citizens, until someone migrates.
 - The regional map is schematic, and kingdoms are not rendered in 3D. Carts are drawn only within about
   3 km of the village.
-- Unemployment can still run high in some seeds (around half of adults in one run). Emigration acts as the
-  release valve, which is plausible but not tuned for realism.
+- Unemployment can still run high in some seeds (around half of adults in one run). Emigration is the
+  release valve, so migration churn is high: about 750 arrivals and 500 departures over 200 years.
+- Hunger still occasionally kills: 2–10 people per 200 years, almost all children of jobless families.
+  Each death records its cause.
 - The council's treasury is often low, so festivals are sometimes scaled down or cancelled.
 - The simulation pauses while the page is closed. There is no offline catch-up.
 - The district layout is still a fixed set of ten blocks, now linked by real roads. Citizens can pave and
