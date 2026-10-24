@@ -60,6 +60,16 @@ const BASE = process.env.BASE_URL ?? 'http://localhost:4173/kingdom-of-nobodies/
   assert.ok(after <= before, 'food aid is paid for');
   step('council action runs from the panel');
 
+  for (const tab of ['families', 'economy', 'politics', 'history']) {
+    await page.tap(`#tabbar button[data-tab=${tab}]`);
+    await page.waitForFunction((t) => document.querySelector(`#tabbar button[data-tab=${t}]`).classList.contains('active') && document.getElementById('sheet-body').textContent.trim().length > 20, tab);
+  }
+  await page.tap('#sheet-body [data-act=bio]');
+  await page.waitForFunction(() => document.getElementById('sheet-body').textContent.includes('Family tree'));
+  await page.tap('#sheet-body [data-act=tree]');
+  await page.waitForSelector('#sheet-body .tree-node');
+  step('families, economy, politics and history tabs open; biography and family tree respond to touch');
+
   await page.evaluate(async () => { while (kingdom.sim.state.day < 4) kingdom.sim.step(); await kingdom.save(); });
   const saved = await page.evaluate(() => ({ day: kingdom.sim.state.day, tick: kingdom.sim.state.tick }));
   await page.reload();

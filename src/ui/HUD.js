@@ -1,10 +1,15 @@
+import { byId } from '../core/EntityRegistry.js';
 import { balance } from '../economy/Transactions.js';
 import { BottomSheet } from './BottomSheet.js';
 import { Notifications } from './Notifications.js';
 import { citizenList, citizenDetail } from './CitizenPanel.js';
 import { economyOverview, businessDetail } from './BusinessPanel.js';
 import { buildingsList, plotDetail } from './PropertyPanel.js';
-import { chronicle } from './ChroniclePanel.js';
+import { familiesList, houseDetail, familyTree } from './FamilyPanel.js';
+import { politicsPanel } from './PoliticsPanel.js';
+import { historyPanel, biographyView } from './HistoryPanel.js';
+import { dateLabel, yearOf } from '../core/Calendar.js';
+import { settlementStage } from '../population/Expansion.js';
 import { councilPanel } from './CouncilPanel.js';
 import { clock } from './util.js';
 import { plotById } from '../property/LandRegistry.js';
@@ -22,7 +27,7 @@ export class HUD {
     this.toasts = new Notifications($('toasts'));
     this.sheet = new BottomSheet($('sheet'), { onClose: () => { this.view.detail = null; this.stack = []; } });
     this.sheet.onChange = () => setTimeout(() => this.renderTabs(), 300);
-    this.view = { tab: 'citizens', detail: null, plotFilter: 'all', chronicle: {} };
+    this.view = { tab: 'citizens', detail: null, plotFilter: 'all', chronicle: {}, econMode: 'business', historyMode: 'eras', historyYear: null, historyQuery: '', citizenQuery: '' };
     this.stack = [];
     this.lastTop = 0;
     this.lastBody = 0;
@@ -48,6 +53,15 @@ export class HUD {
     window.addEventListener('pointerup', () => { setTimeout(() => { this.interacting = false; }, 250); });
     body.addEventListener('click', (e) => this.onAction(e));
     body.addEventListener('change', (e) => this.onAction(e));
+    body.addEventListener('input', (e) => {
+      const el = e.target.closest('input.search');
+      if (!el) return;
+      if (el.dataset.act === 'citizen-search') this.view.citizenQuery = el.value;
+      if (el.dataset.act === 'hist-search') this.view.historyQuery = el.value;
+      this.renderSheet(true);
+      const again = $('sheet-body').querySelector(`input[data-act="${el.dataset.act}"]`);
+      if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+    });
     $('import-file').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) this.game.importSave(f); });
   }
 
@@ -59,6 +73,12 @@ export class HUD {
     this.sheet.open('peek');
     this.renderSheet(true);
     $('sheet-body').scrollTop = 0;
+  }
+
+  /** Tapping the Founders' Memorial in the square opens the History tab on it. */
+  showMemorial() {
+    this.view.historyMode = 'eras';
+    this.openTab('history');
   }
 
   openDetail(kind, id, { push = true } = {}) {
@@ -81,14 +101,18 @@ export class HUD {
     const { act, id } = el.dataset;
     const g = this.game;
     switch (act) {
-      case 'citizen': case 'business': case 'plot': this.openDetail(act, id); break;
+      case 'citizen': case 'business': case 'plot': case 'house': case 'tree': case 'bio': this.openDetail(act, id); break;
+      case 'econ-mode': this.view.econMode = id; this.renderSheet(true); break;
+      case 'hist-mode': this.view.historyMode = id; this.view.chronicle = {}; this.view.historyQuery = ''; this.renderSheet(true); $('sheet-body').scrollTop = 0; break;
+      case 'hist-year': this.view.historyYear = Number(id); this.renderSheet(true); break;
+      case 'memorial': this.openTab('history'); this.view.historyMode = 'eras'; this.renderSheet(true); break;
       case 'tab': this.openTab(id); break;
-      case 'tab-filter': this.openTab(id, { plotFilter: el.dataset.filter }); break;
+      case 'tab-filter': this.view.econMode = 'land'; this.openTab(id, { plotFilter: el.dataset.filter }); break;
       case 'plot-filter': this.view.plotFilter = id; this.renderSheet(true); break;
-      case 'chronicle-filter': this.view.chronicle = { category: id || null }; this.renderSheet(true); break;
+      case 'chronicle-filter': this.view.chronicle = { ...this.view.chronicle, category: id || null }; this.renderSheet(true); break;
       case 'chronicle-clear': this.view.chronicle = {}; this.renderSheet(true); break;
-      case 'history': this.view.tab = 'chronicle'; this.view.detail = null; this.stack = []; this.view.chronicle = { [el.dataset.kind]: id }; this.renderSheet(true); $('sheet-body').scrollTop = 0; break;
-      case 'focus-citizen': { const c = this.sim.state.citizens.find((x) => x.id === id); if (c) { g.world?.focusOn(c.x, c.z); this.sheet.set('peek'); } break; }
+      case 'history': this.view.tab = 'history'; this.view.historyMode = 'timeline'; this.view.detail = null; this.stack = []; this.view.chronicle = { [el.dataset.kind]: id }; this.renderSheet(true); $('sheet-body').scrollTop = 0; break;
+      case 'focus-citizen': { const c = byId(this.sim.state.citizens, id); if (c) { g.world?.follow(c.id); this.sheet.set('peek'); } break; }
       case 'focus-plot': { const p = plotById(this.sim.state, id); if (p) { this.sim.select('plot', id); g.world?.focusOn(p.x, p.z); this.sheet.set('peek'); } break; }
       case 'council': {
         const res = this.sim.council(el.dataset.action, id || undefined);
@@ -103,6 +127,7 @@ export class HUD {
       case 'save': g.save(true); break;
       case 'export': g.saves.exportFile(this.sim.state); this.toasts.show('Save file downloaded.'); break;
       case 'import': $('import-file').click(); break;
+      case 'restore': if (confirm('Roll back to the recovery snapshot taken at the start of the latest saved year? Progress since then will be lost.')) g.restoreSnapshot(); break;
       case 'new': if (confirm('Start a new kingdom? Your current village will be replaced. (Export it first if you want to keep it.)')) g.newKingdom(); break;
       default: break;
     }
@@ -118,7 +143,9 @@ export class HUD {
     this.lastTop = performance.now();
     const s = this.sim.state;
     const clockEl = $('clock');
-    const text = `Day ${s.day} · ${clock(s.minute)}`;
+    const text = `${dateLabel(s.day, { short: true })} · ${clock(s.minute)} · ${settlementStage(s.citizens.length)}`;
+    const name = 'Kingdom of Nobodies';
+    if ($('kingdom-name').textContent !== name) $('kingdom-name').textContent = name;
     if (clockEl.textContent !== text) clockEl.textContent = text;
     const stats = `<span class="stat" title="Treasury">🪙 ${balance(s, 'treasury')}</span><span class="stat" title="Food in the village">🍞 ${this.sim.food}</span>` +
       `<span class="stat" title="Timber">🪵 ${this.sim.wood}</span><span class="stat" title="Population">👥 ${s.citizens.length}</span><span class="stat" title="Average happiness">♥ ${this.sim.averageMood}%</span>`;
@@ -148,11 +175,19 @@ export class HUD {
     if (detail?.kind === 'citizen') return citizenDetail(this.sim, detail.id);
     if (detail?.kind === 'business') return businessDetail(this.sim, detail.id);
     if (detail?.kind === 'plot') return plotDetail(this.sim, detail.id);
-    if (tab === 'economy') return economyOverview(this.sim);
-    if (tab === 'buildings') return buildingsList(this.sim, this.view.plotFilter);
-    if (tab === 'chronicle') return chronicle(this.sim, this.view.chronicle);
+    if (detail?.kind === 'house') return houseDetail(this.sim, detail.id);
+    if (detail?.kind === 'tree') return familyTree(this.sim, detail.id);
+    if (detail?.kind === 'bio') return biographyView(this.sim, detail.id);
+    if (tab === 'economy') {
+      const seg = `<div class="segmented">${[['business', 'Businesses'], ['land', 'Land & buildings']].map(([k, l]) => `<button class="${this.view.econMode === k ? 'active' : ''}" data-act="econ-mode" data-id="${k}">${l}</button>`).join('')}</div>`;
+      const inner = this.view.econMode === 'land' ? buildingsList(this.sim, this.view.plotFilter) : economyOverview(this.sim);
+      return { title: inner.title, html: seg + inner.html };
+    }
+    if (tab === 'families') return familiesList(this.sim);
+    if (tab === 'politics') return politicsPanel(this.sim);
+    if (tab === 'history') return historyPanel(this.sim, this.view);
     if (tab === 'council') return councilPanel(this.sim, { settings: this.game.settings, build: this.game.build, lastSaved: this.game.lastSavedText(), source: this.game.loadSource });
-    return citizenList(this.sim);
+    return citizenList(this.sim, this.view);
   }
 
   renderSheet(force = false) {

@@ -1,12 +1,26 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { buildTerrain } from './Terrain.js';
-import { buildingModel, constructionModel, forSaleSign, litWindow, forgeGlow } from './Models.js';
+import { buildingModel, constructionModel, forSaleSign, litWindow, forgeGlow, memorialModel, fireModel } from './Models.js';
 import { Villagers } from './Villagers.js';
-import { mat, G, part } from './Materials.js';
-import { STAGES, REFIT_STAGE, DEMOLITION } from '../core/Config.js';
+import { mat, G, part, PALETTE as P } from './Materials.js';
+import { stagesFor } from '../property/Construction.js';
 import { facingAngle } from '../property/LandRegistry.js';
 import { isTrading } from '../economy/Businesses.js';
+import { roadsFor } from '../population/Expansion.js';
+import { seasonIndex } from '../core/Calendar.js';
+import { byId } from '../core/EntityRegistry.js';
+
+// Seasonal tints: [ground, leaves, roofs-to-snow]. Ground and leaves multiply
+// their base colour; roofs blend towards snow in winter.
+const SEASON_LOOK = [
+  { ground: '#ffffff', leaf: '#ffffff', snow: 0 },
+  { ground: '#f4ffe8', leaf: '#eef7dc', snow: 0 },
+  { ground: '#f2dcb4', leaf: '#ffb46a', snow: 0 },
+  { ground: '#e8eef4', leaf: '#b9c8bf', snow: 0.72 },
+];
+const ROOFS = [P.roofRed, P.roofBrown, P.roofSlate, P.thatch];
+const LABEL_LIMIT = 14;
 
 // The Three.js presentation of the simulation. It only reads simulation state;
 // all changes flow the other way through Simulation methods.
@@ -34,12 +48,12 @@ export class World {
     this.duskColor = new THREE.Color('#e7a27a');
     this.nightColor = new THREE.Color('#14223d');
     this.scene.background = this.dayColor.clone();
-    this.scene.fog = new THREE.Fog(this.scene.background, 70, 150);
+    this.scene.fog = new THREE.Fog(this.scene.background, 120, 290);
 
-    this.camera = new THREE.PerspectiveCamera(42, 1, 0.5, 400);
+    this.camera = new THREE.PerspectiveCamera(42, 1, 0.5, 520);
     this.camera.position.set(34, 40, 52);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    Object.assign(this.controls, { enableDamping: true, dampingFactor: 0.09, minDistance: 10, maxDistance: 110, maxPolarAngle: Math.PI * 0.46, enablePan: true, screenSpacePanning: false });
+    Object.assign(this.controls, { enableDamping: true, dampingFactor: 0.09, minDistance: 10, maxDistance: 160, maxPolarAngle: Math.PI * 0.46, enablePan: true, screenSpacePanning: false });
     this.controls.touches.ONE = THREE.TOUCH.ROTATE;
     this.controls.touches.TWO = THREE.TOUCH.DOLLY_PAN;
     this.controls.target.set(0, 0, 2);
@@ -57,6 +71,14 @@ export class World {
     this.plotNodes = new Map();
     this.market = null;
     this.villagers = new Villagers(this.scene);
+    this.fires = new Map();
+    this.memorial = null;
+    this.season = -1;
+    this.leafBase = this.terrain.leafMaterials.map((m) => m.color.clone());
+    this.groundBase = this.terrain.ground.material.color.clone();
+    this.roofMats = ROOFS.map((c) => mat(c));
+    this.roofBase = this.roofMats.map((m) => m.color.clone());
+    this.followId = null;
 
     this.labelLayer = document.createElement('div');
     this.labelLayer.className = 'labels';
@@ -71,7 +93,7 @@ export class World {
     this.v = new THREE.Vector3();
     this.down = null;
     const el = this.renderer.domElement;
-    el.addEventListener('pointerdown', (e) => { this.down = { x: e.clientX, y: e.clientY, t: performance.now() }; this.focus = null; });
+    el.addEventListener('pointerdown', (e) => { this.down = { x: e.clientX, y: e.clientY, t: performance.now() }; this.focus = null; this.followId = null; });
     el.addEventListener('pointerup', (e) => this.pick(e));
     this.observer = new ResizeObserver(() => this.resize());
     this.observer.observe(container);
@@ -114,6 +136,8 @@ export class World {
   /** Rebuild plot visuals whose state signature changed. */
   syncPlots(force = false) {
     const s = this.sim.state;
+    const season = seasonIndex(s.day);
+    const burning = new Set((s.fires ?? []).map((f) => f.plotId));
     for (const plot of s.plots) {
       const project = plot.projectId ? s.projects.find((p) => p.id === plot.projectId) : null;
       const business = plot.businessId ? s.businesses.find((b) => b.id === plot.businessId) : null;
@@ -121,19 +145,49 @@ export class World {
       const open = business ? isTrading(business) : plot.building && ['bakery', 'tavern', 'general_store', 'blacksmith', 'lumberyard', 'stall'].includes(plot.building.type) ? false : undefined;
       const status = project ? 'BUILDING' : plot.marketStatus === 'FOR_SALE' ? 'FOR_SALE' : plot.ownerId === 'council' ? 'COUNCIL' : 'OWNED';
       const selected = this.sim.selected.kind === 'plot' && this.sim.selected.id === plot.id;
-      const sig = [plot.building?.type, plot.constructionStatus, project?.buildingType, Math.round(stageProgress * 4), open, status, selected, business?.type].join('|');
+      const sig = [plot.building?.type, plot.building?.level, (plot.building?.condition ?? 100) < 60, plot.constructionStatus, project?.kind, project?.buildingType, Math.round(stageProgress * 4), open, status, selected, business?.type, burning.has(plot.id), business?.type === 'farm' || plot.building?.type === 'farm' ? season : ''].join('|');
       let node = this.plotNodes.get(plot.id);
       if (node && node.userData.sig === sig && !force) continue;
       if (node) { this.plotLayer.remove(node); disposeInstanced(node); }
-      node = this.makePlot(plot, project, business, stageProgress, open, status, selected);
+      node = this.makePlot(plot, project, business, stageProgress, open, status, selected, burning.has(plot.id), season);
       node.userData.sig = sig;
       this.plotLayer.add(node);
       this.plotNodes.set(plot.id, node);
     }
+    for (const [id, node] of this.plotNodes) if (!s.plots.some((p) => p.id === id)) { this.plotLayer.remove(node); disposeInstanced(node); this.plotNodes.delete(id); }
     if (s.council.marketplace && !this.market) this.market = this.makeMarket();
+    this.syncMemorial();
   }
 
-  makePlot(plot, project, business, progress, open, status, selected) {
+  /** The Founders' Memorial stands in the square; it gains a crown once every founder has passed. */
+  syncMemorial() {
+    const s = this.sim.state;
+    if (!s.monuments?.some((m) => m.id === 'founders')) return;
+    const allPassed = !s.citizens.some((c) => c.founder);
+    if (this.memorial && this.memorial.userData.allPassed === allPassed) return;
+    if (this.memorial) this.scene.remove(this.memorial);
+    const m = memorialModel(allPassed);
+    m.position.set(-4.6, 0, -4.6);
+    m.rotation.y = Math.PI / 4;
+    m.userData.allPassed = allPassed;
+    m.traverse((o) => { o.userData.monument = 'founders'; });
+    this.scene.add(m);
+    this.memorial = m;
+  }
+
+  /** Seasonal colour of the land, trees and (in winter) snow on roofs. */
+  applySeason(index) {
+    if (index === this.season) return;
+    this.season = index;
+    const look = SEASON_LOOK[index];
+    const t = new THREE.Color();
+    this.terrain.ground.material.color.copy(this.groundBase).multiply(t.set(look.ground));
+    this.terrain.leafMaterials.forEach((m, i) => m.color.copy(this.leafBase[i]).multiply(t.set(look.leaf)));
+    const snow = new THREE.Color('#f4f7fa');
+    this.roofMats.forEach((m, i) => m.color.copy(this.roofBase[i]).lerp(snow, look.snow));
+  }
+
+  makePlot(plot, project, business, progress, open, status, selected, burning, season) {
     const g = new THREE.Group();
     g.position.set(plot.x, 0, plot.z);
     const hit = new THREE.Mesh(G.plane(), new THREE.MeshBasicMaterial({ visible: false }));
@@ -149,8 +203,12 @@ export class World {
     const inner = new THREE.Group();
     inner.rotation.y = facingAngle(plot);
     g.add(inner);
-    const opts = { id: plot.id, w: plot.w, d: plot.d, open };
-    if (project) {
+    const opts = { id: plot.id, w: plot.w, d: plot.d, open, level: plot.building?.level ?? 1, condition: plot.building?.condition ?? 100, season };
+    if (project && (project.kind === 'upgrade' || project.kind === 'repair')) {
+      // Existing building stays in use under scaffolding while it is expanded or repaired.
+      const type = business ? business.type === 'farm' ? 'farm' : business.type : plot.building.type;
+      inner.add(constructionModel(type, 'FINISHING', progress, { ...opts, level: opts.level + (project.kind === 'upgrade' && progress > 0.5 ? 1 : 0) }));
+    } else if (project) {
       const type = project.kind === 'demolition' ? plot.building?.type : project.buildingType;
       inner.add(constructionModel(type ?? 'cottage', project.kind === 'demolition' ? 'DEMOLISHING' : plot.constructionStatus, progress, { ...opts, oldType: plot.building?.type }));
     } else if (plot.building) {
@@ -162,6 +220,11 @@ export class World {
       const sign = forSaleSign();
       sign.position.set(plot.w / 2 - 0.6, 0, plot.d / 2 - 0.6);
       g.add(sign);
+    }
+    if (burning) {
+      const f = fireModel();
+      f.userData.flames = true;
+      g.add(f);
     }
     g.traverse((o) => { o.userData.plotId = plot.id; });
     return g;
@@ -191,6 +254,7 @@ export class World {
       const id = this.villagers.pick(people[0].object);
       if (id) { this.sim.select('citizen', id); this.onPick?.('citizen', id); return; }
     }
+    if (this.memorial && this.raycaster.intersectObject(this.memorial, true).length) { this.onPick?.('memorial', 'founders'); return; }
     const plots = this.raycaster.intersectObjects(this.plotLayer.children, true);
     if (plots.length) {
       const id = plots[0].object.userData.plotId;
@@ -199,28 +263,40 @@ export class World {
   }
 
   /** Smoothly move the camera target to a point. */
-  focusOn(x, z) { this.focus = new THREE.Vector3(x, 0, z); }
+  focusOn(x, z) { this.focus = new THREE.Vector3(x, 0, z); this.followId = null; }
+
+  /** Keep the camera on a citizen as they move, until the player drags the view. */
+  follow(id) { this.followId = id; this.focus = null; }
 
   render(dt, time) {
     const s = this.sim.state;
     if (time - this.lastSync > 0.4) {
       this.syncPlots();
-      this.villagers.sync(s.citizens);
+      this.villagers.sync(s.citizens, s.day);
       this.terrain.setForest(s.commons.forest / s.commons.forestCap);
+      this.terrain.syncRoads(roadsFor(s));
+      this.applySeason(seasonIndex(s.day));
       this.lastSync = time;
     }
     this.updateSky(s.minute / 60, time);
     const selected = this.sim.selected.kind === 'citizen' ? this.sim.selected.id : null;
-    this.villagers.update(s.citizens, dt, time, selected);
+    this.villagers.update(s.citizens, dt, time, selected, s.day, this.controls.target, this.quality);
+    if (this.followId) {
+      const c = byId(s.citizens, this.followId);
+      if (c) (this.focus ??= new THREE.Vector3()).set(c.x, 0, c.z);
+      else this.followId = null;
+    }
     if (this.focus) {
       const t = this.controls.target;
       const delta = this.v.copy(this.focus).sub(t).multiplyScalar(Math.min(1, dt * 4));
       t.add(delta);
       this.camera.position.add(delta);
-      if (delta.lengthSq() < 0.0004) this.focus = null;
+      if (delta.lengthSq() < 0.0004 && !this.followId) this.focus = null;
     }
-    this.controls.target.x = Math.max(-40, Math.min(40, this.controls.target.x));
-    this.controls.target.z = Math.max(-36, Math.min(36, this.controls.target.z));
+    this.controls.target.x = Math.max(-72, Math.min(72, this.controls.target.x));
+    this.controls.target.z = Math.max(-72, Math.min(72, this.controls.target.z));
+    // Shadows follow the area being looked at, so outer districts are lit too.
+    this.sun.target.position.copy(this.controls.target);
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
     if (this.showLabels) this.updateLabels(s.citizens, selected);
@@ -233,7 +309,8 @@ export class World {
     const light = Math.max(0, Math.min(1, elevation * 1.6));
     const night = 1 - light;
     const az = (dayT - 0.5) * Math.PI;
-    this.sun.position.set(Math.sin(az) * 60, 12 + elevation * 60, 30 + Math.cos(az) * 10);
+    const ct = this.controls.target;
+    this.sun.position.set(ct.x + Math.sin(az) * 60, 12 + elevation * 60, ct.z + 30 + Math.cos(az) * 10);
     this.sun.intensity = 0.15 + light * 2.3;
     this.hemi.intensity = 0.45 + light * 1.25;
     const sky = this.scene.background;
@@ -248,12 +325,20 @@ export class World {
     this.terrain.fire.scale.y = 1.5 * flicker;
     this.terrain.fireLight.intensity = (8 + night * 40) * flicker;
     forgeGlow.emissiveIntensity = 1 + Math.sin(time * 5) * 0.3;
+    for (const node of this.plotNodes.values()) for (const child of node.children) if (child.userData.flames) child.scale.y = 0.9 + Math.sin(time * 11 + node.position.x) * 0.12;
   }
 
   updateLabels(citizens, selected) {
     const w = this.container.clientWidth, h = this.container.clientHeight;
     const seen = new Set();
-    for (const c of citizens) {
+    // Only the nearest villagers to the view centre carry name labels, plus the selected one.
+    const t = this.controls.target;
+    let near = citizens.filter((c) => this.villagers.nodes.get(c.id)?.visible)
+      .map((c) => [c, (c.x - t.x) ** 2 + (c.z - t.z) ** 2]).sort((a, b) => a[1] - b[1]).slice(0, LABEL_LIMIT).map(([c]) => c);
+    const sel = selected && citizens.find((c) => c.id === selected);
+    if (sel) near = [sel, ...near.filter((c) => c !== sel)];
+    const placed = [];
+    for (const c of near) {
       const node = this.villagers.nodes.get(c.id);
       if (!node) continue;
       let el = this.labelEls.get(c.id);
@@ -264,14 +349,18 @@ export class World {
         this.labelEls.set(c.id, el);
       }
       seen.add(c.id);
-      this.v.set(node.position.x, 2.9, node.position.z).project(this.camera);
+      this.v.set(node.position.x, 2.9 * node.scale.y, node.position.z).project(this.camera);
       const visible = node.visible && this.v.z < 1 && Math.abs(this.v.x) < 1.1 && Math.abs(this.v.y) < 1.1;
-      el.style.display = visible ? '' : 'none';
-      if (!visible) continue;
+      const sx = ((this.v.x + 1) / 2) * w, sy = ((1 - this.v.y) / 2) * h;
+      // Skip labels that would sit on top of one already placed (the selected one always shows).
+      const crowded = visible && c.id !== selected && placed.some(([px, py]) => Math.abs(px - sx) < 52 && Math.abs(py - sy) < 22);
+      el.style.display = visible && !crowded ? '' : 'none';
+      if (!visible || crowded) continue;
+      placed.push([sx, sy]);
       const text = c.firstName;
       if (el.textContent !== text) el.textContent = text;
       el.classList.toggle('selected', c.id === selected);
-      el.style.transform = `translate(${((this.v.x + 1) / 2) * w}px, ${((1 - this.v.y) / 2) * h}px) translate(-50%, -100%)`;
+      el.style.transform = `translate(${sx}px, ${sy}px) translate(-50%, -100%)`;
     }
     for (const [id, el] of this.labelEls) if (!seen.has(id)) { el.remove(); this.labelEls.delete(id); }
   }
@@ -284,8 +373,7 @@ export class World {
 }
 
 function stageFraction(p) {
-  const stages = p.kind === 'construction' ? STAGES : p.kind === 'refit' ? [REFIT_STAGE] : [{ work: DEMOLITION.work }];
-  const s = stages[p.stageIndex];
+  const s = stagesFor(p.kind)[p.stageIndex];
   return s ? Math.min(1, p.work / s.work) : 0;
 }
 

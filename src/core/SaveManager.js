@@ -1,9 +1,12 @@
 import { serialize, deserialize, newestSave } from './Serialization.js';
+import { yearOf } from './Calendar.js';
 
 // Browser persistence. The primary store is IndexedDB with two slots: a new
 // save is written as 'current' and the previous one is kept as 'previous' in
 // the same transaction, so a failed or interrupted write never destroys the
-// last good save. A copy also goes to localStorage as a fallback.
+// last good save. Once per game year a recovery snapshot is also kept, so a
+// save that is valid but unwanted (or both slots damaged) can still be rolled
+// back. A copy also goes to localStorage as a fallback.
 
 const DB = 'kingdom-of-nobodies';
 const STORE = 'saves';
@@ -43,9 +46,15 @@ export class SaveManager {
       try {
         await idb('readwrite', (store) => {
           const get = store.get('current');
+          const year = store.get('snapshotYear');
           get.onsuccess = () => {
             if (get.result) store.put(get.result, 'previous');
             store.put(text, 'current');
+          };
+          year.onsuccess = () => {
+            if (year.result === yearOf(state.day)) return;
+            store.put(text, 'snapshot');
+            store.put(yearOf(state.day), 'snapshotYear');
           };
         });
         ok = true;
@@ -68,14 +77,16 @@ export class SaveManager {
   async load() {
     const candidates = [];
     try {
-      const [current, previous] = await idb('readonly', (store) => {
+      const [current, previous, snapshot] = await idb('readonly', (store) => {
         const out = { result: [] };
-        const a = store.get('current'), b = store.get('previous');
+        const a = store.get('current'), b = store.get('previous'), c = store.get('snapshot');
         a.onsuccess = () => { out.result[0] = a.result; };
         b.onsuccess = () => { out.result[1] = b.result; };
+        c.onsuccess = () => { out.result[2] = c.result; };
         return out;
       });
-      candidates.push(['saved game', current], ['previous save', previous]);
+      // Listed last so that on a tie the regular save is reported as the source.
+      candidates.push(['saved game', current], ['previous save', previous], ['yearly recovery snapshot', snapshot]);
     } catch { /* IndexedDB unavailable */ }
     try { candidates.push(['backup save', localStorage.getItem(LS_BACKUP)]); } catch { /* ignore */ }
     const best = newestSave(candidates);
@@ -91,8 +102,16 @@ export class SaveManager {
     return { state: null, source: null };
   }
 
+  /** The yearly recovery snapshot, if one exists, for an explicit roll-back. */
+  async loadSnapshot() {
+    try {
+      const text = await idb('readonly', (store) => store.get('snapshot'));
+      return text ? deserialize(text) : null;
+    } catch { return null; }
+  }
+
   async clear() {
-    try { await idb('readwrite', (store) => { store.delete('current'); store.delete('previous'); }); } catch { /* ignore */ }
+    try { await idb('readwrite', (store) => { for (const k of ['current', 'previous', 'snapshot', 'snapshotYear']) store.delete(k); }); } catch { /* ignore */ }
     try { localStorage.removeItem(LS_BACKUP); localStorage.setItem(LEGACY_DONE, '1'); } catch { /* ignore */ }
   }
 

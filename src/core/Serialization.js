@@ -1,9 +1,56 @@
 import { SAVE_VERSION } from './Config.js';
-import { createKingdom } from '../sim/Setup.js';
+import { createKingdom, createWorks } from '../sim/Setup.js';
 import { adjustBoth } from '../citizens/Relationships.js';
 import { addGoods } from '../economy/Inventory.js';
 import { transfer } from '../economy/Transactions.js';
 import { plotByName } from '../property/LandRegistry.js';
+import { POPULATION, DAYS_PER_YEAR } from './Config.js';
+import { NAMES } from '../citizens/Families.js';
+import { familyWish } from '../citizens/Genetics.js';
+import { attractionFor } from '../citizens/Citizen.js';
+
+const FOUNDER_SEX = { Ada: 'F', Bram: 'M', Cora: 'F', Dain: 'M', Elin: 'F' };
+
+/**
+ * Milestone 2 (v3) → Milestone 3 (v4). Ages become birth dates on the new
+ * calendar, everyone gains family, education and health records, and the
+ * world gains an archive, statistics and an (unformed) government. Partners
+ * stay partners; marriage is something they may now choose.
+ */
+export function migrateV3(s) {
+  for (const c of s.citizens) {
+    const age = Number.isFinite(c.age) ? c.age : 30;
+    c.birthDay = s.day - age * DAYS_PER_YEAR - (Number(c.id.slice(1)) % DAYS_PER_YEAR);
+    delete c.age;
+    c.sex = FOUNDER_SEX[c.firstName] && Number(c.id.slice(1)) <= 5 ? FOUNDER_SEX[c.firstName] : NAMES.F.includes(c.firstName) ? 'F' : 'M';
+    c.founder = Number(c.id.slice(1)) <= 5 && !!FOUNDER_SEX[c.firstName];
+    c.generation = 1;
+    c.attraction = c.attraction ?? attractionFor(Number(c.id.slice(1)));
+    c.retired = false;
+    c.romance = { engagedTo: null, ...c.romance };
+    c.family = { spouseId: null, formerSpouseIds: [], guardianId: null, adoptive: false, ...c.family, parentIds: c.family?.parentIds ?? [], childIds: c.family?.childIds ?? [] };
+    c.education = c.education ?? { level: 0.3, trade: null, masterId: null, apprenticeSince: null };
+    c.pregnancy = null;
+    c.health = c.health ?? { sickUntil: 0, immuneUntil: 0, starvingDays: 0 };
+    c.achievements = c.achievements ?? [];
+    c.appearance = { height: 1, ...c.appearance };
+    c.stats.maxStaff = c.stats.maxStaff ?? 0;
+    c.familyWish = c.familyWish ?? familyWish(s, c);
+  }
+  Object.assign(s, {
+    archive: s.archive ?? {}, estates: s.estates ?? [],
+    stats: s.stats ?? { births: 0, deaths: 0, immigrants: Math.max(0, s.citizens.length - 5), emigrants: 0, marriages: 0, elections: 0, fires: 0 },
+    season: s.season ?? {}, discoveries: s.discoveries ?? {}, government: s.government ?? null,
+    eras: s.eras ?? [{ name: 'The Founding Years', startDay: 1, reason: 'Five strangers lit the first hearth.' }],
+    populationCap: POPULATION.max, yearly: s.yearly ?? [], eventLog: s.eventLog ?? [], fires: s.fires ?? [], research: s.research ?? {},
+    monuments: s.monuments ?? [{ id: 'founders', name: "Founders' Memorial", day: 1 }],
+  });
+  s.accounts.outside += 46000; // the wider world becomes realistically large
+  if (!s.businesses.some((b) => b.type === 'works')) createWorks(s);
+  s.version = 4;
+  s.migratedFrom = s.migratedFrom ?? 'milestone-2';
+  return s;
+}
 
 // Pure save-format helpers (no browser APIs) so they can be unit tested.
 // A save file is an envelope { format, version, savedAt, checksum, data }.
@@ -72,6 +119,7 @@ export function migrate(s) {
     s.events = [];
     return s;
   }
+  if (s.version === 3) return migrate(migrateV3(s));
   if (s.version === 2 && Array.isArray(s.people)) return migrateMilestone1(s);
   throw new Error(`Unsupported save version ${s.version}.`);
 }

@@ -1,3 +1,4 @@
+import { byId } from '../core/EntityRegistry.js';
 import { ECONOMY, GOODS } from '../core/Config.js';
 import { transfer, balance } from './Transactions.js';
 import { qty, removeGoods } from './Inventory.js';
@@ -5,6 +6,7 @@ import { BUSINESS_TYPES, isTrading, freshLedger } from './Businesses.js';
 import { adjustPrices, cashReserve, ownerAccount } from './Marketplace.js';
 import { layOff, leaveJob, updateOpenings, wageBill } from './Employment.js';
 import { listForSale } from '../property/Ownership.js';
+import { startProject } from '../property/Construction.js';
 import { plotById, plotHistory } from '../property/LandRegistry.js';
 import { record } from '../society/Chronicle.js';
 import { remember } from '../ai/MemorySystem.js';
@@ -15,7 +17,7 @@ import { createFact } from '../society/Gossip.js';
 // and the business life cycle OPEN → STRUGGLING → CLOSED/BANKRUPT.
 
 export function closeDay(state) {
-  const taxPerBusiness = ECONOMY.tax[state.council.taxLevel];
+  const taxPerBusiness = Math.max(0, ECONOMY.tax[state.council.taxLevel] - (state.government?.policies?.reducedFees ? 1 : 0));
   for (const b of state.businesses) {
     if (!isTrading(b)) continue;
     const startup = state.day - b.foundedDay < 4;
@@ -30,21 +32,33 @@ export function closeDay(state) {
     b.history.push({ day: state.day, revenue: t.revenue, expenses, profit, customers: t.customers, produced: t.produced, cash: balance(state, b.id) });
     if (b.history.length > 14) b.history.shift();
     b.quality = Math.max(0.1, Math.min(1, b.quality + (t.customers > 0 ? 0.02 : -0.01)));
-    payDividend(state, b);
+    if (!BUSINESS_TYPES[b.type].civic) payDividend(state, b);
+    considerUpgrade(state, b);
     adjustPrices(b);
     updateLifecycle(state, b, startup);
     if (isTrading(b)) updateOpenings(state, b);
-    const owner = state.citizens.find((c) => c.id === b.ownerId);
+    const owner = byId(state.citizens, b.ownerId);
     if (owner) bump(owner, 'competence', profit > 0 ? 0.8 : profit < 0 ? -0.6 : 0);
     b.today = freshLedger();
   }
 }
 
 function payDividend(state, b) {
-  const excess = balance(state, b.id) - cashReserve(state, b) - 20;
+  const excess = balance(state, b.id) - cashReserve(state, b) - 45;
   if (excess <= 4) return;
   const amount = Math.floor(excess * ECONOMY.dividendShare);
   if (amount > 0) transfer(state, b.id, ownerAccount(b.ownerId), amount, 'dividend', `Profits from ${b.name}`);
+}
+
+/** A thriving business whose owner can afford it expands its premises (real timber and builders' wages). */
+function considerUpgrade(state, b) {
+  const owner = byId(state.citizens, b.ownerId);
+  const plot = plotById(state, b.plotId);
+  if (!owner || !plot?.building || plot.projectId || (b.level ?? 1) >= 3 || b.status !== 'OPEN') return;
+  if (b.history.length < 6 || recentProfit(b, 6) <= 10 || balance(state, owner.id) < 70 + (b.level ?? 1) * 30) return;
+  if (state.projects.length >= ECONOMY.maxActiveProjects + 2) return;
+  const res = startProject(state, { plotId: plot.id, ownerId: owner.id, kind: 'upgrade' });
+  if (res.ok) remember(state, owner, `Began expanding ${b.name}.`, 2, 'career');
 }
 
 export function recentProfit(b, days = 3) {
@@ -52,7 +66,7 @@ export function recentProfit(b, days = 3) {
 }
 
 function updateLifecycle(state, b, startup) {
-  if (startup) return;
+  if (startup || BUSINESS_TYPES[b.type].civic) return;
   const cash = balance(state, b.id);
   const losing = recentProfit(b, 3) < 0;
   const noTrade = b.history.slice(-3).every((h) => h.revenue === 0);
@@ -88,7 +102,7 @@ export function closeBusiness(state, b, status = 'CLOSED') {
   b.closedDay = state.day;
   b.openings = 0;
   for (const id of [...b.employees]) {
-    const c = state.citizens.find((x) => x.id === id);
+    const c = byId(state.citizens, id);
     if (!c) continue;
     leaveJob(state, c, `${b.name} closed`);
     c.mood = Math.max(0, c.mood - 12);
@@ -111,7 +125,7 @@ export function closeBusiness(state, b, status = 'CLOSED') {
   if (plot.building) plot.building.name = `Empty ${plot.building.name.replace(/^Empty /, '')}`;
   plotHistory(state, plot, `${b.name} ${status === 'BANKRUPT' ? 'went bankrupt' : 'closed its doors'}.`);
   listForSale(state, plot.id, Math.round(plot.price ? Math.max(plot.price * 0.9, 20) : 30));
-  const owner = state.citizens.find((c) => c.id === b.ownerId);
+  const owner = byId(state.citizens, b.ownerId);
   if (owner) {
     if (owner.employment?.businessId === b.id) leaveJob(state, owner, `${b.name} closed`);
     owner.mood = Math.max(0, owner.mood - 25);

@@ -8,6 +8,8 @@ import { createCitizen } from './Citizen.js';
 import { record } from '../society/Chronicle.js';
 import { remember } from '../ai/MemorySystem.js';
 import { moveHome } from '../property/Construction.js';
+import { NAMES } from './Families.js';
+import { familyWish } from './Genetics.js';
 
 // Population growth. Newcomers arrive when there are beds, the village is in
 // decent spirits and there is work or an obvious gap in the market.
@@ -26,7 +28,10 @@ export function housingCapacity(state) {
 export function assignHomes(state) {
   for (const c of state.citizens) {
     if (c.homePlotId) continue;
-    const home = state.plots.find((p) => bedsAt(state, p) > p.residents.length && (p.ownerId === 'council' || p.ownerId === c.id));
+    // Singles start in the communal hall; cottages are kept for families when possible.
+    const free = (p) => bedsAt(state, p) > p.residents.length;
+    const home = state.plots.find((p) => p.ownerId === c.id && free(p)) ?? state.plots.find((p) => p.building?.type === 'hall' && free(p)) ??
+      state.plots.find((p) => p.ownerId === 'council' && free(p));
     if (home) moveHome(state, c, home);
   }
 }
@@ -58,7 +63,7 @@ export function maybeImmigrate(state) {
   const c = createCitizen(state, {
     firstName: FIRST[intRange(state, 0, FIRST.length - 1)],
     lastName: pick(state, LAST),
-    age: intRange(state, 19, 50),
+    age: nextRandom(state) < 0.8 ? intRange(state, 18, 32) : intRange(state, 33, 48),
     color: pick(state, COLORS),
     appearance: { hair: pick(state, HAIR), hairColor: pick(state, HAIR_COLORS), skin: pick(state, SKIN) },
     profession: need.profession,
@@ -67,6 +72,9 @@ export function maybeImmigrate(state) {
     x: -34, z: 0,
   });
   if (state.citizens.filter((o) => o.firstName === c.firstName).length > 1) c.firstName = FIRST[(FIRST.indexOf(c.firstName) + 7) % FIRST.length];
+  c.sex = NAMES.F.includes(c.firstName) ? 'F' : 'M';
+  c.familyWish = familyWish(state, c);
+  state.stats.immigrants++;
   const coins = intRange(state, POPULATION.immigrantMinCoins, POPULATION.immigrantMaxCoins);
   transfer(state, 'outside', c.id, Math.min(coins, balance(state, 'outside')), 'immigration', `${c.firstName}'s savings`);
   assignHomes(state);

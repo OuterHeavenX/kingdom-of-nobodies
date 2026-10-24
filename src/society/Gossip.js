@@ -1,7 +1,9 @@
+import { byId } from '../core/EntityRegistry.js';
 import { SOCIAL } from '../core/Config.js';
 import { chance, nextRandom } from '../core/Random.js';
 import { trait } from '../ai/Personality.js';
 import { rel, adjust } from '../citizens/Relationships.js';
+import { rumorIndex } from './Reputation.js';
 
 // Village gossip. A rumor is a claim about a citizen. Each citizen holds beliefs
 // about rumors with a confidence and a source: 'witnessed' (they saw it) or
@@ -16,7 +18,7 @@ export function createRumor(state, { kind, subjectId, otherId = null, text, trut
   const rumor = { id: 'r' + ++state.nextId.rumor, kind, subjectId, otherId, text, truth, day: state.day, origin };
   state.rumors.push(rumor);
   for (const id of witnesses) {
-    const c = state.citizens.find((x) => x.id === id);
+    const c = byId(state.citizens, id);
     if (c) believe(state, c, rumor, 1, 'witnessed', null);
   }
   return rumor;
@@ -55,7 +57,7 @@ export function shareGossip(state, speaker, listener) {
   }
   const known = Object.entries(speaker.beliefs)
     .filter(([id, b]) => !listener.beliefs[id] && b.confidence > 0.25)
-    .map(([id]) => state.rumors.find((r) => r.id === id))
+    .map(([id]) => rumorIndex(state).get(id))
     .filter((r) => r && r.subjectId !== listener.id);
   if (!known.length) return null;
   const rumor = known[Math.floor(nextRandom(state) * known.length)];

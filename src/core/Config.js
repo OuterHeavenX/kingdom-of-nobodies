@@ -1,13 +1,13 @@
 // Central tuning constants. Every economic and behavioural number lives here so
 // the simulation can be balanced without hunting through system code.
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 export const TIME = {
   minutesPerTick: 10,
   ticksPerDay: 144,
   realSecondsPerTick: 0.25, // at 1× speed one in-game day lasts 36 seconds
-  speeds: [1, 3, 6],
+  speeds: [1, 3, 6, 20],
   maxTicksPerFrame: 12,
   dayStartHour: 6,
   workStartHour: 6,
@@ -27,12 +27,13 @@ export const NEEDS = {
   criticalEnergy: 6,
 };
 
-export const MOVE = { unitsPerTick: 1.6, arriveDistance: 0.6 };
+export const MOVE = { unitsPerTick: 2.6, arriveDistance: 0.6 };
 
 export const POPULATION = {
-  max: 14,
-  hallBeds: 8,
-  cottageBeds: 2,
+  max: 250,
+  hallBeds: 10,
+  cottageBeds: 4,
+  houseBeds: 6,
   immigrationEveryDays: 3,
   immigrantMinCoins: 14,
   immigrantMaxCoins: 34,
@@ -56,9 +57,12 @@ export const ECONOMY = {
   priceMin: 0.65,
   priceMax: 1.6,
   priceStepPerDay: 0.12,
-  dividendShare: 0.35,
+  dividendShare: 0.2,
   tax: { low: 0, normal: 1, high: 3 },
   taxMood: { low: 1.5, normal: 0, high: -3 },
+  tithe: { low: 0.01, normal: 0.02, high: 0.04 }, // daily share of savings above titheFloor
+  titheFloor: 60,
+  treasuryComfort: 300,
   caravanEveryDays: 3,
   caravanBuyFactor: 0.75,
   caravanMaxUnitsPerGood: 10,
@@ -68,18 +72,18 @@ export const ECONOMY = {
   startingCapital: 14,
   struggleDays: 3,
   closeAfterStruggleDays: 7,
-  maxOpenPerType: 2,
+  maxOpenPerType: 3,
   maxActiveProjects: 3,
   minWage: 4,
   toolUses: 12,
   toolBoost: 1.3,
   councilPantryPrice: 1,
-  councilPantryMax: 30,
+  councilPantryMax: 60,
 };
 
 export const WAGES = {
   Farmer: 6, Woodcutter: 7, Builder: 6, Forager: 5, Baker: 7, Blacksmith: 8,
-  Merchant: 6, Innkeeper: 6, Laborer: 5,
+  Merchant: 6, Innkeeper: 6, Laborer: 5, Teacher: 6,
 };
 
 // Construction stages after PLANNING. Work is in labour units; a builder shift adds ~3.
@@ -101,8 +105,8 @@ export const BUILD = {
 export const SOCIAL = {
   friendGain: 6,
   coworkerGain: 1.5,
-  courtAffection: 62,
-  partnerAffection: 80,
+  courtAffection: 55,
+  partnerAffection: 72,
   partnerDays: 4,
   breakupTrust: 22,
   rumorShareChance: 0.6,
@@ -124,5 +128,84 @@ export const COUNCIL = {
   businessGrant: 20,
   marketplaceCost: 60,
   publicCottageBudget: 30,
-  reserve: 160,
+  reserve: 120,
+};
+
+// ---------------------------------------------------------------------------
+// Milestone 3: Legacy & Generations
+// ---------------------------------------------------------------------------
+
+// A year has four seasons. Short seasons let generations unfold in a play
+// session: at 1x one year lasts about 7 minutes, at 20x about 22 seconds.
+export const CALENDAR = {
+  daysPerSeason: 3,
+  seasons: ['Spring', 'Summer', 'Autumn', 'Winter'],
+};
+export const DAYS_PER_YEAR = CALENDAR.daysPerSeason * CALENDAR.seasons.length;
+
+export const LIFE_STAGES = [
+  { id: 'infant', label: 'Infant', from: 0 },
+  { id: 'child', label: 'Child', from: 3 },
+  { id: 'teen', label: 'Teenager', from: 13 },
+  { id: 'young', label: 'Young adult', from: 18 },
+  { id: 'adult', label: 'Adult', from: 30 },
+  { id: 'elder', label: 'Elder', from: 60 },
+];
+
+export const LIFE = {
+  adultAge: 18,
+  apprenticeAge: 13,
+  retireAge: 62,
+  fertileFrom: 19,
+  fertileTo: 44,
+  pregnancyDays: 9,          // three seasons
+  minDaysBetweenBirths: 18,  // 1.5 years
+  maxChildren: 5,
+  marriageMinAge: 18,
+  // Gompertz mortality: yearly death probability = a * exp(b * age).
+  gompertzA: 0.00012,
+  gompertzB: 0.088,
+  infantYearlyRisk: 0.02,
+  starvationDailyRisk: 0.02,
+};
+
+export const FAMILY = {
+  engagementAfterDays: 6,
+  weddingAfterDays: 4,
+  divorceTrust: 18,
+  childCostPerDay: 1,
+};
+
+export const EDUCATION = {
+  lessonGain: 0.012,
+  schoolBonus: 2,
+  apprenticeGainMultiplier: 2.5,
+  apprenticeStipend: 2,
+  mentorGain: 0.02,
+  teacherWage: 6,
+};
+
+export const POLITICS = {
+  firstElectionAdults: 10,
+  termYears: 4,
+  campaignDays: 6,
+  maxCandidates: 3,
+  protestApproval: 30,
+  resignApproval: 18,
+  embezzleChancePerSeason: 0.35,
+};
+
+export const EVENTS = {
+  fireDailyPerBuilding: 0.0009,
+  fireDurationTicks: 8,
+  cropFailureChance: 0.12,
+  harshWinterChance: 0.15,
+  diseaseDailyChance: 0.0025,
+  diseaseSpread: 0.12,
+  recessionChance: 0.07,
+};
+
+export const HISTORY = {
+  chronicleMax: 900,
+  minEraYears: 6,
 };

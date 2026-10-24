@@ -1,5 +1,13 @@
 import * as THREE from 'three';
 import { mat, G, part } from './Materials.js';
+import { ageOn, stageForAge } from '../core/Calendar.js';
+
+// Body scale by life stage; elders also stoop a little and go grey.
+const STAGE_SCALE = { infant: 0.4, child: 0.62, teen: 0.86, young: 1, adult: 1, elder: 0.96 };
+const look = (c, day) => {
+  const stage = stageForAge(ageOn(c.birthDay ?? 0, day)).id;
+  return { stage, sig: `${c.profession}|${c.appearance?.hair}|${c.color}|${stage === 'elder' ? 'grey' : stage === 'infant' || stage === 'child' ? 'small' : ''}` };
+};
 
 // Villager figures. Appearance comes from the citizen record (tunic colour,
 // hair, skin) plus profession clothing and tools. Animation is chosen from the
@@ -36,7 +44,7 @@ function addTool(hand, profession) {
   if (profession === 'Forager') part(hand, G.cyl(8), mat('#b08850'), [0.36, 0.26, 0.36], [0, -0.5, 0.05], null, false);
 }
 
-export function makeVillager(c) {
+export function makeVillager(c, stage = 'adult') {
   const root = new THREE.Group();
   const skin = mat(c.appearance?.skin ?? '#f2cfab');
   const tunic = mat(c.color);
@@ -63,16 +71,16 @@ export function makeVillager(c) {
     torso.add(shoulder);
     return shoulder;
   });
-  addTool(arms[1], c.profession);
+  if (stage !== 'infant' && stage !== 'child') addTool(arms[1], c.profession);
   const head = new THREE.Group();
   head.position.y = 1.08;
   torso.add(head);
   part(head, G.sphere(10), skin, [0.5, 0.52, 0.5], [0, 0, 0]);
   part(head, G.box(), mat('#2b2420'), [0.06, 0.07, 0.03], [-0.1, 0.03, 0.24], null, false);
   part(head, G.box(), mat('#2b2420'), [0.06, 0.07, 0.03], [0.1, 0.03, 0.24], null, false);
-  addHair(head, c.appearance?.hair ?? 'short', c.appearance?.hairColor ?? '#5a3b26');
-  addHat(head, c.profession);
-  root.userData = { citizenId: c.id, legs, arms, torso, head, signature: `${c.profession}|${c.appearance?.hair}|${c.color}` };
+  addHair(head, c.appearance?.hair ?? 'short', stage === 'elder' ? '#c9c6c0' : c.appearance?.hairColor ?? '#5a3b26');
+  if (stage !== 'infant' && stage !== 'child') addHat(head, c.profession);
+  root.userData = { citizenId: c.id, legs, arms, torso, head, stage, signature: '' };
   root.traverse((o) => { o.userData.citizenId = c.id; });
   return root;
 }
@@ -92,15 +100,17 @@ export class Villagers {
     this.tmp = new THREE.Vector3();
   }
 
-  sync(citizens) {
+  sync(citizens, day) {
     const ids = new Set(citizens.map((c) => c.id));
     for (const [id, node] of this.nodes) if (!ids.has(id)) { this.root.remove(node); this.nodes.delete(id); }
     for (const c of citizens) {
       let node = this.nodes.get(c.id);
-      const sig = `${c.profession}|${c.appearance?.hair}|${c.color}`;
+      const { stage, sig } = look(c, day);
       if (node && node.userData.signature !== sig) { this.root.remove(node); node = null; }
+      if (node) node.userData.stage = stage;
       if (!node) {
-        node = makeVillager(c);
+        node = makeVillager(c, stage);
+        node.userData.signature = sig;
         node.position.set(c.x, 0, c.z);
         this.root.add(node);
         this.nodes.set(c.id, node);
@@ -108,14 +118,21 @@ export class Villagers {
     }
   }
 
-  update(citizens, dt, time, selectedId) {
+  /**
+   * Level of detail: villagers far from the view centre are hidden, and those
+   * at middle distance only move (no limb animation). Low quality tightens both.
+   */
+  update(citizens, dt, time, selectedId, day, target, quality = 'high') {
+    const far = (quality === 'high' ? 95 : 70) ** 2, animate = (quality === 'high' ? 55 : 38) ** 2;
     for (const c of citizens) {
       const node = this.nodes.get(c.id);
       if (!node) continue;
       const u = node.userData;
       const a = c.activity;
-      const asleep = a?.kind === 'sleep' && a.phase === 'perform';
-      node.visible = !asleep;
+      const asleep = (a?.kind === 'sleep' || a?.kind === 'cradle') && a.phase === 'perform';
+      const d2 = target ? (c.x - target.x) ** 2 + (c.z - target.z) ** 2 : 0;
+      node.visible = !asleep && (d2 < far || c.id === selectedId);
+      if (!node.visible) { node.position.set(c.x, 0, c.z); continue; }
       this.tmp.set(c.x, 0, c.z);
       const dx = c.x - node.position.x, dz = c.z - node.position.z;
       const dist = Math.hypot(dx, dz);
@@ -123,6 +140,9 @@ export class Villagers {
       if (dist > 12) node.position.copy(this.tmp);
       else node.position.lerp(this.tmp, Math.min(1, dt * 7));
       if (moving) node.rotation.y = lerpAngle(node.rotation.y, Math.atan2(dx, dz), Math.min(1, dt * 10));
+      const base = STAGE_SCALE[u.stage] ?? 1;
+      node.scale.setScalar(c.id === selectedId ? base * 1.12 : base);
+      if (d2 > animate && c.id !== selectedId) continue;
       const phase = time * 9 + c.id.length * 1.7 + Number(c.id.slice(1));
       let legSwing = 0, armL = 0, armR = 0, bob = 0, headTilt = 0;
       if (moving) {
@@ -149,9 +169,8 @@ export class Villagers {
       u.arms[0].rotation.x = armL;
       u.arms[1].rotation.x = armR;
       u.torso.position.y = 0.72 + bob;
-      u.head.rotation.x = headTilt;
-      const scale = c.id === selectedId ? 1.12 : 1;
-      node.scale.setScalar(scale);
+      u.head.rotation.x = headTilt + (u.stage === 'elder' ? 0.12 : 0);
+      u.torso.rotation.x = u.stage === 'elder' ? 0.16 : 0;
       if (c.id === selectedId) {
         this.ring.visible = node.visible;
         this.ring.position.set(node.position.x, 0.05, node.position.z);

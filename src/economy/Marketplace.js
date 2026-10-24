@@ -1,3 +1,4 @@
+import { byId } from '../core/EntityRegistry.js';
 import { ECONOMY, GOODS, FOOD_GOODS, TIME } from '../core/Config.js';
 import { chance } from '../core/Random.js';
 import { transfer, balance } from './Transactions.js';
@@ -41,21 +42,22 @@ export function rankSellers(state, c, good, { forFood = false } = {}) {
     if (b.ownerId === c.id) continue;
     const price = retailPrice(b, good);
     const loc = businessLocation(state, b);
-    const owner = state.citizens.find((o) => o.id === b.ownerId);
+    const owner = byId(state.citizens, b.ownerId);
     const honesty = owner ? perceivedHonesty(state, c, owner) : 60;
     const friendship = owner ? peekRel(state, c.id, owner.id)?.friendship ?? 20 : 25;
     const value = forFood ? GOODS[good].food / price : 10 / price;
     const priceSensitivity = 1 + trait(c, 'frugal') + (balance(state, c.id) < 10 ? 1 : 0);
-    const score = value * 10 * priceSensitivity - distance(c, loc) * distanceWeight + (honesty - 50) * 0.08 +
-      (friendship - 20) * 0.04 + b.quality * 3 + (GOODS[good].social ?? 0) * 0.1 * trait(c, 'friendly');
+    const urgency = forFood ? 1 + Math.max(0, 60 - (c.needs?.hunger ?? 60)) / 20 : 1;
+    const score = value * 10 * priceSensitivity - distance(c, loc) * distanceWeight * urgency + (honesty - 50) * 0.08 +
+      (friendship - 20) * 0.04 + b.quality * 3 + (b.licensed ? 1.5 : 0) + (GOODS[good].social ?? 0) * 0.1 * trait(c, 'friendly');
     offers.push({ business: b, good, price, loc, score, honesty });
   }
   return offers.sort((a, b) => b.score - a.score);
 }
 
 /** Best affordable food option for a citizen, or null. */
-export function bestFoodOffer(state, c) {
-  const money = balance(state, c.id);
+export function bestFoodOffer(state, c, payer = c.id) {
+  const money = balance(state, payer);
   const all = FOOD_GOODS.flatMap((g) => rankSellers(state, c, g, { forFood: true })).filter((o) => o.price <= money);
   all.sort((a, b) => b.score - a.score);
   if (all[0]) return all[0];
@@ -64,13 +66,24 @@ export function bestFoodOffer(state, c) {
   if (good && money >= ECONOMY.councilPantryPrice + 1) {
     return { business: null, pantry: true, good, price: ECONOMY.councilPantryPrice + 1, loc: frontOf(state.plots[0]), score: 0 };
   }
+  // Food assistance: the destitute and hungry are fed from the pantry for free.
+  if (good && c.needs.hunger < 40 && foodAssistanceOn(state)) {
+    return { business: null, pantry: true, relief: true, good, price: 0, loc: frontOf(state.plots[0]), score: 0 };
+  }
   return null;
 }
 
 /** Buy one portion from the council pantry; the coins go to the treasury. */
-export function buyFromPantry(state, c, good) {
+export const foodAssistanceOn = (state) => state.government?.policies?.foodAssistance ?? true;
+
+export function buyFromPantry(state, c, good, payer = c.id, relief = false) {
+  if (relief) {
+    if (!foodAssistanceOn(state) || !moveGoods(state.council.pantry, c.inventory, good, 1)) return { ok: false };
+    state.council.reliefMeals = (state.council.reliefMeals ?? 0) + 1;
+    return { ok: true, paid: 0 };
+  }
   const price = ECONOMY.councilPantryPrice + 1;
-  if (qty(state.council.pantry, good) < 1 || !transfer(state, c.id, 'treasury', price, 'purchase', `${good} from the council pantry`)) return { ok: false };
+  if (qty(state.council.pantry, good) < 1 || !transfer(state, payer, 'treasury', price, 'purchase', `${good} from the council pantry`)) return { ok: false };
   moveGoods(state.council.pantry, c.inventory, good, 1);
   c.stats.spent += price;
   return { ok: true, paid: price };
@@ -88,18 +101,18 @@ export function ownStockFood(state, c) {
  * A citizen buys goods at a business. Dishonest owners sometimes overcharge;
  * the customer may notice, which creates a witnessed rumor and damages trust.
  */
-export function buyRetail(state, c, b, good, n = 1) {
+export function buyRetail(state, c, b, good, n = 1, payer = c.id) {
   if (!isOpenNow(state, b) || qty(b.inventory, good) < n) return { ok: false, reason: 'out of stock' };
   let price = retailPrice(b, good) * n;
   const isCitizen = state.citizens.includes(c);
-  const owner = state.citizens.find((o) => o.id === b.ownerId);
+  const owner = byId(state.citizens, b.ownerId);
   let cheated = false;
   if (isCitizen && owner && trait(owner, 'dishonest') > 0 && chance(state, trait(owner, 'dishonest') * 0.35)) {
     price += 1;
     cheated = true;
   }
-  if (balance(state, c.id) < price) return { ok: false, reason: 'cannot afford' };
-  if (!transfer(state, c.id, b.id, price, 'purchase', `${n} ${good} at ${b.name}`)) return { ok: false, reason: 'payment failed' };
+  if (balance(state, payer) < price) return { ok: false, reason: 'cannot afford' };
+  if (!transfer(state, payer, b.id, price, 'purchase', `${n} ${good} at ${b.name}`)) return { ok: false, reason: 'payment failed' };
   moveGoods(b.inventory, c.inventory, good, n);
   b.today.revenue += price;
   b.today.customers++;
@@ -127,7 +140,7 @@ export function buyRetail(state, c, b, good, n = 1) {
 export function noteSale(state, b, buyerName, n, good, price, buyerId = null) {
   if (b.firstSale) return;
   b.firstSale = true;
-  const owner = state.citizens.find((o) => o.id === b.ownerId);
+  const owner = byId(state.citizens, b.ownerId);
   if (!owner) return;
   record(state, 'business', `${b.name} made its first sale: ${n} ${GOODS[good].label.toLowerCase()} to ${buyerName} for ${price} coins.`,
     { citizens: [owner.id, ...(buyerId ? [buyerId] : [])], business: b.id }, 3);
@@ -160,7 +173,7 @@ function suppliersOf(state, good, exclude) {
 
 /** Keep cash for about two days of wages before spending on stock. */
 export function cashReserve(state, b) {
-  const wages = b.employees.reduce((s, id) => s + (state.citizens.find((c) => c.id === id)?.employment?.wage ?? 0), 0);
+  const wages = b.employees.reduce((s, id) => s + (byId(state.citizens, id)?.employment?.wage ?? 0), 0);
   return wages * 2 + 3;
 }
 
@@ -224,7 +237,7 @@ export function sellGathered(state, c, good) {
     return { ok: true, units, paid: unit * units, buyer: b.name };
   }
   if (good === 'berries' || good === 'grain') {
-    const room = ECONOMY.councilPantryMax - qty(state.council.pantry, good);
+    const room = ECONOMY.councilPantryMax * (state.plots.some((p) => p.building?.type === 'granary') ? 2 : 1) - qty(state.council.pantry, good);
     const units = Math.min(n, room, Math.floor((balance(state, 'treasury') - 20) / ECONOMY.councilPantryPrice));
     if (units > 0 && transfer(state, 'treasury', c.id, units * ECONOMY.councilPantryPrice, 'sale', `${units} ${good} to the council pantry`)) {
       moveGoods(c.inventory, state.council.pantry, good, units);
@@ -256,13 +269,16 @@ export function adjustPrices(b) {
  */
 export function caravanVisit(state) {
   let bought = 0, sold = 0;
+  const slump = (state.season?.recessionUntil ?? 0) > state.day ? 0.5 : 1;
+  const hungry = villageFood(state) < state.citizens.length * 4;
   for (const b of state.businesses) {
     if (!isTrading(b)) continue;
     const def = BUSINESS_TYPES[b.type];
     for (const good of def.sells) {
+      if (hungry && FOOD_GOODS.includes(good)) continue;
       const surplus = qty(b.inventory, good) - Math.round(def.target * 0.8);
       if (surplus < 1) continue;
-      const unit = Math.max(1, Math.round(GOODS[good].base * ECONOMY.caravanBuyFactor));
+      const unit = Math.max(1, Math.round(GOODS[good].base * ECONOMY.caravanBuyFactor * slump));
       const units = Math.min(surplus, ECONOMY.caravanMaxUnitsPerGood, Math.floor(balance(state, 'outside') / unit));
       if (units > 0 && transfer(state, 'outside', b.id, unit * units, 'export', `${units} ${good} sold to the caravan`)) {
         removeGoods(b.inventory, good, units);
@@ -297,7 +313,7 @@ export function spoilCarriedFood(state) {
   for (const c of state.citizens) {
     for (const g of ['berries', 'bread', 'meal']) {
       const n = qty(c.inventory, g);
-      const lost = Math.floor(n * (g === 'berries' ? 0.25 : 0.15));
+      const lost = Math.floor(n * (g === 'berries' ? 0.25 : 0.15) * (state.discoveries?.improvedStorage ? 0.5 : 1) * (state.plots.some((p) => p.building?.type === 'granary') ? 0.6 : 1));
       if (lost > 0) removeGoods(c.inventory, g, lost);
     }
   }

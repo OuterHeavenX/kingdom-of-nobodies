@@ -12,14 +12,14 @@ function seeded(seed) {
 
 export function buildTerrain(scene) {
   const rand = seeded(42);
-  const groundGeo = new THREE.PlaneGeometry(160, 160, 40, 40).rotateX(-Math.PI / 2);
+  const groundGeo = new THREE.PlaneGeometry(300, 300, 60, 60).rotateX(-Math.PI / 2);
   const colors = [];
   const base = new THREE.Color(P.grass);
   const pos = groundGeo.attributes.position;
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), z = pos.getZ(i);
     const r = Math.hypot(x, z);
-    if (r > 48) pos.setY(i, (r - 48) * 0.08 * (0.6 + rand() * 0.8));
+    if (r > 92) pos.setY(i, (r - 92) * 0.12 * (0.6 + rand() * 0.8));
     const c = base.clone().offsetHSL((rand() - 0.5) * 0.03, (rand() - 0.5) * 0.08, (rand() - 0.5) * 0.06);
     colors.push(c.r, c.g, c.b);
   }
@@ -73,15 +73,10 @@ export function buildTerrain(scene) {
     if (commons) forest.push(entry); else (kind === 'pine' ? pines : crowns).push(entry);
     trunks.push(entry);
   };
-  for (let i = 0; i < 150; i++) {
-    const a = rand() * Math.PI * 2, r = 46 + rand() * 26;
-    place(Math.cos(a) * r, Math.sin(a) * r, 0.8 + rand() * 0.7, rand() < 0.45 ? 'pine' : 'round');
-  }
-  for (let i = 0; i < 26; i++) {
-    const a = rand() * Math.PI * 2, r = 36 + rand() * 8;
-    const x = Math.cos(a) * r, z = Math.sin(a) * r;
-    if (Math.abs(z) < 4 || Math.abs(x) < 4) continue;
-    place(x, z, 0.7 + rand() * 0.5, 'round');
+  // Woodland surrounds the valley beyond the land the town can grow into.
+  for (let i = 0; i < 260; i++) {
+    const a = rand() * Math.PI * 2, r = 82 + rand() * 46;
+    place(Math.cos(a) * r, Math.sin(a) * r, 0.9 + rand() * 0.8, rand() < 0.45 ? 'pine' : 'round');
   }
   for (let i = 0; i < 44; i++) place(10 + rand() * 26, -20 - rand() * 14, 0.75 + rand() * 0.45, rand() < 0.5 ? 'pine' : 'round', true);
 
@@ -106,8 +101,8 @@ export function buildTerrain(scene) {
   const stumps = instanced(G.cyl(7), mat('#8a6847'), [...forest].reverse(), (e) => { v.set(e.x, 0.2, e.z); sc.set(0.5 * e.s, 0.4, 0.5 * e.s); });
 
   const rocks = [], flowers = [];
-  for (let i = 0; i < 60; i++) {
-    const x = (rand() - 0.5) * 90, z = (rand() - 0.5) * 80;
+  for (let i = 0; i < 90; i++) {
+    const x = (rand() - 0.5) * 150, z = (rand() - 0.5) * 140;
     if (Math.abs(z) < 3 || Math.abs(x) < 3) continue;
     (i % 2 ? rocks : flowers).push({ x, z, s: 0.3 + rand() * 0.5 });
   }
@@ -120,8 +115,20 @@ export function buildTerrain(scene) {
   }
   scene.add(petals);
 
+  const roadMeshes = new Map();
   return {
-    fire, fireLight, lamps, lampGlass,
+    fire, fireLight, lamps, lampGlass, ground,
+    leafMaterials: [mat(P.leaf), mat(P.leafDark), mat(P.pine)],
+    /** Lay any district roads that have been surveyed since the last call. */
+    syncRoads(list) {
+      for (const [x, z, w, d] of list) {
+        const key = `${x},${z},${w},${d}`;
+        if (roadMeshes.has(key)) continue;
+        const m = part(roads, G.plane(), road, [w, 1, d], [x, 0.026, z], null, false);
+        m.receiveShadow = true;
+        roadMeshes.set(key, m);
+      }
+    },
     /** Show as many commons trees as the forest stock supports. */
     setForest(fraction) {
       const n = Math.round(forest.length * Math.max(0, Math.min(1, fraction)));

@@ -27,7 +27,7 @@ export class Game {
     this.clock = new GameClock(() => this.sim.step());
     this.startWorld();
     this.hud = new HUD(this);
-    if (this.world) this.world.onPick = (kind, id) => this.hud.openDetail(kind, id, { push: false });
+    if (this.world) this.world.onPick = (kind, id) => (kind === 'memorial' ? this.hud.showMemorial() : this.hud.openDetail(kind, id, { push: false }));
     this.lastChronicle = this.sim.state.nextId.chronicle;
     this.last = performance.now();
     requestAnimationFrame((t) => this.frame(t));
@@ -124,6 +124,14 @@ export class Game {
     } catch (e) {
       this.hud.toasts.show(`Import failed: ${e.message}`, { bad: true, ms: 7000 });
     }
+  }
+
+  async restoreSnapshot() {
+    const state = await this.saves.loadSnapshot();
+    if (!state) { this.hud.toasts.show('No recovery snapshot has been taken yet.', { bad: true }); return; }
+    this.replaceState(state);
+    await this.save();
+    this.hud.toasts.show(`Restored the recovery snapshot from day ${state.day}.`);
   }
 
   replaceState(state) {

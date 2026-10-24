@@ -1,3 +1,4 @@
+import { byId } from '../core/EntityRegistry.js';
 import { transfer, balance } from '../economy/Transactions.js';
 import { plotById, plotValue, plotHistory, BUILDING_INFO } from './LandRegistry.js';
 import { record } from '../society/Chronicle.js';
@@ -8,7 +9,7 @@ import { ownerAccount } from '../economy/Marketplace.js';
 // Property transfers. A sale is one atomic operation: verify the listing and
 // funds, move the money, then move the title. Nothing changes on failure.
 
-const ownerName = (state, id) => (id === 'council' ? 'the council' : state.citizens.find((c) => c.id === id)?.firstName ?? 'nobody');
+const ownerName = (state, id) => (id === 'council' ? 'the council' : byId(state.citizens, id)?.firstName ?? 'nobody');
 
 /** Hold a plot for a buyer while they walk to the land office. */
 export function reservePlot(state, plotId, buyerId, ticks = 60) {
@@ -39,8 +40,8 @@ export function buyPlot(state, plotId, buyerId) {
   p.listedDay = null;
   const what = p.building ? `${p.name} (${p.building.name})` : `the ${p.name} plot`;
   plotHistory(state, p, `Sold by ${ownerName(state, sellerId)} to ${ownerName(state, buyerId)} for ${price} coins.`);
-  const buyer = state.citizens.find((c) => c.id === buyerId);
-  const seller = state.citizens.find((c) => c.id === sellerId);
+  const buyer = byId(state.citizens, buyerId);
+  const seller = byId(state.citizens, sellerId);
   record(state, 'property', `${ownerName(state, buyerId)} purchased ${what} from ${ownerName(state, sellerId)} for ${price} coins.`,
     { citizens: [buyerId, sellerId].filter((id) => id !== 'council'), plot: p.id }, 3);
   if (buyer) {

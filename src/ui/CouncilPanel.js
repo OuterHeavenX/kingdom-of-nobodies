@@ -25,8 +25,8 @@ export function councilPanel(sim, ctx) {
   </div>
   <div class="card">
     <h3>Business levy</h3>
-    <div class="segmented">${['low', 'normal', 'high'].map((lvl) => `<button class="${s.council.taxLevel === lvl ? 'active' : ''}" data-act="tax" data-id="${lvl}">${lvl[0].toUpperCase() + lvl.slice(1)} · ${ECONOMY.tax[lvl]}🪙</button>`).join('')}</div>
-    <p class="muted" style="font-size:12px;margin-top:6px">Per business per day. Higher levies fill the treasury but squeeze profits and lower happiness; low levies cheer the village.</p>
+    <div class="segmented">${['low', 'normal', 'high'].map((lvl) => `<button class="${s.council.taxLevel === lvl ? 'active' : ''}" data-act="tax" data-id="${lvl}" ${s.government?.leaderId ? 'disabled' : ''}>${lvl[0].toUpperCase() + lvl.slice(1)} · ${ECONOMY.tax[lvl]}🪙</button>`).join('')}</div>
+    <p class="muted" style="font-size:12px;margin-top:6px">${s.government?.leaderId ? `Taxes are now set by the elected ${esc(s.government.title)} (see Politics).` : 'Per business per day, plus a tithe on savings above 60 coins. Higher taxes fill the treasury but squeeze profits and lower happiness.'}</p>
   </div>
   ${action('🍲 Emergency food aid', `Buy food from local sellers (or the pantry) and hand ${COUNCIL.foodAidUnits} portions to the hungriest villagers.`, 'Distribute', 'foodAid', {}, t < 3 && !Object.keys(s.council.pantry).length)}
   ${action('✧ Financial aid', selectedCitizen ? `Grant ${esc(selectedCitizen.firstName)} ${COUNCIL.aidAmount} coins from the treasury.` : 'Select a villager first (tap one in the village or Citizens list).', `${COUNCIL.aidAmount}🪙`, 'aid', { id: selectedCitizen?.id ?? '' }, !selectedCitizen || t < COUNCIL.aidAmount)}
@@ -35,7 +35,7 @@ export function councilPanel(sim, ctx) {
   ${action('🤝 Support a business', struggling ? `Grant ${esc(struggling.name)} ${COUNCIL.businessGrant} coins.` : 'No citizen-owned business to support yet.', `${COUNCIL.businessGrant}🪙`, 'supportBusiness', { id: struggling?.id ?? '' }, !struggling || t < COUNCIL.businessGrant)}
   ${action('🏛️ Establish a marketplace', s.council.marketplace ? 'Established. Caravans visit every two days and distance matters less to shoppers.' : 'Market stalls around the square: caravans visit more often and shoppers travel further.', `${COUNCIL.marketplaceCost}🪙`, 'marketplace', {}, s.council.marketplace || t < COUNCIL.marketplaceCost)}
   <div class="grid2">
-    <button class="btn" data-act="tab-filter" data-id="buildings" data-filter="sale">📍 Inspect land</button>
+    <button class="btn" data-act="tab-filter" data-id="economy" data-filter="sale">📍 Inspect land</button>
     <button class="btn" data-act="tab" data-id="economy">📊 Review finances</button>
   </div>
   <div class="card">
@@ -46,10 +46,11 @@ export function councilPanel(sim, ctx) {
       <button class="btn" data-act="save">💾 Save now</button>
       <button class="btn" data-act="export">⬇ Export save</button>
       <button class="btn" data-act="import">⬆ Import save</button>
+      <button class="btn" data-act="restore">↺ Restore yearly snapshot</button>
       <button class="btn danger" data-act="new">✦ New kingdom</button>
     </div>
-    <p class="muted" style="font-size:12px;margin-top:8px">Autosaves every minute and when you leave the page. ${ctx.lastSaved ? `Last saved ${ctx.lastSaved}.` : ''} ${ctx.source ? `Loaded from: ${esc(ctx.source)}.` : ''}</p>
+    <p class="muted" style="font-size:12px;margin-top:8px">Autosaves every minute and when you leave the page; a recovery snapshot is kept once per game year. ${ctx.lastSaved ? `Last saved ${ctx.lastSaved}.` : ''} ${ctx.source ? `Loaded from: ${esc(ctx.source)}.` : ''}</p>
   </div>
-  <p class="version">Kingdom of Nobodies · Milestone 2 · build ${esc(ctx.build)}</p>`;
+  <p class="version">Kingdom of Nobodies · v0.3.0 Legacy &amp; Generations · build ${esc(ctx.build)}</p>`;
   return { title: 'The Council', html };
 }

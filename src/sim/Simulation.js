@@ -5,11 +5,30 @@ import { closeDay, economySnapshot } from '../economy/EconomyManager.js';
 import { restockAll, caravanVisit, villageFood, villageWood, spoilCarriedFood } from '../economy/Marketplace.js';
 import { updateProjects } from '../property/Construction.js';
 import { softenListings } from '../property/Ownership.js';
-import { checkBreakups } from '../citizens/Relationships.js';
+import { checkBreakups, pruneRelationships } from '../citizens/Relationships.js';
 import { recomputeStanding } from '../society/Reputation.js';
 import { decayRumors, createFact } from '../society/Gossip.js';
-import { maybeImmigrate, assignHomes } from '../citizens/CitizenManager.js';
+import { assignHomes } from '../citizens/CitizenManager.js';
+import { maybeImmigrate, maybeEmigrate } from '../population/Migration.js';
 import { COUNCIL_ACTIONS, councilDaily } from '../council/Council.js';
+import { dailyLifecycle, lifecycleHooks } from '../citizens/Lifecycle.js';
+import { dailyFamilies, dailyParenthood, feedInfants } from '../citizens/Families.js';
+import { chooseTrade, findMaster, onAdulthood } from '../education/Education.js';
+import { ageOf } from '../citizens/Citizen.js';
+import { LIFE } from '../core/Config.js';
+import { rehouseFamilies } from '../population/Housing.js';
+import { maybeExpand } from '../population/Expansion.js';
+import { dailyGovernment, onCitizenGone } from '../politics/Government.js';
+import { dailyDisasters, updateFires } from '../events/Disasters.js';
+import { dailyDiscovery } from '../events/Discoveries.js';
+import { yearlyReview } from '../history/Eras.js';
+import { compactState } from '../history/Compaction.js';
+import { isNewYear } from '../core/Calendar.js';
+import { councilInfrastructure } from '../council/Council.js';
+
+lifecycleHooks.teen.push((state, c) => { chooseTrade(state, c); findMaster(state, c); });
+lifecycleHooks.adulthood.push((state, c) => onAdulthood(state, c));
+lifecycleHooks.death.push((state, c) => onCitizenGone(state, c));
 import { balance, totalMoney } from '../economy/Transactions.js';
 
 // The simulation orchestrator. It owns the plain-JSON game state and advances
@@ -54,10 +73,10 @@ export class Simulation {
     const s = this.state;
     const h = s.minute / 60;
     updateProjects(s);
+    updateFires(s);
     if (h === 6 || h === 12) restockAll(s);
     const caravanEvery = s.council.marketplace ? 2 : ECONOMY.caravanEveryDays;
     if (h === 12 && s.day - s.lastCaravanDay >= caravanEvery) caravanVisit(s);
-    if (h === 10) maybeImmigrate(s);
   }
 
   endOfDay() {
@@ -74,15 +93,38 @@ export class Simulation {
   startOfDay() {
     const s = this.state;
     for (const c of s.citizens) c.shiftsToday = 0;
+    dailyLifecycle(s);
+    dailyFamilies(s);
+    dailyParenthood(s);
+    feedInfants(s);
+    for (const c of s.citizens) {
+      const age = ageOf(s, c);
+      if (age >= LIFE.apprenticeAge && age < LIFE.adultAge && !c.education.masterId && s.day % 4 === 0) {
+        if (!c.education.trade) chooseTrade(s, c);
+        findMaster(s, c);
+      }
+    }
+    yearlyReview(s);
+    if (isNewYear(s.day)) compactState(s);
+    dailyGovernment(s);
+    dailyDisasters(s);
+    dailyDiscovery(s);
+    councilInfrastructure(s);
+    if (s.eventLog.length > 300) s.eventLog.splice(0, s.eventLog.length - 300);
     councilDaily(s);
+    maybeExpand(s);
+    maybeImmigrate(s);
+    maybeEmigrate(s);
     checkBreakups(s);
+    if (s.day % 3 === 0) pruneRelationships(s);
     recomputeStanding(s);
     decayRumors(s);
     softenListings(s);
     assignHomes(s);
+    rehouseFamilies(s);
     spoilCarriedFood(s);
     s.commons.forest = Math.min(s.commons.forestCap, s.commons.forest + 9);
-    s.commons.berries = Math.min(s.commons.berriesCap, s.commons.berries + 16);
+    s.commons.berries = Math.min(s.commons.berriesCap, s.commons.berries + 26);
   }
 
   processEvents() {

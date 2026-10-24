@@ -19,6 +19,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   padding: calc(8px + env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left));
   background: linear-gradient(180deg, #14231bf5, #172920f0); border-bottom: 1px solid var(--line); }
 .brand { grid-area: brand; display: flex; align-items: center; gap: 9px; min-width: 0; }
+.brand > div { min-width: 0; }
+.brand #clock { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .brand .crown { font-size: 24px; color: var(--accent); }
 .brand strong { display: block; font: 700 16px/1.15 Georgia, 'Times New Roman', serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .brand #clock { display: block; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -50,9 +52,9 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(-8px); } }
 
 /* ---------- Tab bar ---------- */
-#tabbar { position: relative; z-index: 8; display: grid; grid-template-columns: repeat(5, 1fr); height: var(--tabbar-h); padding: 4px max(6px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(6px, env(safe-area-inset-left));
+#tabbar { position: relative; z-index: 8; display: grid; grid-template-columns: repeat(6, 1fr); height: var(--tabbar-h); padding: 4px max(6px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(6px, env(safe-area-inset-left));
   background: #14231b; border-top: 1px solid var(--line); }
-#tabbar button { border: 0; background: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; font-size: 10.5px; font-weight: 600; color: var(--muted); border-radius: 10px; }
+#tabbar button { border: 0; background: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; font-size: 10px; min-width: 0; font-weight: 600; color: var(--muted); border-radius: 10px; }
 #tabbar button span { font-size: 19px; line-height: 1.1; filter: grayscale(.4); }
 #tabbar button.active { color: var(--accent); background: #22382b; }
 #tabbar button.active span { filter: none; }
