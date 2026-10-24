@@ -3,7 +3,7 @@ import { byId } from '../core/EntityRegistry.js';
 import { record } from '../society/Chronicle.js';
 import { KINGDOMS, HEARTH, COMMODITIES } from '../region/RegionData.js';
 import { settlementName } from '../region/RegionManager.js';
-import { tariffRate } from '../diplomacy/Diplomacy.js';
+import { tariffRate, noteTrade } from '../diplomacy/Diplomacy.js';
 import { reserve, release, collect, buyerFor, deliverGoods } from './Markets.js';
 
 // Trade contracts. A contract is agreed before a caravan sets out: the goods
@@ -114,6 +114,8 @@ export function deliverContract(state, c, caravan) {
   t.stats.volume += n;
   t.stats.value += pay;
   if (c.destination !== HEARTH) state.region.settlements[c.destination].stats.imports += pay;
+  noteTrade(state, c.merchantHome, c.destination, pay);
+  if (c.origin !== c.merchantHome) noteTrade(state, c.origin, c.destination, pay / 2);
   logCargo(state, { caravanId: caravan.id, kind: 'deliver', g: c.commodity, n, at: c.destination, contractId: c.id });
   const citizen = byId(state.citizens, c.merchantId);
   const to = c.destination === HEARTH ? `${c.buyerName} in First Hearth` : settlementName(c.destination);

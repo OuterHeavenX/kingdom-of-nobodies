@@ -14,3 +14,8 @@ export function byId(list, id) {
   const hit = entry.map.get(id);
   return hit && hit.id === id ? hit : null;
 }
+
+/** Drop the cached index for a list (after an entity's id was changed in place). */
+export function invalidateIds(list) {
+  caches.delete(list);
+}

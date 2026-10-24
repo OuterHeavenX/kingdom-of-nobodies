@@ -9,7 +9,7 @@ import { checkBreakups, pruneRelationships } from '../citizens/Relationships.js'
 import { recomputeStanding } from '../society/Reputation.js';
 import { decayRumors, createFact } from '../society/Gossip.js';
 import { assignHomes } from '../citizens/CitizenManager.js';
-import { maybeImmigrate, maybeEmigrate } from '../population/Migration.js';
+import { maybeImmigrate, maybeEmigrate, maybeReturn } from '../population/Migration.js';
 import { COUNCIL_ACTIONS, councilDaily } from '../council/Council.js';
 import { dailyLifecycle, lifecycleHooks } from '../citizens/Lifecycle.js';
 import { dailyFamilies, dailyParenthood, feedInfants } from '../citizens/Families.js';
@@ -23,13 +23,14 @@ import { dailyDisasters, updateFires } from '../events/Disasters.js';
 import { dailyDiscovery } from '../events/Discoveries.js';
 import { yearlyReview } from '../history/Eras.js';
 import { compactState } from '../history/Compaction.js';
-import { isNewYear } from '../core/Calendar.js';
+import { isNewYear, isNewSeason } from '../core/Calendar.js';
 import { councilInfrastructure } from '../council/Council.js';
 import { considerRoads, approveRoads } from '../navigation/RoadConstruction.js';
 import { decayTraffic } from '../navigation/Traffic.js';
 import { dailyRegion } from '../region/RegionManager.js';
 import { dailyExploration } from '../region/Exploration.js';
 import { tickTrade, dailyTrade, onMerchantGone } from '../trade/TradeManager.js';
+import { dailyDiplomacy } from '../diplomacy/Diplomacy.js';
 
 lifecycleHooks.teen.push((state, c) => { chooseTrade(state, c); findMaster(state, c); });
 lifecycleHooks.adulthood.push((state, c) => onAdulthood(state, c));
@@ -121,11 +122,13 @@ export class Simulation {
     dailyRegion(s);
     dailyExploration(s);
     dailyTrade(s);
+    dailyDiplomacy(s);
     considerRoads(s);
     approveRoads(s);
     decayTraffic(s);
     maybeImmigrate(s);
     maybeEmigrate(s);
+    if (isNewSeason(s.day)) maybeReturn(s);
     checkBreakups(s);
     if (s.day % 3 === 0) pruneRelationships(s);
     recomputeStanding(s);

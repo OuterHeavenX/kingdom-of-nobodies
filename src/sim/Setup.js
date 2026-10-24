@@ -2,6 +2,7 @@ import { foundingRoads, addRoad } from '../navigation/RoadNetwork.js';
 import { BLOCKS } from '../population/Expansion.js';
 import { ensureRegion } from '../region/RegionManager.js';
 import { ensureTrade } from '../trade/Contracts.js';
+import { ensureDiplomacy } from '../diplomacy/Diplomacy.js';
 import { SAVE_VERSION, POPULATION } from '../core/Config.js';
 import { familyWish } from '../citizens/Genetics.js';
 import { transfer, openAccount } from '../economy/Transactions.js';
@@ -118,6 +119,8 @@ export function addMilestone4State(state) {
   state.council.stores = state.council.stores ?? {};
   ensureRegion(state);
   ensureTrade(state);
+  ensureDiplomacy(state);
+  if (state.government?.policies) state.government.policies = { tariffLevel: 'normal', openDiplomacy: true, ...state.government.policies };
   return state;
 }
 

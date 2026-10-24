@@ -19,6 +19,9 @@ const SEASONAL = {
 export const seasonalFactor = (state, good) => (SEASONAL[good] ?? [1, 1, 1, 1])[seasonIndex(state.day)];
 
 const COVER_DAYS = 8;
+// What the lands beyond the region pay for a glut, as a share of the base price:
+// worked metal and luxuries travel well; bulk goods hardly pay their carriage.
+const EXPORT_FACTOR = { iron: 0.75, tools: 0.75, luxuries: 0.8, salt: 0.6, fish: 0.5, provisions: 0.55, grain: 0.5, ore: 0.5, stone: 0.5, timber: 0.5 };
 const PRICE = { min: 0.45, max: 3 };
 
 export function createKingdomState(id, rand) {
@@ -143,7 +146,7 @@ function distantWorld(state, k) {
     const glut = available(k, g) - rate * k.population / 100 * 22;
     if (glut < 4) continue;
     const n = Math.floor(glut * 0.25);
-    const unit = Math.max(1, Math.round(COMMODITIES[g].base * 0.55));
+    const unit = Math.max(1, Math.round(COMMODITIES[g].base * (EXPORT_FACTOR[g] ?? 0.55)));
     if (n > 0 && balance(state, 'outside') > unit * n && transfer(state, 'outside', acct, unit * n, 'export', `${k.name} sold ${n} ${g} beyond the region`)) {
       k.inventory[g] -= n;
       k.stats.overseasOut += unit * n;

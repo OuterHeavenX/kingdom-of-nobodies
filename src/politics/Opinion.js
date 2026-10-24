@@ -23,6 +23,11 @@ export function priorities(state, c) {
   p.works = (jobless ? 0.8 : 0) + (c.profession === 'Builder' ? 0.5 : 0) - (cls === 'affluent' ? 0.3 : 0);
   p.business = (owner ? 0.9 : 0) + trait(c, 'ambitious') * 0.5 + (c.dream.type === 'business' ? 0.4 : 0) + trait(c, 'riskTaking') * 0.2;
   p.trust = trait(c, 'honest') * 0.8 + (c.memories.some((m) => m.kind === 'grievance') ? 0.4 : 0) - trait(c, 'dishonest') * 0.8 - (owner ? 0.2 : 0);
+  // Trade: merchants and exporters want open markets; those undercut by imports want protection.
+  const exporter = state.businesses.some((b) => b.ownerId === c.id && isTrading(b) && ['farm', 'lumberyard'].includes(b.type));
+  const competing = state.businesses.some((b) => b.ownerId === c.id && isTrading(b) && ['blacksmith', 'bakery'].includes(b.type));
+  const merchant = c.profession === 'Merchant' || (state.trade?.merchants?.[c.id]?.trips ?? 0) > 0;
+  p.trade = (merchant ? 1 : 0) + (exporter ? 0.4 : 0) - (competing ? 0.5 : 0) - (jobless ? 0.3 : 0) + trait(c, 'riskTaking') * 0.2 - trait(c, 'stubborn') * 0.2 + trait(c, 'curious') * 0.15;
   p.education = kids * 0.35 + trait(c, 'curious') * 0.4 + (c.profession === 'Teacher' ? 0.8 : 0) + c.education.level * 0.3;
   for (const k of ISSUES) p[k] = Math.max(-1, Math.min(1.5, Math.round(p[k] * 100) / 100));
   return p;
@@ -56,11 +61,11 @@ export function candidateAppeal(state, voter, cand, prio) {
 // ---------------------------------------------------------------------------
 
 export const FACTIONS = {
-  merchants: { name: 'Merchant Guild', wants: { taxes: 0.7, business: 1, trust: 0.2, welfare: -0.3 } },
-  workers: { name: "Workers' Coalition", wants: { welfare: 1, works: 0.8, taxes: -0.3 } },
-  landowners: { name: "Landowners' Association", wants: { taxes: 1, welfare: -0.5, business: 0.3 } },
-  traditionalists: { name: 'Traditionalists', wants: { taxes: 0.4, education: -0.3, trust: 0.5, works: 0.2 } },
-  reformers: { name: 'Reformers', wants: { education: 1, welfare: 0.5, trust: 0.6 } },
+  merchants: { name: 'Merchant Guild', wants: { taxes: 0.7, business: 1, trust: 0.2, welfare: -0.3, trade: 1 } },
+  workers: { name: "Workers' Coalition", wants: { welfare: 1, works: 0.8, taxes: -0.3, trade: -0.3 } },
+  landowners: { name: "Landowners' Association", wants: { taxes: 1, welfare: -0.5, business: 0.3, trade: -0.4 } },
+  traditionalists: { name: 'Traditionalists', wants: { taxes: 0.4, education: -0.3, trust: 0.5, works: 0.2, trade: -0.3 } },
+  reformers: { name: 'Reformers', wants: { education: 1, welfare: 0.5, trust: 0.6, trade: 0.4 } },
 };
 
 export function factionAffinity(state, c, key, prio) {
