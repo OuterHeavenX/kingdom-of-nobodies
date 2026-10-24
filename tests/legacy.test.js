@@ -7,7 +7,7 @@ import { Simulation } from '../src/sim/Simulation.js';
 import { createKingdom } from '../src/sim/Setup.js';
 import { GameClock } from '../src/core/GameClock.js';
 import { serialize, deserialize } from '../src/core/Serialization.js';
-import { DAYS_PER_YEAR, POLITICS, LIFE, TIME } from '../src/core/Config.js';
+import { DAYS_PER_YEAR, POLITICS, LIFE, TIME, SAVE_VERSION } from '../src/core/Config.js';
 import { ageOn, stageForAge } from '../src/core/Calendar.js';
 import { ageOf, stageOf } from '../src/citizens/Citizen.js';
 import { ancestorIds, linkParent, person } from '../src/citizens/FamilyTree.js';
@@ -298,7 +298,7 @@ test('a real Milestone 2 save (version 3) migrates into a working Milestone 3 wo
   const old = JSON.parse(JSON.parse(text).data);
   assert.equal(old.version, 3);
   const s = deserialize(text);
-  assert.equal(s.version, 4);
+  assert.equal(s.version, SAVE_VERSION);
   assert.equal(s.citizens.length, old.citizens.length, 'nobody is lost');
   for (const c of s.citizens) {
     const before = old.citizens.find((x) => x.id === c.id);

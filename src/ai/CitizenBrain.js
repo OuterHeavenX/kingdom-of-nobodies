@@ -23,6 +23,10 @@ import { hungerMultiplier, maybeSpread } from '../events/Disasters.js';
 import { gainSkill } from '../education/Skills.js';
 import { ageOf } from '../citizens/Citizen.js';
 import { schoolOpen, completeLesson, completeApprenticeship, completeMentoring } from '../education/Education.js';
+import { findPath, segmentClear } from '../navigation/Pathfinding.js';
+import { navGrid, costAt, cellOf, nearestOpen, cellX, cellZ, walkable } from '../navigation/NavigationGrid.js';
+import { roadWorkSpot } from '../navigation/RoadConstruction.js';
+import { recordTrip, crowdFactor, ensureNavigation } from '../navigation/Traffic.js';
 
 // Each citizen is always either performing an activity or choosing one.
 // Activities have two phases: travel to a location, then perform for a duration.
@@ -58,15 +62,13 @@ export function updateCitizen(state, c) {
     // Visitors follow the person they are going to see.
     if ((act.kind === 'socialize' || act.kind === 'mentor') && act.citizenId && state.tick % 3 === 0) {
       const t = byId(state.citizens, act.citizenId);
-      if (t) { act.x = t.x + 0.8; act.z = t.z + 0.6; }
+      if (t) {
+        act.x = t.x + 0.8; act.z = t.z + 0.6;
+        const end = act.path?.[act.path.length - 1];
+        if (end && Math.hypot(end[0] - act.x, end[1] - act.z) > 4) act.path = null;
+      }
     }
-    const dx = act.x - c.x, dz = act.z - c.z, d = Math.hypot(dx, dz);
-    if (d <= MOVE.arriveDistance) act.phase = 'perform';
-    else {
-      const step = Math.min(MOVE.unitsPerTick, d);
-      c.x += (dx / d) * step;
-      c.z += (dz / d) * step;
-    }
+    travel(state, c, act);
     return;
   }
   act.elapsed++;
@@ -77,6 +79,57 @@ export function updateCitizen(state, c) {
     return;
   }
   if (act.elapsed >= act.duration) finish(state, c);
+}
+
+const r2 = (v) => Math.round(v * 100) / 100;
+
+/**
+ * Walk the planned route: plan it on first use (A* around buildings, preferring
+ * roads), re-plan if the town changed under it, and move at a speed set by the
+ * ground underfoot and how crowded it is. Unreachable places fail with a reason
+ * instead of leaving anyone frozen.
+ */
+function travel(state, c, act) {
+  const grid = navGrid(state);
+  if (act.path && act.navV !== grid.version) {
+    const next = act.path[act.wp ?? 0];
+    if (next && !segmentClear(state, c.x, c.z, next[0], next[1])) act.path = null;
+    else act.navV = grid.version;
+  }
+  if (!act.path) {
+    // Someone standing where a wall now is steps out first.
+    const here = cellOf(c.x, c.z);
+    if (here >= 0 && !walkable(grid, here)) {
+      const open = nearestOpen(grid, here);
+      if (open >= 0) { c.x = cellX(open); c.z = cellZ(open); }
+    }
+    const route = findPath(state, c, act);
+    if (route.failed) return routeFailed(state, c, act, route.failed);
+    act.path = route.points.map(([x, z]) => [r2(x), r2(z)]);
+    act.wp = 0;
+    act.navV = route.version;
+    recordTrip(state, route.cells);
+  }
+  let budget = MOVE.unitsPerTick * crowdFactor(state, c.x, c.z);
+  while (budget > 1e-6 && act.wp < act.path.length) {
+    const [tx, tz] = act.path[act.wp];
+    const dx = tx - c.x, dz = tz - c.z, d = Math.hypot(dx, dz);
+    const speed = 1 / Math.max(0.45, Math.min(4, costAt(state, c.x, c.z)));
+    const step = Math.min(d, budget * speed);
+    if (d > 1e-6) { c.x += (dx / d) * step; c.z += (dz / d) * step; }
+    budget -= step / speed;
+    if (step >= d - 1e-6) act.wp++;
+  }
+  if (act.wp >= act.path.length) { act.phase = 'perform'; act.path = null; }
+}
+
+function routeFailed(state, c, act, reason) {
+  const nav = ensureNavigation(state);
+  nav.failures++;
+  nav.recentFailures.push({ day: state.day, who: c.id, label: act.label, reason });
+  if (nav.recentFailures.length > 20) nav.recentFailures.shift();
+  remember(state, c, `Could not find a way there (${reason}) and gave up on ${act.label.toLowerCase()}.`, 1, 'routine');
+  abandon(state, c, act);
 }
 
 function tickNeeds(state, c) {
@@ -168,7 +221,8 @@ function begin(state, c, k) {
     case 'work': {
       const b = businessById(state, k.businessId);
       const plot = plotById(state, b.plotId);
-      const loc = b.type === 'farm' ? { x: plot.x + range(state, -4, 3), z: plot.z + range(state, -3, 1) } : frontOf(plot, range(state, -2.2, 2.2), range(state, 0.1, 1.2));
+      const road = b.type === 'works' ? roadWorkSpot(state, () => range(state, 0, 1)) : null;
+      const loc = road ?? (b.type === 'farm' ? { x: plot.x + range(state, -4, 3), z: plot.z + range(state, -3, 1) } : frontOf(plot, range(state, -2.2, 2.2), range(state, 0.1, 1.2)));
       return activity('work', c.employment.role === 'owner' ? `Running ${b.name}` : `Working at ${b.name}`, loc, 24, { businessId: b.id });
     }
     case 'build': {

@@ -2,6 +2,7 @@ import { transfer, balance } from '../economy/Transactions.js';
 import { makePlot, bedsAt } from '../property/LandRegistry.js';
 import { ageOf } from '../citizens/Citizen.js';
 import { record } from '../society/Chronicle.js';
+import { addRoad } from '../navigation/RoadNetwork.js';
 import { LIFE } from '../core/Config.js';
 
 // Town growth. When land runs short the council surveys a new district: it
@@ -54,6 +55,8 @@ export function maybeExpand(state) {
     makePlot(state, { name: `${next.name} ${i + 1}`, x, z, w, d, landType, district: next.name });
   }
   state.districts.opened.push(next.name);
+  const [rx, rz, rw, rd] = next.road;
+  addRoad(state, { name: `${next.name} Road`, kind: 'dirt', x: rx, z: rz, w: rw, d: rd });
   record(state, 'property', `The council surveyed ${next.name}: a new road and ${next.plots.length} plots opened for settlement${crews.length ? `, paying ${crews.map((c) => c.firstName).join(', ')} to lay the road` : ''}.`, {}, 3);
   return next;
 }

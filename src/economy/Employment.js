@@ -1,3 +1,4 @@
+import { workOnRoad } from '../navigation/RoadConstruction.js';
 import { byId } from '../core/EntityRegistry.js';
 import { ECONOMY } from '../core/Config.js';
 import { transfer, balance } from './Transactions.js';
@@ -98,7 +99,7 @@ export function layOff(state, b, reason) {
 export function completeShift(state, c, b) {
   if (!isTrading(b)) return { ok: false, produced: 0, paid: 0 };
   const produced = produce(state, b, productivity(c, b.type));
-  if (b.type === 'works') maintain(state, c);
+  if (b.type === 'works' && !workOnRoad(state, c)) maintain(state, c);
   improveSkill(c, SKILL_FOR_BUSINESS[b.type]);
   c.stats.shiftsWorked++;
   c.shiftsToday++;

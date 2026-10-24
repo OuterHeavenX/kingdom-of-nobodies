@@ -1,3 +1,4 @@
+import { SAVE_VERSION } from '../src/core/Config.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeSim, byName } from './helpers.js';
@@ -48,7 +49,7 @@ test('14. Milestone 1 saves migrate safely', () => {
     })),
   };
   const s = deserialize(JSON.stringify(m1));
-  assert.equal(s.version, 4);
+  assert.equal(s.version, SAVE_VERSION);
   assert.equal(s.day, 6);
   assert.deepEqual(s.citizens.map((c) => c.firstName), ['Ada', 'Bram', 'Cora', 'Dain', 'Elin']);
   assert.equal(Math.round(s.citizens[2].needs.hunger), 42);

@@ -1,7 +1,7 @@
 // Central tuning constants. Every economic and behavioural number lives here so
 // the simulation can be balanced without hunting through system code.
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 export const TIME = {
   minutesPerTick: 10,
