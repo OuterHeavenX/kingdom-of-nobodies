@@ -85,11 +85,11 @@ const BASE = process.env.BASE_URL ?? 'http://localhost:4173/kingdom-of-nobodies/
     await page.tap(`#sheet-body [data-act=region-mode][data-id=${mode}]`);
     await page.waitForFunction((m) => document.querySelector(`#sheet-body [data-act=region-mode][data-id=${m}]`)?.classList.contains('active'), mode);
   }
-  const caravan = await page.$('#sheet-body [data-act=region-mode][data-id=caravans]');
-  await caravan.tap();
-  const cvItem = await page.waitForSelector('#sheet-body [data-act=caravan]', { timeout: 5000 }).catch(() => null);
-  if (cvItem) {
-    await cvItem.tap();
+  // The sheet re-renders with live data, so taps go through selectors rather than held element handles.
+  await page.tap('#sheet-body [data-act=region-mode][data-id=caravans]');
+  const hasCaravan = await page.waitForSelector('#sheet-body [data-act=caravan]', { timeout: 5000 }).then(() => true, () => false);
+  if (hasCaravan) {
+    await page.tap('#sheet-body [data-act=caravan]');
     await page.waitForFunction(() => /caravan/i.test(document.getElementById('sheet-title').textContent));
     step('region modes switch; a caravan opens with its route and cargo');
   } else step('region modes switch (no caravan on the road at this moment)');
