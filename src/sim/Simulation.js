@@ -27,6 +27,8 @@ import { isNewYear } from '../core/Calendar.js';
 import { councilInfrastructure } from '../council/Council.js';
 import { considerRoads, approveRoads } from '../navigation/RoadConstruction.js';
 import { decayTraffic } from '../navigation/Traffic.js';
+import { dailyRegion } from '../region/RegionManager.js';
+import { dailyExploration } from '../region/Exploration.js';
 
 lifecycleHooks.teen.push((state, c) => { chooseTrade(state, c); findMaster(state, c); });
 lifecycleHooks.adulthood.push((state, c) => onAdulthood(state, c));
@@ -115,6 +117,8 @@ export class Simulation {
     if (s.eventLog.length > 300) s.eventLog.splice(0, s.eventLog.length - 300);
     councilDaily(s);
     maybeExpand(s);
+    dailyRegion(s);
+    dailyExploration(s);
     considerRoads(s);
     approveRoads(s);
     decayTraffic(s);

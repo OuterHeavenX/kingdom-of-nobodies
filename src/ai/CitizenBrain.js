@@ -53,6 +53,11 @@ const square = (state) => ({ x: range(state, -3.5, 3.5), z: range(state, -3.5, 3
 const forestSpot = (state) => ({ x: range(state, 13, 32), z: range(state, -30, -21) });
 
 export function updateCitizen(state, c) {
+  // Someone away from the valley (scouting) is provisioned and off the map.
+  if (c.away) {
+    if (c.activity?.kind !== 'away') c.activity = { kind: 'away', label: c.away.reason === 'scouting' ? 'Away scouting' : 'Away', x: c.x, z: c.z, duration: 1, elapsed: 0, phase: 'perform' };
+    return;
+  }
   tickNeeds(state, c);
   const a = c.activity;
   if (a && shouldInterrupt(state, c, a)) abandon(state, c, a);
