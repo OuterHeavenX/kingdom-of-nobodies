@@ -25,8 +25,8 @@ export function councilPanel(sim, ctx) {
   </div>
   <div class="card">
     <h3>Business levy</h3>
-    <div class="segmented">${['low', 'normal', 'high'].map((lvl) => `<button class="${s.council.taxLevel === lvl ? 'active' : ''}" data-act="tax" data-id="${lvl}">${lvl[0].toUpperCase() + lvl.slice(1)} · ${ECONOMY.tax[lvl]}🪙</button>`).join('')}</div>
-    <p class="muted" style="font-size:12px;margin-top:6px">Per business per day. Higher levies fill the treasury but squeeze profits and lower happiness; low levies cheer the village.</p>
+    <div class="segmented">${['low', 'normal', 'high'].map((lvl) => `<button class="${s.council.taxLevel === lvl ? 'active' : ''}" data-act="tax" data-id="${lvl}" ${s.government?.leaderId ? 'disabled' : ''}>${lvl[0].toUpperCase() + lvl.slice(1)} · ${ECONOMY.tax[lvl]}🪙</button>`).join('')}</div>
+    <p class="muted" style="font-size:12px;margin-top:6px">${s.government?.leaderId ? `Taxes are now set by the elected ${esc(s.government.title)} (see Politics).` : 'Per business per day, plus a tithe on savings above 60 coins. Higher taxes fill the treasury but squeeze profits and lower happiness.'}</p>
   </div>
   ${action('🍲 Emergency food aid', `Buy food from local sellers (or the pantry) and hand ${COUNCIL.foodAidUnits} portions to the hungriest villagers.`, 'Distribute', 'foodAid', {}, t < 3 && !Object.keys(s.council.pantry).length)}
   ${action('✧ Financial aid', selectedCitizen ? `Grant ${esc(selectedCitizen.firstName)} ${COUNCIL.aidAmount} coins from the treasury.` : 'Select a villager first (tap one in the village or Citizens list).', `${COUNCIL.aidAmount}🪙`, 'aid', { id: selectedCitizen?.id ?? '' }, !selectedCitizen || t < COUNCIL.aidAmount)}
@@ -50,6 +50,6 @@ export function councilPanel(sim, ctx) {
     </div>
     <p class="muted" style="font-size:12px;margin-top:8px">Autosaves every minute and when you leave the page. ${ctx.lastSaved ? `Last saved ${ctx.lastSaved}.` : ''} ${ctx.source ? `Loaded from: ${esc(ctx.source)}.` : ''}</p>
   </div>
-  <p class="version">Kingdom of Nobodies · Milestone 2 · build ${esc(ctx.build)}</p>`;
+  <p class="version">Kingdom of Nobodies · v0.3.0 Legacy &amp; Generations · build ${esc(ctx.build)}</p>`;
   return { title: 'The Council', html };
 }

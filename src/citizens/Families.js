@@ -115,7 +115,7 @@ function householdRoom(state, a) {
 /** Would this couple like another child, and can they manage one? */
 export function wantsChild(state, a, b) {
   const kids = state.citizens.filter((c) => isMinorChildOf(state, c, a) || isMinorChildOf(state, c, b)).length;
-  const desired = Math.round(((a.familyWish ?? 0.5) + (b.familyWish ?? 0.5)) * 1.8);
+  const desired = Math.round(((a.familyWish ?? 0.5) + (b.familyWish ?? 0.5)) * 2.3);
   if (kids >= Math.min(desired, LIFE.maxChildren)) return 0;
   if (householdRoom(state, a) < 1) return 0;
   const money = balance(state, a.id) + balance(state, b.id);
@@ -140,7 +140,7 @@ export function dailyParenthood(state) {
       state.day - (x.lastBirthDay ?? -999) >= LIFE.minDaysBetweenBirths);
     if (bearer) {
       const other = bearer === a ? b : a;
-      if (other.sex === 'M' && chance(state, 0.07 * wish)) {
+      if (other.sex === 'M' && chance(state, 0.1 * wish)) {
         bearer.pregnancy = { dueDay: state.day + LIFE.pregnancyDays, otherParentId: other.id };
         remember(state, bearer, `Expecting a child with ${other.firstName}.`, 2, 'family');
         remember(state, other, `${bearer.firstName} and I are expecting a child.`, 2, 'family');

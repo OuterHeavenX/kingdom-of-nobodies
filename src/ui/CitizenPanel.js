@@ -5,16 +5,43 @@ import { closestRelations, describeRelation } from '../citizens/Relationships.js
 import { ownedPlots } from '../property/Ownership.js';
 import { plotById } from '../property/LandRegistry.js';
 import { esc, meter, portrait, moodIcon, link, badge } from './util.js';
+import { LIFE_STAGES } from '../core/Config.js';
+import { ageOn, stageForAge, dateLabel } from '../core/Calendar.js';
+import { classDistribution, CLASSES, wealthClass } from '../population/SocialClasses.js';
+import { housingStats } from '../population/Housing.js';
+import { settlementStage } from '../population/Expansion.js';
+import { SKILLS, levelOf } from '../education/Skills.js';
+import { person, siblingsOf } from '../citizens/FamilyTree.js';
+import { FACTIONS } from '../politics/Opinion.js';
 
-export function citizenList(sim) {
+export function demographics(sim) {
   const s = sim.state;
-  const rows = [...s.citizens].sort((a, b) => a.arrivedDay - b.arrivedDay).map((c) => `
+  const stages = Object.fromEntries(LIFE_STAGES.map((st) => [st.id, 0]));
+  for (const c of s.citizens) stages[stageForAge(ageOn(c.birthDay, s.day)).id]++;
+  const max = Math.max(1, ...Object.values(stages));
+  const classes = classDistribution(s);
+  const y = s.yearly.at(-1);
+  const housing = housingStats(s);
+  return `<div class="card">
+    <div class="row between"><h3 style="margin:0">${esc(settlementStage(s.citizens.length))} · ${s.citizens.length} people</h3><span class="muted" style="font-size:12px">${housing.free} beds free</span></div>
+    ${y ? `<p class="muted" style="font-size:12px;margin:6px 0">Last year: ${y.births} born · ${y.deaths} died · ${y.immigrants} arrived · ${y.emigrants} left · ${y.marriages} weddings</p>` : ''}
+    <div class="pyramid">${LIFE_STAGES.map((st) => `<div class="pyr-row"><span>${st.label}</span><i style="width:${Math.round((stages[st.id] / max) * 100)}%"></i><b>${stages[st.id]}</b></div>`).join('')}</div>
+    <div class="chips" style="margin-top:8px">${CLASSES.map((k) => `<span class="chip">${k.label}: ${classes[k.id]}</span>`).join('')}</div>
+    <p class="muted" style="font-size:11.5px;margin:6px 0 0">All time: ${s.stats.births} births · ${s.stats.deaths} deaths · ${s.stats.immigrants} arrivals · ${s.stats.emigrants} departures</p>
+  </div>`;
+}
+
+export function citizenList(sim, view = {}) {
+  const s = sim.state;
+  const q = (view.citizenQuery ?? '').trim().toLowerCase();
+  const list = [...s.citizens].filter((c) => !q || `${c.firstName} ${c.lastName} ${c.profession}`.toLowerCase().includes(q)).sort((a, b) => (b.founder - a.founder) || a.birthDay - b.birthDay);
+  const rows = list.slice(0, q ? 80 : 50).map((c) => `
     <button class="item" data-act="citizen" data-id="${c.id}">
       ${portrait(c)}
-      <span class="main"><strong>${esc(c.firstName)} ${esc(c.lastName)}</strong><small>${esc(c.profession)} · ${esc(c.activity?.label ?? c.decision.label)}</small></span>
+      <span class="main"><strong>${esc(c.firstName)} ${esc(c.lastName)}${c.founder ? ' ★' : ''}</strong><small>${ageOn(c.birthDay, s.day)} · ${esc(c.profession)} · ${esc(c.activity?.label ?? c.decision.label)}</small></span>
       <span class="side">${balance(s, c.id)}🪙<br>${moodIcon(c.mood)} ${Math.round(c.mood)}</span>
     </button>`).join('');
-  return { title: `Citizens · ${s.citizens.length}`, html: `<div class="list">${rows}</div>` };
+  return { title: `People · ${s.citizens.length}`, html: `${demographics(sim)}<input class="search" type="search" placeholder="Search by name or trade…" data-act="citizen-search" value="${esc(view.citizenQuery ?? '')}"><div class="list">${rows}</div>${list.length > 50 && !q ? `<p class="muted center" style="font-size:12px">Showing 50 of ${list.length}. Search to find others.</p>` : ''}` };
 }
 
 export function citizenDetail(sim, id) {
@@ -38,7 +65,8 @@ export function citizenDetail(sim, id) {
     <div class="row">${portrait(c, true)}
       <div style="flex:1;min-width:0">
         <strong style="font-size:17px">${esc(c.firstName)} ${esc(c.lastName)}</strong>
-        <div class="muted" style="font-size:13px">${esc(c.profession)} · age ${c.age}${c.legacyTrait ? ` · founder` : ''}</div>
+        <div class="muted" style="font-size:13px">${esc(c.profession)} · ${esc(stageForAge(ageOn(c.birthDay, s.day)).label)}, ${ageOn(c.birthDay, s.day)}${c.founder ? ' · founder' : ''}</div>
+        <div class="muted" style="font-size:12px">Born ${dateLabel(c.birthDay)} · generation ${c.generation ?? 1} · ${esc(wealthClass(s, c).label)}</div>
         <div style="font-size:13px;margin-top:2px">${money}🪙 · ${moodIcon(c.mood)} ${Math.round(c.mood)}% happy</div>
       </div>
     </div>
@@ -52,6 +80,24 @@ export function citizenDetail(sim, id) {
     <p style="margin-top:8px"><span class="muted">Goal:</span> ${esc(c.plan.goal)}</p>
     <p><span class="muted">Next step:</span> ${esc(c.plan.next)}</p>
     ${c.decision.alternatives?.length ? `<p class="muted" style="font-size:12px">Also considered: ${c.decision.alternatives.map((a) => `${esc(a.action)} (${Math.round(a.score)})`).join(', ')} · chose score ${Math.round(c.decision.score)}</p>` : ''}
+  </div>
+
+  <div class="card">
+    <h3>Family</h3>
+    <div class="chips">${[
+      ...c.family.parentIds.map((pid) => [pid, 'parent']), ...(c.family.spouseId ? [[c.family.spouseId, 'spouse']] : []),
+      ...c.family.formerSpouseIds.map((x) => [x, 'former spouse']), ...c.family.childIds.map((x) => [x, 'child']), ...siblingsOf(s, c.id).map((x) => [x.id, 'sibling']),
+    ].map(([pid, rel]) => { const p = person(s, pid); return p ? `<button class="chip" data-act="${s.citizens.includes(p) ? 'citizen' : 'bio'}" data-id="${pid}">${esc(p.firstName)}${s.citizens.includes(p) ? '' : ' †'} · ${rel}</button>` : ''; }).join('') || '<span class="muted">No family in the village.</span>'}</div>
+    ${c.pregnancy ? `<p style="margin-top:6px">Expecting a child (due ${dateLabel(c.pregnancy.dueDay)}).</p>` : ''}
+    <div class="grid2" style="margin-top:8px"><button class="btn" data-act="tree" data-id="${c.id}">🌳 Family tree</button><button class="btn" data-act="bio" data-id="${c.id}">📖 Biography</button></div>
+  </div>
+
+  <div class="card">
+    <h3>Education & skills</h3>
+    ${meter('Schooling', c.education.level * 100)}
+    ${c.education.trade ? `<p style="margin-top:6px">Trade: <strong>${esc(SKILLS[c.education.trade] ?? c.education.trade)}</strong>${c.education.masterId ? ` · apprenticed to ${esc(person(s, c.education.masterId)?.firstName ?? '?')}` : ''}</p>` : ''}
+    ${Object.entries(c.skills).filter(([k, v]) => SKILLS[k] && v >= 0.08).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k, v]) => `<div class="meter-label"><span>${esc(SKILLS[k])} · ${levelOf(v)}</span><span>${Math.round(v * 100)}</span></div><div class="meter"><i style="width:${Math.round(v * 100)}%"></i></div>`).join('')}
+    ${c.faction ? `<p class="muted" style="font-size:12px;margin-top:8px">Member of the ${esc(FACTIONS[c.faction].name)}${c.opinionOfLeader !== undefined ? ` · thinks ${c.opinionOfLeader}/100 of the current leader` : ''}</p>` : ''}
   </div>
 
   <div class="card">

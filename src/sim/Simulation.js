@@ -22,6 +22,8 @@ import { dailyGovernment, onCitizenGone } from '../politics/Government.js';
 import { dailyDisasters, updateFires } from '../events/Disasters.js';
 import { dailyDiscovery } from '../events/Discoveries.js';
 import { yearlyReview } from '../history/Eras.js';
+import { compactState } from '../history/Compaction.js';
+import { isNewYear } from '../core/Calendar.js';
 import { councilInfrastructure } from '../council/Council.js';
 
 lifecycleHooks.teen.push((state, c) => { chooseTrade(state, c); findMaster(state, c); });
@@ -103,6 +105,7 @@ export class Simulation {
       }
     }
     yearlyReview(s);
+    if (isNewYear(s.day)) compactState(s);
     dailyGovernment(s);
     dailyDisasters(s);
     dailyDiscovery(s);

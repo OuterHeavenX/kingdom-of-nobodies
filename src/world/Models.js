@@ -135,6 +135,42 @@ const BUILDERS = {
       part(g, G.sphere(6), mat('#c8b07a'), [0.6, 0.7, 0.6], [1.0, 0.35, 2.9]);
     }
   },
+  well(g) {
+    part(g, G.cyl(12), mat(P.stone), [2.2, 0.9, 2.2], [0, 0.45, 0]);
+    part(g, G.cyl(12), mat('#3a5a78'), [1.7, 0.1, 1.7], [0, 0.86, 0], null, false);
+    for (const sx of [-1, 1]) part(g, G.box(), mat(P.timber), [0.16, 1.9, 0.16], [sx * 0.95, 1.3, 0]);
+    part(g, G.prism(), mat(P.roofRed), [2.5, 0.8, 1.6], [0, 2.2, 0]);
+    part(g, G.cyl(8), mat(P.plank), [0.3, 0.35, 0.3], [0.2, 1.3, 0], null, false);
+  },
+  granary(g) {
+    part(g, G.box(), mat(P.stoneDark), [5.2, 0.6, 3.6], [0, 0.3, 0]);
+    part(g, G.box(), mat(P.plank), [5, 2.4, 3.4], [0, 1.8, 0]);
+    for (let i = -2; i <= 2; i++) part(g, G.box(), mat(P.timberDark), [0.12, 2.4, 3.45], [i * 1.2, 1.8, 0], null, false);
+    part(g, G.prism(), mat(P.thatch), [5.8, 2, 4], [0, 3, 0]);
+    part(g, G.box(), mat(P.door), [1.2, 1.6, 0.12], [0, 1.4, 1.75]);
+    for (const x of [-3.3, 3.3]) part(g, G.cyl(8), mat(P.thatch), [1.2, 1.1, 1.2], [x, 0.55, 1.6]);
+  },
+  school(g, o) {
+    house(g, { w: 5.6, d: 3.8, h: 2.6, wall: P.plasterWarm, roof: P.roofSlate, roofH: 2.1, chimney: null, windowsLit: o.open !== false });
+    part(g, G.box(), mat(P.timber), [0.7, 1.6, 0.7], [0, 5.2, -0.4]);
+    part(g, G.cone(4), mat(P.roofSlate), [1.1, 1, 1.1], [0, 6.5, -0.4], [0, Math.PI / 4, 0]);
+    part(g, G.cyl(8), mat('#c9a442', { metalness: 0.5 }), [0.4, 0.4, 0.4], [0, 5.5, -0.02], [Math.PI / 2, 0, 0], false);
+    part(g, G.box(), mat(P.plank), [1.6, 0.6, 0.6], [-1.8, 0.3, 2.6]);
+  },
+  townhall(g) {
+    house(g, { w: 7.6, d: 5.6, h: 2.6, stone: true, roof: P.roofSlate, roofH: 0.01, chimney: null, frame: false });
+    house(g, { w: 7.6, d: 5.6, h: 2.2, wall: P.plasterWarm, roof: P.roofSlate, roofH: 2.6, y: 2.6, door: false, chimney: 'side' });
+    part(g, G.box(), mat(P.stone), [1.6, 4.5, 1.6], [0, 7.2, 0]);
+    part(g, G.cone(4), mat(P.roofSlate), [2.4, 2.4, 2.4], [0, 10.6, 0], [0, Math.PI / 4, 0]);
+    part(g, G.cyl(12), mat('#f4efe2'), [1, 1, 0.08], [0, 8.4, 0.82], [Math.PI / 2, 0, 0], false);
+    part(g, G.box(), mat(P.door), [1.8, 2.1, 0.16], [0, 1.35, 2.86]);
+    for (const sx of [-1, 1]) part(g, G.box(), mat(sx < 0 ? '#3f6fa3' : '#b8443a'), [0.8, 1.6, 0.05], [sx * 2.6, 3.8, 2.9], null, false);
+  },
+  ruins(g) {
+    part(g, G.box(), mat('#3a3330'), [4.2, 0.3, 3.6], [0, 0.15, 0]);
+    for (let i = 0; i < 6; i++) part(g, G.box(), mat(i % 2 ? '#2f2925' : '#5b4c40'), [0.4 + (i % 3) * 0.3, 0.6 + (i % 4) * 0.5, 0.3], [-1.6 + i * 0.65, 0.5, (i % 2 ? 1 : -1) * 1.2], [0, i * 0.7, (i % 3) * 0.2]);
+    for (let i = 0; i < 5; i++) part(g, G.dodeca(), mat('#4a423b'), [0.7, 0.4, 0.7], [-1.8 + i, 0.2, 2.2 - (i % 2)], null, false);
+  },
   stall(g, o) {
     const wood = mat(P.timber);
     part(g, G.box(), mat(P.plank), [3.6, 0.9, 1.6], [0, 0.45, 0]);
@@ -144,10 +180,22 @@ const BUILDERS = {
   },
 };
 
-/** Build a finished building. opts: { id, w, d, open (bool|undefined), forSale } */
+/** Build a finished building. opts: { id, w, d, open (bool|undefined), level, condition } */
 export function buildingModel(type, opts) {
   const g = new THREE.Group();
   (BUILDERS[type] ?? BUILDERS.cottage)(g, opts);
+  const level = opts.level ?? 1;
+  if (level >= 2 && !['farm', 'well', 'ruins', 'lumberyard'].includes(type)) {
+    // An expanded building gains a side wing.
+    const wing = new THREE.Group();
+    house(wing, { w: 2.4, d: 2.6, h: 2 + (level - 2) * 0.8, roof: P.roofBrown, roofH: 1.2, chimney: null, door: false });
+    wing.position.set(-(widthOf(type) / 2 + 1.1), 0, -0.2);
+    g.add(wing);
+  }
+  if ((opts.condition ?? 100) < 60 && type !== 'ruins') {
+    // Fire damage: soot and missing roof timbers until repaired.
+    for (let i = 0; i < 4; i++) part(g, G.box(), mat('#1f1b19'), [0.9, 0.08, 0.9], [-1.2 + i * 0.8, heightOf(type) + 0.9 + (i % 2) * 0.3, 0.3], [0.5, i, 0.3], false);
+  }
   if (opts.open === false && type !== 'farm' && type !== 'cottage') {
     // Boarded-up door shows the business has closed.
     for (const r of [0.6, -0.6]) part(g, G.box(), mat(P.timberDark), [1.2, 0.14, 0.08], [0, 1.05, (type === 'stall' ? 0.85 : depthOf(type) / 2) + 0.14], [0, 0, r], false);
@@ -155,9 +203,9 @@ export function buildingModel(type, opts) {
   return g;
 }
 
-const depthOf = (type) => ({ hall: 5.4, cottage: 3.2, blacksmith: 3.6, bakery: 3.4, tavern: 3.8, general_store: 3.4, lumberyard: 3 }[type] ?? 3.2);
-const heightOf = (type) => ({ hall: 3.2, tavern: 4.0, lumberyard: 2.6 }[type] ?? 2.5);
-const widthOf = (type) => ({ hall: 7, tavern: 4.8, blacksmith: 4.2, bakery: 4, general_store: 4.2, lumberyard: 5, stall: 3.6 }[type] ?? 3.6);
+const depthOf = (type) => ({ hall: 5.4, townhall: 5.6, cottage: 3.2, blacksmith: 3.6, bakery: 3.4, tavern: 3.8, general_store: 3.4, lumberyard: 3, school: 3.8, granary: 3.4, well: 2.2 }[type] ?? 3.2);
+const heightOf = (type) => ({ hall: 3.2, townhall: 4.8, tavern: 4.0, lumberyard: 2.6, school: 2.6, granary: 2.6, well: 1.2 }[type] ?? 2.5);
+const widthOf = (type) => ({ hall: 7, townhall: 7.6, tavern: 4.8, blacksmith: 4.2, bakery: 4, general_store: 4.2, lumberyard: 5, stall: 3.6, school: 5.6, granary: 5, well: 2.2 }[type] ?? 3.6);
 
 function scaffold(g, w, d, h) {
   const pole = mat('#9c7a52');
@@ -216,6 +264,31 @@ export function constructionModel(type, stage, progress, opts) {
     if (progress > 0.5) part(g, G.prism(), mat(P.roofBrown), [w + 0.7, 1.8 * (progress - 0.4), d * progress], [0, h + 0.3, -d * (1 - progress) / 2]);
   }
   scaffold(g, w, d, frameH);
+  return g;
+}
+
+/** The Founders' Memorial: an obelisk with five plaques, later crowned when all founders have passed. */
+export function memorialModel(allPassed) {
+  const g = new THREE.Group();
+  part(g, G.box(), mat(P.stoneDark), [2.4, 0.4, 2.4], [0, 0.2, 0]);
+  part(g, G.box(), mat(P.stone), [1.6, 0.5, 1.6], [0, 0.65, 0]);
+  part(g, G.cyl(4), mat('#c8c1b0'), [0.9, 3.2, 0.9], [0, 2.5, 0], [0, Math.PI / 4, 0]);
+  part(g, G.cone(4), mat('#c8c1b0'), [0.9, 0.7, 0.9], [0, 4.45, 0], [0, Math.PI / 4, 0]);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    part(g, G.box(), mat('#a8874a', { metalness: 0.4 }), [0.36, 0.26, 0.05], [Math.sin(a) * 0.82, 0.68, Math.cos(a) * 0.82], [0, a, 0], false);
+  }
+  if (allPassed) part(g, G.sphere(10), mat('#e2c46a', { metalness: 0.6, roughness: 0.3 }), [0.6, 0.6, 0.6], [0, 5.05, 0]);
+  return g;
+}
+
+/** Flickering flames for a burning building. */
+export function fireModel() {
+  const g = new THREE.Group();
+  const flame = new THREE.MeshStandardMaterial({ color: '#ff9a3d', emissive: '#ff5a1f', emissiveIntensity: 2, transparent: true, opacity: 0.9, flatShading: true });
+  for (let i = 0; i < 5; i++) part(g, G.cone(6), flame, [1.2, 2.2 + (i % 3) * 0.8, 1.2], [-1.6 + i * 0.8, 2.8 + (i % 2) * 0.6, (i % 2 ? 0.6 : -0.6)], null, false);
+  const smoke = mat('#4b4744', { transparent: true, opacity: 0.55 });
+  for (let i = 0; i < 4; i++) part(g, G.sphere(6), smoke, [1.4 + i * 0.3, 1.2, 1.4 + i * 0.3], [0.2 * i, 5 + i * 1.3, -0.2 * i], null, false);
   return g;
 }
 

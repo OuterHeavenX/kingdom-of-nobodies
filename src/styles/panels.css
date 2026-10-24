@@ -90,3 +90,23 @@ button.chip.active { background: #6a5636; border-color: var(--accent); color: #f
 .version { font-size: 11px; color: #7f9182; text-align: center; padding: 6px 0 2px; font-variant-numeric: tabular-nums; }
 .toggle { display: flex; justify-content: space-between; align-items: center; font-size: 14px; padding: 6px 0; }
 .toggle input { width: 22px; height: 22px; accent-color: #e6b976; }
+
+/* ---------- Milestone 3 ---------- */
+.search { width: 100%; padding: 10px 12px; border-radius: 11px; border: 1px solid #4d6e57; background: #14251b; color: var(--text); font: inherit; font-size: 14px; }
+.search::placeholder { color: #7f9182; }
+.center { text-align: center; }
+.pyramid { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.pyr-row { display: grid; grid-template-columns: 84px 1fr 28px; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.pyr-row i { display: block; height: 9px; border-radius: 5px; background: linear-gradient(90deg, #7fb37a, #e6b976); min-width: 2px; }
+.pyr-row b { text-align: right; color: var(--text); font-weight: 650; font-variant-numeric: tabular-nums; }
+.tree { display: flex; flex-direction: column; align-items: stretch; gap: 2px; }
+.tree-row { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px; scrollbar-width: thin; justify-content: flex-start; }
+.tree-row.focus .tree-node:first-child { border-color: var(--accent); background: #4a3f27; }
+.tree-link { text-align: center; color: #6d8a74; line-height: 1; font-size: 14px; }
+.tree-node { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 128px; max-width: 170px; padding: 8px 10px; border-radius: 12px; border: 1px solid #4d6e57; background: var(--card); text-align: left; }
+.tree-node strong { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.tree-node small { font-size: 11px; color: var(--muted); }
+.tree-node .dot { width: 10px; height: 10px; border-radius: 50%; margin-bottom: 3px; }
+.tree-node.dead { opacity: .72; border-style: dashed; }
+.memorial { background: linear-gradient(160deg, #2f3a2d, #223a2c); border-color: #8a7a52; }
+.dot { display: inline-block; }

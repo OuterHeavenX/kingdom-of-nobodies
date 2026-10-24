@@ -116,7 +116,7 @@ function updateRomance(state, a, b, ab, ba) {
  */
 export function pruneRelationships(state) {
   for (const [key, r] of Object.entries(state.relationships)) {
-    if (r.friendship < 24 && r.affection < 14 && r.rivalry < 6 && Math.abs(r.trust - 45) < 10 && r.respect < 42 && !r.closeFriend) delete state.relationships[key];
+    if (r.friendship < 30 && r.affection < 14 && r.rivalry < 6 && Math.abs(r.trust - 45) < 12 && r.respect < 45 && !r.closeFriend) delete state.relationships[key];
   }
 }
 

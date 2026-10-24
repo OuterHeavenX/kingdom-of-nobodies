@@ -83,7 +83,7 @@ function newPerson(state, { sex, age, lastName, profession, dream, parents = [] 
 /** Daily: perhaps a household arrives. */
 export function maybeImmigrate(state) {
   const { score, free } = attractiveness(state);
-  if (!chance(state, Math.min(0.45, score * 0.18))) return null;
+  if (!chance(state, Math.min(0.4, score * 0.14))) return null;
   const need = neededTrade(state);
   const lastName = pick(state, LAST);
   const roll = nextRandom(state);
