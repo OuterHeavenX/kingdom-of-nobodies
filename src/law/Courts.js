@@ -112,7 +112,7 @@ function fileCase(state, cl) {
   const c = {
     id: 'case' + ++law.nextCase, kind: cl.kind, law: cl.law, claimId: cl.id, eventDay: cl.day, filedDay: state.day,
     plaintiff: who(state, cl.claimantId), defendant: who(state, cl.defendantId), amount: cl.amount,
-    evidence: cl.evidence.slice(0, 8), details: { good: cl.good, n: cl.n, cause: cl.cause, estateId: cl.estateId, scandalId: cl.scandalId, plotId: cl.plotId },
+    evidence: cl.evidence.slice(0, 8), details: Object.fromEntries(Object.entries({ good: cl.good, n: cl.n, cause: cl.cause, estateId: cl.estateId, scandalId: cl.scandalId, plotId: cl.plotId }).filter(([, v]) => v !== undefined)),
     status: 'FILED', hearingDay: null, judgment: null,
   };
   law.cases.push(c);
