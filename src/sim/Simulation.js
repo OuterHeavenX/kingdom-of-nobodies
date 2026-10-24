@@ -2,7 +2,7 @@ import { TIME, ECONOMY } from '../core/Config.js';
 import { createKingdom } from './Setup.js';
 import { updateCitizen } from '../ai/CitizenBrain.js';
 import { closeDay, economySnapshot } from '../economy/EconomyManager.js';
-import { restockAll, caravanVisit, villageFood, villageWood, spoilCarriedFood } from '../economy/Marketplace.js';
+import { restockAll, villageFood, villageWood, spoilCarriedFood } from '../economy/Marketplace.js';
 import { updateProjects } from '../property/Construction.js';
 import { softenListings } from '../property/Ownership.js';
 import { checkBreakups, pruneRelationships } from '../citizens/Relationships.js';
@@ -29,10 +29,12 @@ import { considerRoads, approveRoads } from '../navigation/RoadConstruction.js';
 import { decayTraffic } from '../navigation/Traffic.js';
 import { dailyRegion } from '../region/RegionManager.js';
 import { dailyExploration } from '../region/Exploration.js';
+import { tickTrade, dailyTrade, onMerchantGone } from '../trade/TradeManager.js';
 
 lifecycleHooks.teen.push((state, c) => { chooseTrade(state, c); findMaster(state, c); });
 lifecycleHooks.adulthood.push((state, c) => onAdulthood(state, c));
 lifecycleHooks.death.push((state, c) => onCitizenGone(state, c));
+lifecycleHooks.death.push((state, c) => onMerchantGone(state, c));
 import { balance, totalMoney } from '../economy/Transactions.js';
 
 // The simulation orchestrator. It owns the plain-JSON game state and advances
@@ -70,6 +72,7 @@ export class Simulation {
     }
     if (s.minute % 60 === 0) this.hourly();
     for (const c of s.citizens) updateCitizen(s, c);
+    tickTrade(s);
     this.processEvents();
   }
 
@@ -79,8 +82,6 @@ export class Simulation {
     updateProjects(s);
     updateFires(s);
     if (h === 6 || h === 12) restockAll(s);
-    const caravanEvery = s.council.marketplace ? 2 : ECONOMY.caravanEveryDays;
-    if (h === 12 && s.day - s.lastCaravanDay >= caravanEvery) caravanVisit(s);
   }
 
   endOfDay() {
@@ -119,6 +120,7 @@ export class Simulation {
     maybeExpand(s);
     dailyRegion(s);
     dailyExploration(s);
+    dailyTrade(s);
     considerRoads(s);
     approveRoads(s);
     decayTraffic(s);

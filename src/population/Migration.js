@@ -14,6 +14,7 @@ import { linkParent } from '../citizens/FamilyTree.js';
 import { reassignWards } from '../citizens/Lifecycle.js';
 import { householdOf } from './Housing.js';
 import { onCitizenGone } from '../politics/Government.js';
+import { onMerchantGone } from '../trade/TradeManager.js';
 import { publicBeds } from './Expansion.js';
 import { assignHomes } from '../citizens/CitizenManager.js';
 import { archiveCitizen } from '../history/Archive.js';
@@ -140,7 +141,7 @@ export function emigrate(state, c) {
     for (const key of Object.keys(state.relationships)) if (key.startsWith(m.id + '|') || key.endsWith('|' + m.id)) delete state.relationships[key];
     archiveCitizen(state, m, 'emigrated', 'hard times');
   }
-  for (const m of household) onCitizenGone(state, m);
+  for (const m of household) { onCitizenGone(state, m); onMerchantGone(state, m); }
   const ids = new Set(household.map((m) => m.id));
   state.citizens = state.citizens.filter((x) => !ids.has(x.id));
   for (const m of household) { reassignWards(state, m); delete state.accounts[m.id]; }

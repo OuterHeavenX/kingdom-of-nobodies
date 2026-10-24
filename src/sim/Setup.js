@@ -1,6 +1,7 @@
 import { foundingRoads, addRoad } from '../navigation/RoadNetwork.js';
 import { BLOCKS } from '../population/Expansion.js';
 import { ensureRegion } from '../region/RegionManager.js';
+import { ensureTrade } from '../trade/Contracts.js';
 import { SAVE_VERSION, POPULATION } from '../core/Config.js';
 import { familyWish } from '../citizens/Genetics.js';
 import { transfer, openAccount } from '../economy/Transactions.js';
@@ -116,6 +117,7 @@ export function addMilestone4State(state) {
   state.navigation = state.navigation ?? { traffic: {}, routes: 0, failures: 0, recentFailures: [] };
   state.council.stores = state.council.stores ?? {};
   ensureRegion(state);
+  ensureTrade(state);
   return state;
 }
 

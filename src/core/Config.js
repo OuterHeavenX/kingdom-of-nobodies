@@ -48,6 +48,7 @@ export const GOODS = {
   timber: { label: 'Timber', icon: '🪵', base: 3 },
   ore: { label: 'Ore', icon: '🪨', base: 2 },
   tools: { label: 'Tools', icon: '🔨', base: 9 },
+  stone: { label: 'Stone', icon: '🧱', base: 2 },
 };
 
 export const FOOD_GOODS = ['meal', 'bread', 'grain', 'berries'];
