@@ -1,5 +1,6 @@
 import { ECONOMY, GOODS } from '../core/Config.js';
 import { openAccount } from './Transactions.js';
+import { byId } from '../core/EntityRegistry.js';
 import { addGoods, removeGoods, qty } from './Inventory.js';
 
 // Business archetypes and their production chains. One "batch" converts
@@ -7,33 +8,46 @@ import { addGoods, removeGoods, qty } from './Inventory.js';
 // batches, scaled by worker productivity and limited by available inputs.
 export const BUSINESS_TYPES = {
   farm: {
-    label: 'Farm', building: 'farm', output: 'grain', outputPerBatch: 1, batchesPerShift: 6,
-    inputs: {}, usesTools: true, sells: ['grain'], target: 18, maxStaff: 3, names: ['Fields', 'Farm', 'Acres'],
+    label: 'Farm', building: 'farm', output: 'grain', outputPerBatch: 1, batchesPerShift: 13,
+    inputs: {}, usesTools: true, sells: ['grain'], target: 24, maxStaff: 6, names: ['Fields', 'Farm', 'Acres'],
   },
   lumberyard: {
     label: 'Lumberyard', building: 'lumberyard', output: 'timber', outputPerBatch: 1, batchesPerShift: 3,
-    inputs: {}, commons: 'forest', usesTools: true, sells: ['timber'], target: 14, maxStaff: 3, names: ['Lumberyard', 'Sawmill', 'Timber Works'],
+    inputs: {}, commons: 'forest', usesTools: true, sells: ['timber'], target: 14, maxStaff: 4, names: ['Lumberyard', 'Sawmill', 'Timber Works'],
   },
   blacksmith: {
     label: 'Blacksmith', building: 'blacksmith', output: 'tools', outputPerBatch: 1, batchesPerShift: 1,
-    inputs: { ore: 2 }, sells: ['tools'], target: 4, maxStaff: 2, names: ['Forge', 'Smithy', 'Anvil'],
+    inputs: { ore: 2 }, sells: ['tools'], target: 4, maxStaff: 3, names: ['Forge', 'Smithy', 'Anvil'],
   },
   bakery: {
     label: 'Bakery', building: 'bakery', output: 'bread', outputPerBatch: 2, batchesPerShift: 3,
-    inputs: { grain: 1 }, sells: ['bread'], target: 14, maxStaff: 2, names: ['Bakery', 'Ovens', 'Bread House'],
+    inputs: { grain: 1 }, sells: ['bread'], target: 14, maxStaff: 3, names: ['Bakery', 'Ovens', 'Bread House'],
   },
   tavern: {
     label: 'Tavern', building: 'tavern', output: 'meal', outputPerBatch: 2, batchesPerShift: 2,
-    inputs: { grain: 1 }, sells: ['meal'], target: 10, maxStaff: 2, names: ['Tavern', 'Inn', 'Alehouse'],
+    inputs: { grain: 1 }, sells: ['meal'], target: 10, maxStaff: 3, names: ['Tavern', 'Inn', 'Alehouse'],
   },
   general_store: {
     label: 'General Store', building: 'general_store', output: null, batchesPerShift: 0,
-    inputs: {}, sells: ['bread', 'grain', 'berries', 'timber', 'tools'], target: 6, maxStaff: 2, names: ['Store', 'Provisions', 'Trading Post'],
+    inputs: {}, sells: ['bread', 'grain', 'berries', 'timber', 'tools'], target: 6, maxStaff: 3, names: ['Store', 'Provisions', 'Trading Post'],
     resale: true,
+  },
+  // A council-funded institution: no sales, teachers paid from the treasury.
+  school: {
+    label: 'School', building: 'school', output: null, batchesPerShift: 0,
+    inputs: {}, sells: [], target: 0, maxStaff: 2, names: ['Village School', 'Schoolhouse'], civic: true,
+  },
+  // Council-run public works crew: maintains buildings and roads, paid from the treasury.
+  works: {
+    label: 'Village Works', building: 'hall', output: null, batchesPerShift: 0,
+    inputs: {}, sells: [], target: 0, maxStaff: 8, names: ['Village Works'], civic: true,
   },
 };
 
-export const businessById = (state, id) => state.businesses.find((b) => b.id === id) ?? null;
+/** Staff a business can employ: bigger premises (upgrades) take more hands. */
+export const staffCap = (b) => BUSINESS_TYPES[b.type].maxStaff + ((b.level ?? 1) - 1) * 2;
+
+export const businessById = (state, id) => byId(state.businesses, id);
 export const isTrading = (b) => b.status === 'OPEN' || b.status === 'STRUGGLING';
 
 export function createBusiness(state, { type, ownerId, plotId, name }) {
@@ -112,7 +126,7 @@ export function produce(state, b, productivity) {
 
 export function businessName(state, type, owner) {
   const def = BUSINESS_TYPES[type];
-  const taken = new Set(state.businesses.map((b) => b.name));
+  const taken = new Set(state.businesses.filter(isTrading).map((b) => b.name));
   for (const suffix of def.names) {
     const name = owner ? `${owner.firstName}'s ${suffix}` : `Village ${suffix}`;
     if (!taken.has(name)) return name;

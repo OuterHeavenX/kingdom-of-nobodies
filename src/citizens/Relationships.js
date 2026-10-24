@@ -1,4 +1,7 @@
-import { SOCIAL } from '../core/Config.js';
+import { byId } from '../core/EntityRegistry.js';
+import { SOCIAL, DAYS_PER_YEAR, LIFE } from '../core/Config.js';
+import { ageOf } from './Citizen.js';
+import { areCloseKin } from './FamilyTree.js';
 import { pairHash } from '../core/Random.js';
 import { trait } from '../ai/Personality.js';
 import { record } from '../society/Chronicle.js';
@@ -65,23 +68,31 @@ export function socialize(state, a, b, intensity = 1) {
     remember(state, b, `Became close friends with ${a.firstName}.`, 2, 'social');
   }
   // Attraction grows only with good chemistry and established friendship.
-  if (chemistry > 0.45 && ab.friendship > 45 && canRomance(a, b)) {
-    const gain = (chemistry - 0.35) * 9 * intensity;
+  if (chemistry > 0.35 && ab.friendship > 25 && canRomance(state, a, b)) {
+    const gain = (chemistry - 0.25) * 28 * intensity;
     adjust(state, a.id, b.id, { affection: gain });
     adjust(state, b.id, a.id, { affection: gain * 0.9 });
   }
   updateRomance(state, a, b, ab, ba);
 }
 
-function canRomance(a, b) {
-  return a.romance.partnerId === null && b.romance.partnerId === null && Math.abs(a.age - b.age) <= 16 &&
+/** Whether each is drawn to the other: most people to the opposite sex, some to the same sex, some to either. */
+export function attracted(a, b) {
+  const pref = (x, y) => (x.attraction ?? 'opposite') === 'any' || ((x.attraction ?? 'opposite') === 'opposite' ? x.sex !== y.sex : x.sex === y.sex);
+  return pref(a, b) && pref(b, a);
+}
+
+function canRomance(state, a, b) {
+  return attracted(a, b) && a.romance.partnerId === null && b.romance.partnerId === null && !a.family.spouseId && !b.family.spouseId &&
+    Math.abs(a.birthDay - b.birthDay) <= 16 * DAYS_PER_YEAR &&
+    ageOf(state, a) >= LIFE.marriageMinAge && ageOf(state, b) >= LIFE.marriageMinAge && !areCloseKin(state, a.id, b.id) &&
     (a.romance.courtingId === null || a.romance.courtingId === b.id) &&
     (b.romance.courtingId === null || b.romance.courtingId === a.id);
 }
 
 function updateRomance(state, a, b, ab, ba) {
   const together = a.romance.courtingId === b.id;
-  if (!together && canRomance(a, b) && ab.affection > SOCIAL.courtAffection && ba.affection > SOCIAL.courtAffection) {
+  if (!together && canRomance(state, a, b) && ab.affection > SOCIAL.courtAffection && ba.affection > SOCIAL.courtAffection) {
     a.romance.courtingId = b.id; b.romance.courtingId = a.id;
     a.romance.since = b.romance.since = state.day;
     record(state, 'relationships', `${a.firstName} and ${b.firstName} have started courting.`, { citizens: [a.id, b.id] }, 2);
@@ -99,18 +110,28 @@ function updateRomance(state, a, b, ab, ba) {
   }
 }
 
+/**
+ * Forget insignificant acquaintances so memory stays bounded as the village
+ * grows. Family, friends, rivals and anyone with real feelings are kept.
+ */
+export function pruneRelationships(state) {
+  for (const [key, r] of Object.entries(state.relationships)) {
+    if (r.friendship < 24 && r.affection < 14 && r.rivalry < 6 && Math.abs(r.trust - 45) < 10 && r.respect < 42 && !r.closeFriend) delete state.relationships[key];
+  }
+}
+
 /** Called daily: relationships under strain may end. */
 export function checkBreakups(state) {
   for (const a of state.citizens) {
     const otherId = a.romance.partnerId ?? a.romance.courtingId;
-    if (!otherId || a.id > otherId) continue;
-    const b = state.citizens.find((c) => c.id === otherId);
+    if (!otherId || a.id > otherId || a.family.spouseId === otherId) continue;
+    const b = byId(state.citizens, otherId);
     if (!b) continue;
     const ab = rel(state, a.id, b.id), ba = rel(state, b.id, a.id);
     if (ab.trust < SOCIAL.breakupTrust || ba.trust < SOCIAL.breakupTrust || ab.rivalry > 55 || ba.rivalry > 55 || ab.affection < 30) {
       const wasPartner = a.romance.partnerId === b.id;
       for (const [x, y] of [[a, b], [b, a]]) {
-        x.romance.partnerId = null; x.romance.courtingId = null; x.family.partnerId = null;
+        x.romance.partnerId = null; x.romance.courtingId = null; x.romance.engagedTo = null; x.family.partnerId = null;
         x.romance.history.push({ with: y.id, endedDay: state.day });
         x.mood = Math.max(0, x.mood - 15);
         adjust(state, x.id, y.id, { affection: -25 });

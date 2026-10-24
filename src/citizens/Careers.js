@@ -1,4 +1,5 @@
 import { WAGES } from '../core/Config.js';
+import { gainSkill } from '../education/Skills.js';
 
 // Which skill each profession uses and which business type employs it.
 export const PROFESSIONS = {
@@ -11,16 +12,17 @@ export const PROFESSIONS = {
   Merchant: { skill: 'trade', works: ['general_store'] },
   Innkeeper: { skill: 'hospitality', works: ['tavern'] },
   Laborer: { skill: 'labor', works: ['farm', 'lumberyard', 'general_store', 'tavern'] },
+  Teacher: { skill: 'teaching', works: ['school'] },
 };
 
 export const SKILL_FOR_BUSINESS = {
   farm: 'farming', lumberyard: 'forestry', bakery: 'baking', blacksmith: 'smithing',
-  general_store: 'trade', tavern: 'hospitality',
+  general_store: 'trade', tavern: 'hospitality', school: 'teaching', works: 'building',
 };
 
 export const PROFESSION_FOR_BUSINESS = {
   farm: 'Farmer', lumberyard: 'Woodcutter', bakery: 'Baker', blacksmith: 'Blacksmith',
-  general_store: 'Merchant', tavern: 'Innkeeper',
+  general_store: 'Merchant', tavern: 'Innkeeper', school: 'Teacher', works: 'Public worker',
 };
 
 export const baseWage = (profession) => WAGES[profession] ?? WAGES.Laborer;
@@ -33,5 +35,5 @@ export function skillFor(c, businessType) {
 export const productivity = (c, businessType) => 0.7 + skillFor(c, businessType) * 0.6;
 
 export function improveSkill(c, skill, amount = 0.012) {
-  c.skills[skill] = Math.min(1, Math.round(((c.skills[skill] ?? 0.1) + amount) * 1000) / 1000);
+  return gainSkill(c, skill, amount);
 }

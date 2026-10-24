@@ -1,3 +1,4 @@
+import { byId } from '../core/EntityRegistry.js';
 import { balance } from '../economy/Transactions.js';
 import { BottomSheet } from './BottomSheet.js';
 import { Notifications } from './Notifications.js';
@@ -88,7 +89,7 @@ export class HUD {
       case 'chronicle-filter': this.view.chronicle = { category: id || null }; this.renderSheet(true); break;
       case 'chronicle-clear': this.view.chronicle = {}; this.renderSheet(true); break;
       case 'history': this.view.tab = 'chronicle'; this.view.detail = null; this.stack = []; this.view.chronicle = { [el.dataset.kind]: id }; this.renderSheet(true); $('sheet-body').scrollTop = 0; break;
-      case 'focus-citizen': { const c = this.sim.state.citizens.find((x) => x.id === id); if (c) { g.world?.focusOn(c.x, c.z); this.sheet.set('peek'); } break; }
+      case 'focus-citizen': { const c = this.sim.byId(state.citizens, id); if (c) { g.world?.focusOn(c.x, c.z); this.sheet.set('peek'); } break; }
       case 'focus-plot': { const p = plotById(this.sim.state, id); if (p) { this.sim.select('plot', id); g.world?.focusOn(p.x, p.z); this.sheet.set('peek'); } break; }
       case 'council': {
         const res = this.sim.council(el.dataset.action, id || undefined);

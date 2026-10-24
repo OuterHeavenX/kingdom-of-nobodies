@@ -1,4 +1,5 @@
 import { POPULATION } from '../core/Config.js';
+import { byId } from '../core/EntityRegistry.js';
 
 // The land registry: every plot in the settlement, who owns it and what stands on it.
 
@@ -7,7 +8,7 @@ export const LAND_TYPES = {
   commercial: { label: 'Commercial', base: 38, allows: ['bakery', 'general_store', 'tavern', 'blacksmith'] },
   workshop: { label: 'Workshop land', base: 34, allows: ['lumberyard', 'blacksmith', 'general_store'] },
   residential: { label: 'Residential', base: 22, allows: ['cottage'] },
-  civic: { label: 'Civic', base: 60, allows: ['hall', 'market'] },
+  civic: { label: 'Civic', base: 50, allows: ['hall', 'market', 'school', 'granary', 'well', 'townhall', 'memorial'] },
 };
 
 export const BUILDING_INFO = {
@@ -21,6 +22,11 @@ export const BUILDING_INFO = {
   tavern: { label: 'Tavern', class: 'shop', value: 34 },
   stall: { label: 'Trading Stall', class: 'shop', value: 14 },
   cottage: { label: 'Cottage', class: 'home', value: 24 },
+  school: { label: 'School', class: 'civic', value: 40 },
+  granary: { label: 'Granary', class: 'civic', value: 36 },
+  well: { label: 'Well', class: 'civic', value: 14 },
+  townhall: { label: 'Town Hall', class: 'civic', value: 90 },
+  ruins: { label: 'Ruins', class: 'ruins', value: 0 },
 };
 
 // Hand-placed village layout around the crossroads at (0, 0).
@@ -42,7 +48,11 @@ const LAYOUT = [
 ];
 
 export function createPlots(state) {
-  for (const [name, x, z, w, d, landType] of LAYOUT) {
+  for (const [name, x, z, w, d, landType] of LAYOUT) makePlot(state, { name, x, z, w, d, landType, district: 'Old Town' });
+}
+
+export function makePlot(state, { name, x, z, w, d, landType, district }) {
+  {
     const plot = {
       id: 'p' + ++state.nextId.plot,
       name, x, z, w, d, landType,
@@ -57,15 +67,17 @@ export function createPlots(state) {
       constructionStatus: 'NONE',
       projectId: null,
       history: [],
-      facing: x > 28 ? 'west' : z > 0 ? 'north' : 'south',
+      facing: x > 28 ? 'west' : x < -34 ? 'east' : z > 0 ? 'north' : 'south',
+      district,
     };
     state.plots.push(plot);
+    return plot;
   }
 }
 
-const FACING = { south: [0, 1], north: [0, -1], west: [-1, 0] };
+const FACING = { south: [0, 1], north: [0, -1], west: [-1, 0], east: [1, 0] };
 /** Rotation (radians about y) that turns a model's +z front toward the street. */
-export const facingAngle = (plot) => ({ south: 0, north: Math.PI, west: -Math.PI / 2 }[plot.facing ?? 'south']);
+export const facingAngle = (plot) => ({ south: 0, north: Math.PI, west: -Math.PI / 2, east: Math.PI / 2 }[plot.facing ?? 'south']);
 /** A point just outside the plot's front door. `offset` shifts along the frontage. */
 export function frontOf(plot, offset = 0, extra = 0.8) {
   const [fx, fz] = FACING[plot.facing ?? 'south'];
@@ -73,7 +85,7 @@ export function frontOf(plot, offset = 0, extra = 0.8) {
   return { x: plot.x + fx * (half + extra) + fz * offset, z: plot.z + fz * (half + extra) - fx * offset };
 }
 
-export const plotById = (state, id) => state.plots.find((p) => p.id === id) ?? null;
+export const plotById = (state, id) => byId(state.plots, id);
 export const plotByName = (state, name) => state.plots.find((p) => p.name === name) ?? null;
 export const buildingClass = (type) => BUILDING_INFO[type]?.class ?? null;
 export const allows = (plot, buildingType) => LAND_TYPES[plot.landType].allows.includes(buildingType);
@@ -104,7 +116,7 @@ export function plotsForSale(state, buildingType, buyerId) {
 
 export function bedsAt(state, plot) {
   if (!plot.building || plot.constructionStatus !== 'COMPLETE') return 0;
-  if (plot.building.type === 'hall') return POPULATION.hallBeds;
-  if (plot.building.type === 'cottage') return POPULATION.cottageBeds;
+  if (plot.building.type === 'hall' || plot.building.type === 'townhall') return POPULATION.hallBeds;
+  if (plot.building.type === 'cottage') return (plot.building.level ?? 1) >= 2 ? POPULATION.houseBeds : POPULATION.cottageBeds;
   return 0;
 }

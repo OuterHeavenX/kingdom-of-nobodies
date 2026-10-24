@@ -48,7 +48,7 @@ test('14. Milestone 1 saves migrate safely', () => {
     })),
   };
   const s = deserialize(JSON.stringify(m1));
-  assert.equal(s.version, 3);
+  assert.equal(s.version, 4);
   assert.equal(s.day, 6);
   assert.deepEqual(s.citizens.map((c) => c.firstName), ['Ada', 'Bram', 'Cora', 'Dain', 'Elin']);
   assert.equal(Math.round(s.citizens[2].needs.hunger), 42);

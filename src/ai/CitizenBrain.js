@@ -1,3 +1,4 @@
+import { byId } from '../core/EntityRegistry.js';
 import { NEEDS, MOVE, GOODS, FOOD_GOODS, ECONOMY } from '../core/Config.js';
 import { range, chance } from '../core/Random.js';
 import { balance, transfer } from '../economy/Transactions.js';
@@ -16,6 +17,8 @@ import { remember } from './MemorySystem.js';
 import { trait } from './Personality.js';
 import { planFor, checkDreamFulfilled } from './GoalPlanner.js';
 import { generateCandidates, explain, hourOf, isNight } from './DecisionUtility.js';
+import { guardianOf } from '../citizens/Families.js';
+import { schoolOpen, completeLesson, completeApprenticeship, completeMentoring } from '../education/Education.js';
 
 // Each citizen is always either performing an activity or choosing one.
 // Activities have two phases: travel to a location, then perform for a duration.
@@ -29,6 +32,7 @@ const LABELS = {
   seek_job: 'Looking for work', forage: 'Foraging in the forest', sell_goods: 'Selling goods', socialize: 'Socialising',
   tavern: 'At the tavern', help: 'Helping a neighbour', festival: 'Enjoying the festival', buy_plot: 'Buying property',
   start_project: 'Starting a building project', explore: 'Wandering', idle: 'Taking a moment',
+  cradle: 'Being looked after', rest_sick: 'Resting while ill', lessons: 'Lessons', apprentice: 'Apprenticing', mentor: 'Mentoring', family_time: 'Family time',
 };
 
 export function homeOf(state, c) {
@@ -67,6 +71,12 @@ export function updateCitizen(state, c) {
 }
 
 function tickNeeds(state, c) {
+  if (state.tick % 6 !== 0) {
+    c.needs.hunger = clamp(c.needs.hunger - NEEDS.hungerDecay);
+    if (c.activity?.kind !== 'sleep' || c.activity.phase !== 'perform') c.needs.energy = clamp(c.needs.energy - NEEDS.energyDecay * (c.activity?.kind === 'work' || c.activity?.kind === 'build' ? 1.15 : 0.85));
+    c.needs.social = clamp(c.needs.social - NEEDS.socialDecay);
+    return;
+  }
   c.needs.hunger = clamp(c.needs.hunger - NEEDS.hungerDecay);
   if (c.activity?.kind !== 'sleep' || c.activity.phase !== 'perform') c.needs.energy = clamp(c.needs.energy - NEEDS.energyDecay * (c.activity?.kind === 'work' || c.activity?.kind === 'build' ? 1.15 : 0.85));
   c.needs.social = clamp(c.needs.social - NEEDS.socialDecay);
@@ -75,11 +85,11 @@ function tickNeeds(state, c) {
   const target = 18 + c.needs.hunger * 0.22 + c.needs.energy * 0.18 + c.needs.social * 0.2 +
     Math.min(12, money / 4) + (home?.ownerId === c.id ? 6 : 0) + (c.romance.partnerId ? 6 : 0) +
     (c.employment ? 4 : 0) + ECONOMY.taxMood[state.council.taxLevel];
-  c.mood = clamp(c.mood + (target - c.mood) * 0.015);
+  c.mood = clamp(c.mood + (target - c.mood) * 0.09);
 }
 
 function shouldInterrupt(state, c, a) {
-  if (a.kind === 'eat_own' || a.kind === 'eat_stock' || a.kind === 'buy_food' || a.kind === 'sleep') return false;
+  if (a.kind === 'eat_own' || a.kind === 'eat_stock' || a.kind === 'buy_food' || a.kind === 'sleep' || a.kind === 'cradle' || a.kind === 'rest_sick') return false;
   if (c.needs.hunger < NEEDS.criticalHunger && (FOOD_GOODS.some((g) => qty(c.inventory, g) > 0) || balance(state, c.id) > 0)) return true;
   if (c.needs.energy < NEEDS.criticalEnergy) return true;
   if (a.kind === 'work') {
@@ -136,9 +146,9 @@ function begin(state, c, k) {
       return activity('eat_stock', `Eating ${GOODS[k.good].label.toLowerCase()} from ${b.name}`, businessLocation(state, b), 3, { businessId: b.id, good: k.good });
     }
     case 'buy_food': {
-      if (k.pantry) return activity('buy_food', `Buying ${GOODS[k.good].label.toLowerCase()} at the council pantry`, hallDoor(state), 2, { pantry: true, good: k.good });
+      if (k.pantry) return activity('buy_food', k.relief ? 'Getting food from the council pantry' : `Buying ${GOODS[k.good].label.toLowerCase()} at the council pantry`, hallDoor(state), 2, { pantry: true, relief: k.relief, good: k.good, payer: k.payer });
       const b = businessById(state, k.businessId);
-      return activity('buy_food', `Buying ${GOODS[k.good].label.toLowerCase()} at ${b.name}`, businessLocation(state, b), 2, { businessId: b.id, good: k.good });
+      return activity('buy_food', `Buying ${GOODS[k.good].label.toLowerCase()} at ${b.name}`, businessLocation(state, b), 2, { businessId: b.id, good: k.good, payer: k.payer });
     }
     case 'sleep': return activity('sleep', plotById(state, c.homePlotId)?.ownerId === c.id ? 'Sleeping at home' : 'Sleeping at the hall', homeOf(state, c), 80);
     case 'work': {
@@ -164,7 +174,7 @@ function begin(state, c, k) {
       return activity('sell_goods', `Selling ${GOODS[k.good].label.toLowerCase()}`, buyer ? businessLocation(state, buyer) : hallDoor(state), 2, { good: k.good });
     }
     case 'socialize': {
-      const t = state.citizens.find((o) => o.id === k.citizenId);
+      const t = byId(state.citizens, k.citizenId);
       const loc = t ? { x: t.x + range(state, -1, 1), z: t.z + range(state, -1, 1) } : square(state);
       return activity('socialize', t ? `Chatting with ${t.firstName}` : 'Chatting in the square', loc, 8, { citizenId: t?.id ?? null });
     }
@@ -173,7 +183,7 @@ function begin(state, c, k) {
       return activity('tavern', `Evening at ${b.name}`, businessLocation(state, b), 10, { businessId: b.id });
     }
     case 'help': {
-      const t = state.citizens.find((o) => o.id === k.citizenId);
+      const t = byId(state.citizens, k.citizenId);
       return activity('help', `Helping ${t.firstName}`, { x: t.x, z: t.z }, 2, { citizenId: t.id });
     }
     case 'festival': return activity('festival', 'Celebrating at the festival', square(state), 10);
@@ -185,6 +195,24 @@ function begin(state, c, k) {
       const plot = plotById(state, k.plotId);
       return activity('start_project', `Planning work on ${plot.name}`, { x: plot.x, z: plot.z }, 4, { plotId: k.plotId, projectKind: k.projectKind, businessType: k.businessType ?? null, home: !!k.home });
     }
+    case 'cradle': return activity('cradle', 'Being looked after at home', homeOf(state, c), 36);
+    case 'rest_sick': return activity('rest_sick', 'Resting while ill', homeOf(state, c), 30);
+    case 'lessons': {
+      const school = schoolOpen(state);
+      const loc = school ? businessLocation(state, school) : homeOf(state, c);
+      return activity('lessons', school ? `Lessons at ${school.name}` : 'Lessons at home', loc, 18, {});
+    }
+    case 'apprentice': {
+      const m = byId(state.citizens, k.citizenId);
+      if (!m) return null;
+      return activity('apprentice', `Apprenticing with ${m.firstName}`, { x: m.x + range(state, -1.2, 1.2), z: m.z + range(state, -1.2, 1.2) }, 24, { citizenId: m.id });
+    }
+    case 'mentor': {
+      const st = byId(state.citizens, k.citizenId);
+      if (!st) return null;
+      return activity('mentor', `Teaching ${st.firstName} ${k.skill}`, { x: st.x + 1, z: st.z }, 8, { citizenId: st.id, skill: k.skill });
+    }
+    case 'family_time': return activity('family_time', 'Time with the family', homeOf(state, c), 8);
     case 'explore': return activity('explore', 'Wandering the village', { x: range(state, -26, 30), z: range(state, -20, 24) }, 4);
     default: return activity('idle', 'Taking a moment', { x: c.x, z: c.z }, 3);
   }
@@ -222,10 +250,12 @@ function finish(state, c) {
       break;
     }
     case 'buy_food': {
-      if (a.pantry) { if (buyFromPantry(state, c, a.good).ok) eatFrom(c, a.good); break; }
+      const payer = a.payer ?? c.id;
+      if (!(payer in state.accounts)) break;
+      if (a.pantry) { if (buyFromPantry(state, c, a.good, payer, a.relief).ok) eatFrom(c, a.good); break; }
       const b = businessById(state, a.businessId);
-      const n = a.good === 'grain' && balance(state, c.id) > 14 ? 2 : 1;
-      const res = b ? buyRetail(state, c, b, a.good, n) : { ok: false };
+      const n = a.good === 'grain' && balance(state, payer) > 14 ? 2 : 1;
+      const res = b ? buyRetail(state, c, b, a.good, n, payer) : { ok: false };
       if (res.ok) eatFrom(c, a.good);
       break;
     }
@@ -279,7 +309,7 @@ function finish(state, c) {
       break;
     }
     case 'help': {
-      const t = state.citizens.find((o) => o.id === a.citizenId);
+      const t = byId(state.citizens, a.citizenId);
       if (t && transfer(state, c.id, t.id, 5, 'gift', `${c.firstName} helped ${t.firstName}`)) {
         c.stats.gifts++;
         bump(c, 'generosity', 5);
@@ -301,6 +331,26 @@ function finish(state, c) {
       break;
     }
     case 'start_project': startOwnProject(state, c, a); break;
+    case 'cradle': break;
+    case 'rest_sick': c.needs.energy = clamp(c.needs.energy + 25); break;
+    case 'lessons': completeLesson(state, c, guardianOf(state, c)); c.shiftsToday++; break;
+    case 'apprentice': {
+      const m = byId(state.citizens, a.citizenId);
+      completeApprenticeship(state, c, m);
+      break;
+    }
+    case 'mentor': {
+      const st = byId(state.citizens, a.citizenId);
+      if (st && Math.hypot(st.x - c.x, st.z - c.z) < 12) completeMentoring(state, c, st, a.skill);
+      break;
+    }
+    case 'family_time': {
+      const kids = state.citizens.filter((k) => k.family.parentIds.includes(c.id) && Math.hypot(k.x - c.x, k.z - c.z) < 8);
+      for (const k of kids) { socialize(state, c, k, 0.6); k.needs.social = clamp(k.needs.social + 20); }
+      c.needs.social = clamp(c.needs.social + 15 + kids.length * 5);
+      c.mood = clamp(c.mood + 2);
+      break;
+    }
     case 'explore': {
       c.mood = clamp(c.mood + 1 + trait(c, 'curious') * 2);
       if (chance(state, 0.15) && state.commons.berries > 1) { state.commons.berries -= 1; addGoods(c.inventory, 'berries', 1); }
@@ -318,7 +368,7 @@ function startOwnProject(state, c, a) {
     plotHistory(state, plot, `${c.firstName} reopened the building as ${b.name}.`);
     return;
   }
-  const v = c.venture ?? (c.venture = {});
+  const v = a.home ? (c.homeVenture ?? (c.homeVenture = {})) : (c.venture ?? (c.venture = {}));
   const spec = a.home ? { kind: 'construction', buildingType: 'cottage', purpose: 'home' }
     : a.projectKind === 'demolition' ? { kind: 'demolition' }
       : { kind: a.projectKind, buildingType: BUSINESS_TYPES[a.businessType].building, purpose: 'business', businessType: a.businessType };

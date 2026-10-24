@@ -1,3 +1,4 @@
+import { byId } from '../core/EntityRegistry.js';
 import { ECONOMY } from '../core/Config.js';
 import { balance } from '../economy/Transactions.js';
 import { BUSINESS_TYPES, businessById, isTrading } from '../economy/Businesses.js';
@@ -25,7 +26,12 @@ const step = (label, done) => ({ label, done: !!done });
 
 export function planFor(state, c) {
   const d = c.dream;
-  const plan = PLANNERS[d.type]?.(state, c, d) ?? { steps: [], goal: 'Living day to day', need: 0, actions: [] };
+  let plan = PLANNERS[d.type]?.(state, c, d) ?? { steps: [], goal: 'Living day to day', need: 0, actions: [] };
+  // A family without a home of its own puts that first, whatever the long-term dream.
+  if (d.type !== 'homestead' && needsFamilyHome(state, c)) {
+    const home = PLANNERS.homestead(state, c);
+    if (home.actions.length || home.need > 0) plan = { ...home, goal: `Find a home for the family (${home.goal.toLowerCase()})`, dreamPlan: plan };
+  }
   const firstOpen = plan.steps.find((s) => !s.done);
   plan.goal = plan.goal ?? firstOpen?.label ?? 'Dream achieved';
   plan.next = firstOpen?.label ?? 'Enjoy what I have built';
@@ -34,6 +40,12 @@ export function planFor(state, c) {
 }
 
 const hasEarned = (c) => c.employment || c.stats.earned > 0;
+
+function needsFamilyHome(state, c) {
+  if (!c.family.spouseId && !state.citizens.some((k) => k.family.guardianId === c.id || (k.family.parentIds.includes(c.id) && k.birthDay > state.day - 18 * 12))) return false;
+  const home = plotById(state, c.homePlotId);
+  return !home || home.building?.type !== 'cottage' || (home.ownerId !== c.id && home.ownerId !== c.family.spouseId && home.ownerId !== 'council');
+}
 
 /** Cheapest way to get premises for a business type: buy and refit an empty building, or buy land and build. */
 function premisesOptions(state, c, type) {
@@ -120,7 +132,7 @@ const PLANNERS = {
     const home = c.homePlotId ? plotById(state, c.homePlotId) : null;
     const ownsHome = home && home.ownerId === c.id && home.building?.type === 'cottage';
     const owned = ownedPlots(state, c.id);
-    const v = c.venture ?? (c.venture = {});
+    const v = c.homeVenture ?? (c.homeVenture = {});
     const project = v.projectId ? projectById(state, v.projectId) : null;
     if (v.projectId && !project) v.projectId = null;
     const steps = [step('Earn a living', hasEarned(c))];
@@ -168,13 +180,23 @@ const PLANNERS = {
   },
 
   partner(state, c) {
-    const partner = state.citizens.find((o) => o.id === c.romance.partnerId);
-    const courting = state.citizens.find((o) => o.id === c.romance.courtingId);
+    const partner = byId(state.citizens, c.romance.partnerId);
+    const courting = byId(state.citizens, c.romance.courtingId);
     return {
       goal: partner ? `Build a life with ${partner.firstName}` : courting ? `Win ${courting.firstName}'s heart` : 'Meet someone special',
       need: 0,
-      steps: [step('Make friends', Object.keys(state.relationships).some((k) => k.startsWith(c.id + '|') && state.relationships[k].friendship > 50)),
+      steps: [step('Make friends', (c.social?.bestFriendship ?? 0) > 50),
         step('Start courting', courting || partner), step('Become partners', partner)],
+      actions: [],
+    };
+  },
+
+  growing(state, c) {
+    const age = Math.floor((state.day - c.birthDay) / 12);
+    return {
+      goal: age < 13 ? 'Learn and play' : c.education.masterId ? `Learn ${c.education.trade === 'trade' ? 'trading' : c.education.trade}` : 'Find a trade to learn',
+      need: 0,
+      steps: [step('Learn my letters', c.education.level > 0.3), step('Choose a trade', !!c.education.trade), step('Find a master', !!c.education.masterId), step('Come of age', age >= 18)],
       actions: [],
     };
   },

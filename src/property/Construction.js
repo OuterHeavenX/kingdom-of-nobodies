@@ -1,3 +1,4 @@
+import { byId } from '../core/EntityRegistry.js';
 import { STAGES, REFIT_STAGE, DEMOLITION, BUILD, GOODS, ECONOMY } from '../core/Config.js';
 import { transfer, balance } from '../economy/Transactions.js';
 import { qty, removeGoods, addGoods } from '../economy/Inventory.js';
@@ -20,6 +21,8 @@ export const projectById = (state, id) => state.projects.find((p) => p.id === id
 function stagesFor(kind) {
   if (kind === 'construction') return STAGES;
   if (kind === 'refit') return [REFIT_STAGE];
+  if (kind === 'upgrade') return [{ name: 'EXPANSION', work: 10, timber: 4 }];
+  if (kind === 'repair') return [{ name: 'REPAIR', work: 6, timber: 2 }];
   return [{ name: 'DEMOLISHING', work: DEMOLITION.work, timber: 0 }];
 }
 
@@ -30,6 +33,8 @@ export function canStart(state, plot, ownerId, kind, buildingType) {
   if (kind === 'construction' && (plot.building || !allows(plot, buildingType))) return 'plot cannot take that building';
   if (kind === 'refit' && (!plot.building || buildingClass(plot.building.type) !== buildingClass(buildingType) || plot.businessId)) return 'building cannot be refitted';
   if (kind === 'demolition' && (!plot.building || plot.businessId)) return 'nothing to demolish';
+  if (kind === 'upgrade' && (!plot.building || (plot.building.level ?? 1) >= 3)) return 'cannot be expanded further';
+  if (kind === 'repair' && (!plot.building || (plot.building.condition ?? 100) >= 90)) return 'needs no repair';
   return null;
 }
 
@@ -49,10 +54,10 @@ export function startProject(state, { plotId, ownerId, kind, buildingType = null
   state.projects.push(project);
   plot.projectId = project.id;
   plot.marketStatus = 'NOT_FOR_SALE';
-  plot.constructionStatus = kind === 'demolition' ? 'DEMOLISHING' : 'PLANNING';
-  const owner = state.citizens.find((c) => c.id === ownerId);
+  plot.constructionStatus = kind === 'demolition' ? 'DEMOLISHING' : kind === 'upgrade' || kind === 'repair' ? 'COMPLETE' : 'PLANNING';
+  const owner = byId(state.citizens, ownerId);
   const who = owner ? owner.firstName : 'The council';
-  const what = kind === 'demolition' ? `demolition of the old ${BUILDING_INFO[plot.building.type].label.toLowerCase()}` :
+  const what = kind === 'upgrade' ? `expanding the ${BUILDING_INFO[plot.building.type].label.toLowerCase()}` : kind === 'repair' ? `repairing the ${BUILDING_INFO[plot.building.type].label.toLowerCase()}` : kind === 'demolition' ? `demolition of the old ${BUILDING_INFO[plot.building.type].label.toLowerCase()}` :
     kind === 'refit' ? `refitting the ${BUILDING_INFO[plot.building.type].label.toLowerCase()} as a ${BUILDING_INFO[buildingType].label.toLowerCase()}` :
       `a ${BUILDING_INFO[buildingType].label.toLowerCase()}`;
   plotHistory(state, plot, `${who} began ${what}.`);
@@ -80,7 +85,7 @@ function procure(state, p) {
       removeGoods(s.inventory, 'timber', n);
       s.today.revenue += unit * n;
       s.totals.revenue += unit * n;
-      const buyer = state.citizens.find((c) => c.id === p.ownerId);
+      const buyer = byId(state.citizens, p.ownerId);
       noteSale(state, s, buyer ? buyer.firstName : 'the council', n, 'timber', unit * n, buyer?.id ?? null);
       p.materials += n;
       p.materialsPaid += unit * n;
@@ -89,7 +94,7 @@ function procure(state, p) {
   }
   if (need > 0 && !sellers.length) {
     // Owner-held salvage timber counts too.
-    const owner = state.citizens.find((c) => c.id === p.ownerId);
+    const owner = byId(state.citizens, p.ownerId);
     const own = owner ? Math.min(need, qty(owner.inventory, 'timber')) : 0;
     if (own > 0) { removeGoods(owner.inventory, 'timber', own); p.materials += own; need -= own; }
     const unit = Math.round(GOODS.timber.base * 1.7);
@@ -156,7 +161,7 @@ export function addWork(state, p, c) {
     paid = BUILD.builderWage;
     p.labourPaid += paid;
     c.stats.earned += paid;
-    const owner = state.citizens.find((o) => o.id === p.ownerId);
+    const owner = byId(state.citizens, p.ownerId);
     if (owner) adjustBoth(state, c.id, owner.id, { friendship: 1.5, trust: 1, respect: 1 });
   }
   const units = builder ? BUILD.builderWorkPerShift + Math.round((c.skills.building ?? 0) * 1.5) : BUILD.ownerWorkPerShift;
@@ -170,10 +175,21 @@ export function addWork(state, p, c) {
 
 function complete(state, p) {
   const plot = plotById(state, p.plotId);
-  const owner = state.citizens.find((c) => c.id === p.ownerId);
+  const owner = byId(state.citizens, p.ownerId);
   state.projects = state.projects.filter((x) => x !== p);
   plot.projectId = null;
   const crewIds = new Set(p.crewHistory ?? []);
+  if (p.kind === 'upgrade' || p.kind === 'repair') {
+    if (p.kind === 'upgrade') plot.building.level = (plot.building.level ?? 1) + 1;
+    else plot.building.condition = 100;
+    plot.constructionStatus = 'COMPLETE';
+    const b = plot.businessId ? state.businesses.find((x) => x.id === plot.businessId) : null;
+    if (b && p.kind === 'upgrade') b.level = plot.building.level;
+    const label = b?.name ?? BUILDING_INFO[plot.building.type].label;
+    plotHistory(state, plot, p.kind === 'upgrade' ? `${label} was expanded (level ${plot.building.level}).` : `${label} was repaired.`);
+    record(state, 'construction', p.kind === 'upgrade' ? `${label} on ${plot.name} was expanded into larger premises.` : `${label} on ${plot.name} has been repaired.`, { citizens: owner ? [owner.id] : [], plot: plot.id, business: b?.id ?? null }, 2);
+    return;
+  }
   if (p.kind === 'demolition') {
     const old = plot.building ? BUILDING_INFO[plot.building.type].label.toLowerCase() : 'building';
     plot.building = null;
@@ -193,6 +209,13 @@ function complete(state, p) {
     record(state, 'construction', `${owner.firstName}'s new cottage on ${plot.name} is finished.`, { citizens: [owner.id], plot: plot.id }, 3);
     remember(state, owner, `Moved into my own cottage on ${plot.name}.`, 3, 'milestone');
     owner.mood = Math.min(100, owner.mood + 15);
+  } else if (p.purpose === 'council_business') {
+    const b = createBusiness(state, { type: p.businessType, ownerId: 'council', plotId: plot.id, name: businessName(state, p.businessType, null) });
+    plot.businessId = b.id;
+    plot.building.name = b.name;
+    transfer(state, 'treasury', b.id, Math.min(25, balance(state, 'treasury')), 'grant', `Starting funds for ${b.name}`);
+    b.openings = 2;
+    record(state, 'business', `The council opened ${b.name} on ${plot.name}.`, { business: b.id, plot: plot.id }, 2);
   } else {
     record(state, 'construction', `The council finished a new ${BUILDING_INFO[p.buildingType].label.toLowerCase()} on ${plot.name}.`, { plot: plot.id }, 2);
   }
