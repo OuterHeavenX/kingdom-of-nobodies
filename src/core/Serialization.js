@@ -1,4 +1,4 @@
-import { SAVE_VERSION } from './Config.js';
+import { SAVE_VERSION, WIDER_WORLD } from './Config.js';
 import { createKingdom, createWorks, addMilestone4State } from '../sim/Setup.js';
 import { adjustBoth } from '../citizens/Relationships.js';
 import { addGoods } from '../economy/Inventory.js';
@@ -59,6 +59,12 @@ export function migrateV3(s) {
  * law and festival calendars.
  */
 export function migrateV4(s) {
+  // Milestone 4 opens the valley to trade with the wider world, which is far
+  // larger than the purse a Milestone 3 village knew about. This one-time top-up
+  // is recorded so the money supply stays explainable.
+  const topUp = Math.max(0, WIDER_WORLD - (s.accounts.outside ?? 0));
+  s.accounts.outside = (s.accounts.outside ?? 0) + topUp;
+  s.migrationNotes = [...(s.migrationNotes ?? []), { version: 5, outsideTopUp: topUp }];
   addMilestone4State(s);
   s.version = 5;
   s.migratedFrom = s.migratedFrom ?? 'milestone-3';

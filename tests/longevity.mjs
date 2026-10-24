@@ -99,7 +99,7 @@ export function regional(s, year) {
     judgments: s.law?.stats?.judged ?? 0, laws: (s.law?.laws ?? []).filter((l) => l.status === 'ACTIVE').length,
     festivalAttendance: fest.length ? Math.round(fest.slice(-4).reduce((a, f) => a + f.attendance / Math.max(1, f.population), 0) / Math.min(4, fest.length) * 100) : null,
     traditions: (s.culture?.traditions ?? []).filter((x) => x.active).length,
-    treasury: balance(s, 'treasury'),
+    treasury: balance(s, 'treasury'), widerWorld: balance(s, 'outside'),
   };
 }
 

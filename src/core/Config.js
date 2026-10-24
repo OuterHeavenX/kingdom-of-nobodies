@@ -1,6 +1,8 @@
 // Central tuning constants. Every economic and behavioural number lives here so
 // the simulation can be balanced without hunting through system code.
 
+/** Coins held by the wider world beyond the region (the 'outside' account) at the founding. */
+export const WIDER_WORLD = 250000;
 export const SAVE_VERSION = 5;
 
 export const TIME = {
@@ -73,7 +75,7 @@ export const ECONOMY = {
   startingCapital: 14,
   struggleDays: 3,
   closeAfterStruggleDays: 7,
-  luxuryReserve: 200, // savings above this are slowly spent on goods from beyond the valley
+  luxuryReserve: 1500, // savings above this are slowly spent on goods from beyond the valley
   luxuryShare: 0.01, // share of the excess spent each day
   maxOpenPerType: 3,
   maxActiveProjects: 3,

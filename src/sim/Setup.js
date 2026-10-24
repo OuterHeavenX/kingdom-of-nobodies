@@ -5,7 +5,7 @@ import { BLOCKS } from '../population/Expansion.js';
 import { ensureRegion } from '../region/RegionManager.js';
 import { ensureTrade } from '../trade/Contracts.js';
 import { ensureDiplomacy } from '../diplomacy/Diplomacy.js';
-import { SAVE_VERSION, POPULATION } from '../core/Config.js';
+import { SAVE_VERSION, POPULATION, WIDER_WORLD } from '../core/Config.js';
 import { familyWish } from '../citizens/Genetics.js';
 import { transfer, openAccount } from '../economy/Transactions.js';
 import { addGoods } from '../economy/Inventory.js';
@@ -131,7 +131,7 @@ export function addMilestone4State(state) {
 export function createKingdom(seed = 20251024) {
   const state = emptyState(seed);
   state.accounts.treasury = 140;
-  state.accounts.outside = 50000; // the wider world beyond the valley
+  state.accounts.outside = WIDER_WORLD; // the wider world beyond the valley
   createPlots(state);
   const hall = plotByName(state, 'Hearth Hall');
   setBuilding(state, hall, 'hall');

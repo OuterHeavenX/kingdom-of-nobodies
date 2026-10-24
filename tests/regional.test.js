@@ -34,7 +34,9 @@ test('39. a real Milestone 3 save (version 4) migrates into a working Milestone 
   assert.equal(SAVE_VERSION, 5);
   assert.equal(s.citizens.length, old.citizens.length, 'nobody is lost');
   for (const [acct, coins] of Object.entries(old.accounts)) if (acct !== 'outside') assert.equal(s.accounts[acct], coins, `${acct} keeps its coins`);
-  assert.equal(totalMoney(s), totalMoney(old), 'the new kingdoms are funded from outside, not created from nothing');
+  const topUp = s.migrationNotes.find((n) => n.version === 5).outsideTopUp;
+  assert.equal(s.accounts.outside + Object.values(s.region.settlements).reduce((t, k) => t + s.accounts[k.account ?? `k:${k.id}`], 0), old.accounts.outside + topUp, 'the kingdoms are funded from the wider world');
+  assert.equal(totalMoney(s), totalMoney(old) + topUp, 'the only new money is the recorded, one-time enlargement of the wider world');
   for (const p of old.plots) assert.equal(s.plots.find((x) => x.id === p.id).ownerId, p.ownerId, `${p.name} keeps its owner`);
   assert.deepEqual(Object.keys(s.region.settlements).sort(), ['greenvale', 'ironhold', 'saltmere']);
   for (const d of old.districts.opened) assert.ok(s.roads.some((r) => r.name === `${d} Road`), `${d} has its road`);
