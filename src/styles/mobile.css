@@ -1,0 +1,31 @@
+/* Wide screens and phones in landscape: the sheet becomes a docked side panel. */
+@media (min-width: 900px), (orientation: landscape) and (max-height: 540px) {
+  #app { grid-template-columns: 1fr var(--side-w); grid-template-rows: auto 1fr auto; }
+  #topbar { grid-column: 1 / -1; grid-template-columns: auto 1fr auto; grid-template-areas: 'brand stats time'; align-items: center; }
+  .stats { justify-content: center; }
+  #stage { grid-column: 1; grid-row: 2 / span 2; }
+  .sheet { position: relative; grid-column: 2; grid-row: 2; left: auto; right: auto; bottom: auto; height: auto !important; max-height: none;
+    border-radius: 0; border-top: 0; border-left: 1px solid var(--line); box-shadow: none; transform: none !important; }
+  .sheet[data-state='closed'] { transform: none; visibility: visible; pointer-events: auto; }
+  .sheet-grip, #sheet-size, #sheet-close { display: none; }
+  .sheet-head { padding-top: 12px; }
+  #tabbar { grid-column: 2; grid-row: 3; border-left: 1px solid var(--line); }
+}
+@media (min-width: 900px) { :root { --side-w: 400px; } }
+@media (orientation: landscape) and (max-height: 540px) {
+  :root { --side-w: min(44vw, 380px); --tabbar-h: calc(48px + env(safe-area-inset-bottom)); }
+  #topbar { padding-top: max(6px, env(safe-area-inset-top)); padding-bottom: 6px; }
+  .brand #clock { display: inline; margin-left: 6px; }
+  .brand strong { display: inline; font-size: 14px; }
+  #tabbar button { font-size: 0; }
+  #tabbar button span { font-size: 20px; }
+  .sheet-body { padding-bottom: 12px; }
+}
+@media (max-width: 380px) {
+  .stat { padding: 4px 7px; font-size: 11.5px; }
+  .brand strong { font-size: 14.5px; }
+  .icon-btn { min-width: 36px; height: 34px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet, .toast { transition: none; animation: none; }
+}

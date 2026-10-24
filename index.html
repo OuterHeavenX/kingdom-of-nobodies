@@ -1,1 +1,117 @@
-<!doctype html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no"/><meta name="theme-color" content="#14201b"/><title>Kingdom of Nobodies | First Hearth</title></head><body><div id="app"><header><div class="brand"><div class="eyebrow">A LIVING WORLD · MILESTONE 1</div><h1>♜ Kingdom of Nobodies</h1></div><div id="stats" class="stats"></div></header><main><section class="viewport"><div id="world" aria-label="3D interactive village"></div><div class="scene-label">FIRST HEARTH <span>• Drag to orbit • Pinch or scroll to zoom • Tap a villager</span></div><div id="toast" class="toast" role="status"></div><div class="controls"><button id="pause">⏸ Pause</button><button id="speed">▶ 1×</button><button id="feast">🍲 Feast</button><button id="aid">✧ Give aid</button><button id="build">⌂ Cottage</button><button id="save">▣ Save</button><button id="reset">↺ Reset</button></div></section><aside><div class="panel"><h2>The Chronicle</h2><div id="story" class="story"></div></div><div class="panel"><h2>The People</h2><div id="people" class="people"></div></div><div class="panel"><h2 id="details-title">A villager's story</h2><div id="details"></div></div><div class="panel"><h2>Village Events</h2><div id="events" class="events"></div></div></aside></main></div><script type="module" src="/src/main.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <meta name="theme-color" content="#14201b" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Kingdom of Nobodies | The Living Society</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♜</text></svg>" />
+  <style>
+    /* Startup screen styles are inline so they work even if the stylesheet fails to load. */
+    html, body { margin: 0; height: 100%; background: #14201b; }
+    #boot { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+      background: radial-gradient(circle at 50% 40%, #24392c, #101a15 70%); color: #f5edd7; font-family: -apple-system, system-ui, sans-serif; text-align: center; padding: 24px; transition: opacity .5s; }
+    #boot.done { opacity: 0; pointer-events: none; }
+    #boot .crest { font-size: 54px; animation: kon-pulse 1.6s ease-in-out infinite; }
+    #boot h1 { font: 700 22px/1.2 Georgia, serif; margin: 0; letter-spacing: .5px; }
+    #boot p { margin: 0; color: #c9d2c0; font-size: 14px; max-width: 320px; line-height: 1.45; }
+    #boot .bar { width: 180px; height: 4px; border-radius: 4px; background: #2c4235; overflow: hidden; }
+    #boot .bar i { display: block; height: 100%; width: 40%; background: #e6b976; animation: kon-slide 1.2s ease-in-out infinite; }
+    #boot button { display: none; margin-top: 6px; padding: 12px 20px; border-radius: 10px; border: 1px solid #738d71; background: #344e3b; color: #f5edd7; font-size: 15px; }
+    #boot.failed .bar, #boot.failed .crest { animation: none; }
+    #boot.failed .bar { display: none; }
+    #boot.failed button { display: inline-block; }
+    #boot small { position: absolute; bottom: max(14px, env(safe-area-inset-bottom)); color: #7f8f80; font-size: 11px; }
+    @keyframes kon-pulse { 50% { transform: scale(1.08); } }
+    @keyframes kon-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
+  </style>
+  <script>
+    // Startup guard: surfaces load failures instead of leaving a blank or unstyled page.
+    (function () {
+      var failed = false;
+      window.__konFail = function (title, detail) {
+        if (failed) return; failed = true;
+        var boot = document.getElementById('boot');
+        if (!boot) return;
+        boot.classList.add('failed');
+        boot.querySelector('h1').textContent = title;
+        boot.querySelector('p').textContent = detail;
+      };
+      window.__konReload = function () {
+        var url = location.pathname + '?v=' + Date.now() + location.hash;
+        location.replace(url);
+      };
+      window.addEventListener('error', function (e) {
+        if (window.__konStarted) return;
+        var target = e.target;
+        if (target && (target.tagName === 'SCRIPT' || target.tagName === 'LINK')) {
+          // An old cached page may point at files replaced by a newer deployment: retry once with a fresh copy.
+          if (!sessionStorage.getItem('kon-retried')) { sessionStorage.setItem('kon-retried', '1'); window.__konReload(); return; }
+          window.__konFail('Game files could not be loaded', 'Your connection may have dropped, or the game was just updated. Tap below to try again.');
+        } else {
+          window.__konFail('Something went wrong while starting', String(e.message || 'Unknown error'));
+        }
+      }, true);
+      window.addEventListener('unhandledrejection', function (e) {
+        if (!window.__konStarted) window.__konFail('Something went wrong while starting', String((e.reason && e.reason.message) || e.reason));
+      });
+      setTimeout(function () {
+        if (window.__konStarted) return;
+        if (!sessionStorage.getItem('kon-retried')) { sessionStorage.setItem('kon-retried', '1'); window.__konReload(); return; }
+        window.__konFail('The kingdom is taking too long to load', 'Check your connection and tap below to try again.');
+      }, 15000);
+    })();
+  </script>
+</head>
+<body>
+  <div id="boot">
+    <div class="crest">♜</div>
+    <h1>Kingdom of Nobodies</h1>
+    <p>Waking the villagers…</p>
+    <div class="bar"><i></i></div>
+    <button type="button" onclick="window.__konReload()">Reload the game</button>
+    <small id="boot-version"></small>
+  </div>
+  <noscript><p style="color:#f5edd7;font-family:sans-serif;padding:24px">Kingdom of Nobodies needs JavaScript enabled.</p></noscript>
+
+  <div id="app" hidden>
+    <header id="topbar">
+      <div class="brand">
+        <span class="crown">♜</span>
+        <div><strong id="kingdom-name">Kingdom of Nobodies</strong><span id="clock">Day 1 · 08:00</span></div>
+      </div>
+      <div id="stats" class="stats" aria-label="Kingdom statistics"></div>
+      <div class="time-controls">
+        <button id="pause" class="icon-btn" aria-label="Pause">⏸</button>
+        <button id="speed" class="icon-btn speed" aria-label="Game speed">1×</button>
+      </div>
+    </header>
+    <main id="stage">
+      <div id="world" aria-label="3D village. Drag to orbit, pinch to zoom, tap a villager or building."></div>
+      <div id="world-fallback" hidden></div>
+      <div id="toasts" role="status" aria-live="polite"></div>
+    </main>
+    <section id="sheet" class="sheet" data-state="closed" aria-label="Details">
+      <div class="sheet-grip" id="sheet-grip"><span></span></div>
+      <div class="sheet-head">
+        <button id="sheet-back" class="icon-btn small" hidden aria-label="Back">‹</button>
+        <h2 id="sheet-title">Citizens</h2>
+        <button id="sheet-size" class="icon-btn small" aria-label="Expand">⌃</button>
+        <button id="sheet-close" class="icon-btn small" aria-label="Close">✕</button>
+      </div>
+      <div id="sheet-body" class="sheet-body"></div>
+    </section>
+    <nav id="tabbar" aria-label="Main">
+      <button data-tab="citizens"><span>👥</span>Citizens</button>
+      <button data-tab="economy"><span>🪙</span>Economy</button>
+      <button data-tab="buildings"><span>🏘️</span>Buildings</button>
+      <button data-tab="chronicle"><span>📜</span>Chronicle</button>
+      <button data-tab="council"><span>⚖️</span>Council</button>
+    </nav>
+    <input id="import-file" type="file" accept="application/json,.json" hidden />
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
