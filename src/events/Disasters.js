@@ -177,7 +177,8 @@ export function noteDiseaseDeath(state) {
 }
 
 /** Hunger drains faster in a harsh winter. */
-export const hungerMultiplier = (state) => (state.season?.harshWinter && seasonOf(state.day) === 'Winter' ? 1.25 : 1);
+// People burn more food in winter, and more again in a harsh one.
+export const hungerMultiplier = (state) => (seasonOf(state.day) === 'Winter' ? (state.season?.harshWinter ? 1.25 : 1.06) : 1);
 export const harvestMultiplier = (state) => (state.season?.cropFailureYear === yearOf(state.day) ? 0.5 : 1);
 export const inRecession = (state) => (state.season?.recessionUntil ?? 0) > state.day;
 

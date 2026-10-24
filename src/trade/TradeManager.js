@@ -143,7 +143,9 @@ function foreignHouses(state) {
     if (house.active >= 2 || !chance(state, urgency)) continue;
     const funds = balance(state, KINGDOMS[id].account) - 400;
     if (funds < 40) continue;
-    const trader = { id: 'house:' + id, name: `the ${KINGDOMS[id].name} merchants`, account: KINGDOMS[id].account, home: id, capacity: CARAVAN.capacityHouse, funds: Math.min(funds, 900), minProfit: 12, minMargin: k.shortages.food ? 0.04 : 0.12 };
+    // Merchants invited to the Midsummer Fair accept thinner margins to trade with First Hearth.
+    const fair = state.culture?.current?.foreignMerchants?.includes(id) && ['PREPARING', 'ACTIVE'].includes(state.culture.current.phase);
+    const trader = { id: 'house:' + id, name: `the ${KINGDOMS[id].name} merchants`, account: KINGDOMS[id].account, home: id, capacity: CARAVAN.capacityHouse, funds: Math.min(funds, 900), minProfit: fair ? 6 : 12, minMargin: k.shortages.food ? 0.04 : fair ? 0.05 : 0.12 };
     const plan = bestOpportunity(state, trader);
     if (!plan) continue;
     const res = launch(state, trader, plan);

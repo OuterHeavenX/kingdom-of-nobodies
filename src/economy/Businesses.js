@@ -1,3 +1,4 @@
+import { seasonIndex } from '../core/Calendar.js';
 import { ECONOMY, GOODS } from '../core/Config.js';
 import { openAccount } from './Transactions.js';
 import { byId } from '../core/EntityRegistry.js';
@@ -7,6 +8,9 @@ import { addGoods, removeGoods, qty } from './Inventory.js';
 // Business archetypes and their production chains. One "batch" converts
 // `inputs` into `output`. A worker shift produces up to `batchesPerShift`
 // batches, scaled by worker productivity and limited by available inputs.
+// Farming follows the seasons: planting, growth, harvest, winter fallow.
+export const FARM_SEASON = [0.85, 1.1, 1.3, 0.7];
+
 export const BUSINESS_TYPES = {
   farm: {
     label: 'Farm', building: 'farm', output: 'grain', outputPerBatch: 1, batchesPerShift: 13,
@@ -101,7 +105,7 @@ export function produce(state, b, productivity) {
   const def = BUSINESS_TYPES[b.type];
   if (!def.output) return 0;
   let perShift = def.batchesPerShift;
-  if (b.type === 'farm') perShift *= harvestMultiplier(state) * (state.discoveries?.improvedPlow ? 1.2 : 1);
+  if (b.type === 'farm') perShift *= harvestMultiplier(state) * (state.discoveries?.improvedPlow ? 1.2 : 1) * FARM_SEASON[seasonIndex(state.day)];
   if (b.type === 'bakery' && state.discoveries?.watermill) perShift += 1;
   const plot = state.plots.find((p) => p.id === b.plotId);
   if ((plot?.building?.condition ?? 100) < 60) perShift *= 0.6;
@@ -109,7 +113,8 @@ export function produce(state, b, productivity) {
   let batches = Math.floor(perShift * productivity + 0.5);
   const hasTool = def.usesTools && qty(b.inventory, 'tools') > 0;
   if (hasTool) batches = Math.round(batches * ECONOMY.toolBoost);
-  const storageCap = def.target * 3;
+  // Barns hold more at harvest time, so the autumn surplus can be stored for winter.
+  const storageCap = def.target * (b.type === 'farm' && seasonIndex(state.day) === 2 ? 4.5 : 3);
   let made = 0;
   for (let i = 0; i < batches; i++) {
     if (qty(b.inventory, def.output) + def.outputPerBatch > storageCap) break;

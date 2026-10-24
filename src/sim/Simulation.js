@@ -1,3 +1,5 @@
+import { dailyFestivals } from '../culture/Festivals.js';
+import { dailyCulture } from '../culture/Traditions.js';
 import { considerLaws } from '../law/LegalCode.js';
 import { dailyCourts, hourlyCourts } from '../law/Courts.js';
 import { TIME, ECONOMY } from '../core/Config.js';
@@ -128,6 +130,7 @@ export class Simulation {
     dailyDiplomacy(s);
     considerLaws(s);
     dailyCourts(s);
+    dailyCulture(s, { dailyFestivals, isNewSeason, isNewYear });
     considerRoads(s);
     approveRoads(s);
     decayTraffic(s);

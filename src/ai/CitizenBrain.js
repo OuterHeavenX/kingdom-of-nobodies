@@ -1,3 +1,4 @@
+import { enjoyFestival } from '../culture/Festivals.js';
 import { byId } from '../core/EntityRegistry.js';
 import { NEEDS, MOVE, GOODS, FOOD_GOODS, ECONOMY } from '../core/Config.js';
 import { range, chance } from '../core/Random.js';
@@ -264,7 +265,7 @@ function begin(state, c, k) {
       const t = byId(state.citizens, k.citizenId);
       return activity('help', `Helping ${t.firstName}`, { x: t.x, z: t.z }, 2, { citizenId: t.id });
     }
-    case 'festival': return activity('festival', 'Celebrating at the festival', square(state), 10);
+    case 'festival': return activity('festival', k.seasonal ? `At the ${state.culture?.current?.name ?? 'festival'}` : 'Celebrating at the festival', square(state), 10, { seasonal: !!k.seasonal });
     case 'buy_plot': {
       if (!reservePlot(state, k.plotId, c.id)) return null;
       return activity('buy_plot', `Buying ${plotById(state, k.plotId).name}`, hallDoor(state), 3, { plotId: k.plotId, home: !!k.home });
@@ -429,7 +430,7 @@ function finish(state, c) {
       }
       break;
     }
-    case 'festival': chat(state, c, nearby(state, c, 7).slice(0, 3), 1.4); c.needs.social = clamp(c.needs.social + 30); c.mood = clamp(c.mood + 5); break;
+    case 'festival': chat(state, c, nearby(state, c, 7).slice(0, 3), 1.4); c.needs.social = clamp(c.needs.social + 30); c.mood = clamp(c.mood + 5); if (a.seasonal) enjoyFestival(state, c); break;
     case 'buy_plot': {
       const res = buyPlot(state, a.plotId, c.id);
       if (res.ok) {

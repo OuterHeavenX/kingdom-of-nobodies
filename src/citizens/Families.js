@@ -48,7 +48,7 @@ export function dailyFamilies(state) {
         record(state, 'relationships', `${a.firstName} and ${b.firstName} are engaged to be married.`, { citizens: [a.id, b.id] }, 2);
         createFact(state, 'engaged', a.id, `${a.firstName} and ${b.firstName} are engaged.`, [a.id, b.id], b.id);
       }
-    } else if (a.romance.engagedTo === b.id && state.day - a.romance.engagedDay >= FAMILY.weddingAfterDays) {
+    } else if (a.romance.engagedTo === b.id && b.romance.engagedTo === a.id && !a.family.spouseId && !b.family.spouseId && state.day - a.romance.engagedDay >= FAMILY.weddingAfterDays) {
       marry(state, a, b);
     }
   }
@@ -61,6 +61,14 @@ export function dailyFamilies(state) {
 }
 
 export function marry(state, a, b) {
+  // Any other engagement or courtship either of them had is over.
+  for (const x of [a, b]) {
+    const other = living(state, x.romance.engagedTo) ?? living(state, x.romance.partnerId);
+    if (other && other !== a && other !== b) {
+      if (other.romance.engagedTo === x.id) other.romance.engagedTo = null;
+      if (other.romance.partnerId === x.id) { other.romance.partnerId = null; other.family.partnerId = null; }
+    }
+  }
   for (const [x, y] of [[a, b], [b, a]]) {
     x.family.spouseId = y.id;
     x.family.partnerId = y.id;

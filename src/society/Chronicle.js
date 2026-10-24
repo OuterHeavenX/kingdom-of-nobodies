@@ -25,13 +25,18 @@ export function record(state, category, text, refs = {}, importance = 1) {
 }
 
 function prune(state) {
-  // Drop the oldest minor entries first; milestones survive much longer.
-  const excess = state.chronicle.length - CHRONICLE.max + 40;
-  let removed = 0;
-  state.chronicle = state.chronicle.filter((e) => {
-    if (removed < excess && e.importance < 2) { removed++; return false; }
-    return true;
-  });
+  // Drop the oldest entries in tiers: minor ones first, then routine news,
+  // keeping births, deaths, law and diplomacy longer, and milestones longest.
+  let excess = state.chronicle.length - CHRONICLE.max + 40;
+  const lasting = new Set(['citizen', 'law', 'diplomacy']);
+  const tiers = [(e) => e.importance < 2, (e) => e.importance === 2 && !lasting.has(e.category), (e) => e.importance < 3];
+  for (const drop of tiers) {
+    if (excess <= 0) break;
+    state.chronicle = state.chronicle.filter((e) => {
+      if (excess > 0 && drop(e)) { excess--; return false; }
+      return true;
+    });
+  }
   if (state.chronicle.length > CHRONICLE.max) state.chronicle.splice(0, state.chronicle.length - CHRONICLE.max);
 }
 

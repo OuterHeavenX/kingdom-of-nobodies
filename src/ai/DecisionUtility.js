@@ -1,3 +1,4 @@
+import { attendanceScore } from '../culture/Festivals.js';
 import { byId } from '../core/EntityRegistry.js';
 import { TIME, GOODS, FOOD_GOODS, BUILD, LIFE } from '../core/Config.js';
 import { ageOf } from '../citizens/Citizen.js';
@@ -255,6 +256,10 @@ export function generateCandidates(state, c, plan) {
   // --- Festival ------------------------------------------------------------
   if (state.council.festivalUntil > state.tick && !isNight(state)) {
     out.push(candidate('festival', 72 + trait(c, 'friendly') * 10, [['the council is hosting a festival in the square', 72]]));
+  } else if (age >= 3) {
+    // Seasonal festivals: each villager weighs company, mood, work and the walk.
+    const wish = attendanceScore(state, c);
+    if (wish && wish.score > 32) out.push(candidate('festival', wish.score + 15, wish.factors, { seasonal: true }));
   }
 
   // --- Goals (buying property, starting construction) ---------------------
