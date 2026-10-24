@@ -1,5 +1,5 @@
 import { balance, transfer } from '../economy/Transactions.js';
-import { qty, addGoods, removeGoods } from '../economy/Inventory.js';
+import { qty, addGoods, removeGoods, moveGoods } from '../economy/Inventory.js';
 import { isTrading, BUSINESS_TYPES, businessById, wholesalePrice } from '../economy/Businesses.js';
 import { villageFood, noteSale } from '../economy/Marketplace.js';
 import { GOODS } from '../core/Config.js';
@@ -23,7 +23,7 @@ const keepBack = (b, g) => Math.round((BUSINESS_TYPES[b.type].target ?? 4) * (BU
 export function hearthSellers(state, g) {
   if (!COMMODITIES[g]?.local) return [];
   return state.businesses.filter((b) => isTrading(b) && (BUSINESS_TYPES[b.type].output === g || (BUSINESS_TYPES[b.type].sells.includes(g) && b.type !== 'general_store')))
-    .map((b) => ({ b, n: qty(b.inventory, g) - (b.reserved?.[g] ?? 0) - keepBack(b, g) }))
+    .map((b) => ({ b, n: qty(b.inventory, g) - keepBack(b, g) }))
     .filter((x) => x.n > 0).sort((a, b) => b.n - a.n || a.b.id.localeCompare(b.b.id));
 }
 
@@ -104,8 +104,9 @@ export function reserve(state, sid, g, n) {
   for (const { b, n: spare } of hearthSellers(state, g)) {
     if (left <= 0) break;
     const take = Math.min(left, spare);
-    b.reserved = b.reserved ?? {};
-    b.reserved[g] = (b.reserved[g] ?? 0) + take;
+    // Reserved goods are set aside (still the shop's, not yet paid for) so they cannot be sold twice.
+    b.held = b.held ?? {};
+    moveGoods(b.inventory, b.held, g, take);
     parts.push({ party: b.id, n: take });
     left -= take;
   }
@@ -115,7 +116,7 @@ export function reserve(state, sid, g, n) {
 
 export function release(state, sid, g, parts) {
   for (const p of parts ?? []) {
-    if (sid === HEARTH) { const b = businessById(state, p.party); if (b?.reserved?.[g]) b.reserved[g] = Math.max(0, b.reserved[g] - p.n); }
+    if (sid === HEARTH) { const b = businessById(state, p.party); if (b?.held) moveGoods(b.held, b.inventory, g, Math.min(p.n, qty(b.held, g))); }
     else { const k = kingdom(state, sid); k.reserved[g] = Math.max(0, (k.reserved[g] ?? 0) - p.n); }
   }
 }
@@ -128,16 +129,19 @@ export function collect(state, sid, g, parts, payer, unitPrice, memo) {
   let got = 0;
   for (const p of parts) {
     const seller = sid === HEARTH ? businessById(state, p.party) : null;
-    const stock = sid === HEARTH ? (seller && isTrading(seller) ? qty(seller.inventory, g) : 0) : kingdom(state, sid).inventory[g] ?? 0;
+    const stock = sid === HEARTH ? (seller && isTrading(seller) ? qty(seller.held ?? {}, g) : 0) : kingdom(state, sid).inventory[g] ?? 0;
     const affordable = Math.floor(balance(state, payer) / unitPrice);
     const n = Math.max(0, Math.min(p.n, Math.floor(stock), affordable));
-    release(state, sid, g, [p]);
+    // Whatever is not bought goes back on the shelf (or the kingdom's free stock).
+    release(state, sid, g, [{ ...p, n: p.n - n }]);
+    if (sid !== HEARTH) kingdom(state, sid).reserved[g] = Math.max(0, (kingdom(state, sid).reserved[g] ?? 0) - n);
     if (n <= 0) continue;
     const account = sid === HEARTH ? seller.id : KINGDOMS[sid].account;
     const price = Math.round(unitPrice * n);
-    if (!transfer(state, payer, account, price, 'trade', `${memo} (${n} ${g})`)) continue;
+    // A kingdom's own merchants take goods from its own stores without paying themselves.
+    if (account !== payer && !transfer(state, payer, account, price, 'trade', `${memo} (${n} ${g})`)) continue;
     if (sid === HEARTH) {
-      removeGoods(seller.inventory, g, n);
+      removeGoods(seller.held, g, n);
       seller.today.revenue += price;
       seller.totals.revenue += price;
       noteSale(state, seller, 'a merchant caravan', n, g, price);

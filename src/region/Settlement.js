@@ -152,9 +152,10 @@ function distantWorld(state, k) {
       k.stats.overseasOut += unit * n;
     }
   }
-  if (foodCover(state, k) < 1.5) {
-    const n = Math.ceil(foodNeed(state, k) * 1.5);
-    const unit = Math.round(COMMODITIES.grain.base * 1.8);
+  // Distant grain is a last resort: dear, and only when the stores are nearly empty.
+  if (foodCover(state, k) < 1) {
+    const n = Math.ceil(foodNeed(state, k) * 1.2);
+    const unit = Math.round(COMMODITIES.grain.base * 2.2);
     const afford = Math.min(n, Math.floor((balance(state, acct) - 200) / unit));
     if (afford > 0 && transfer(state, acct, 'outside', unit * afford, 'import', `${k.name} bought ${afford} grain from distant lands`)) {
       k.inventory.grain = (k.inventory.grain ?? 0) + afford;

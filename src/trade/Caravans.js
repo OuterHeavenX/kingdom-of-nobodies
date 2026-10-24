@@ -14,7 +14,7 @@ import { spotSale } from './Markets.js';
 // a road stays closed, and lose perishable cargo on long hot journeys. Every
 // unit loaded is accounted for: delivered, sold, spoiled, or still aboard.
 
-export const CARAVAN = { capacityCitizen: 36, capacityHouse: 50, loadTicks: 6, coinsPerHour: 1, fee: 2, waitDays: 3 };
+export const CARAVAN = { capacityCitizen: 36, capacityHouse: 50, loadTicks: 6, coinsPerHour: 0.3, fee: 2, waitDays: 3 };
 const HOURS_PER_TICK = TIME.minutesPerTick / 60;
 
 export const caravanById = (state, id) => ensureTrade(state).caravans.find((c) => c.id === id) ?? null;

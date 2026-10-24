@@ -1,7 +1,7 @@
 import { byId } from '../core/EntityRegistry.js';
 import { ECONOMY, GOODS } from '../core/Config.js';
 import { transfer, balance } from './Transactions.js';
-import { qty, removeGoods } from './Inventory.js';
+import { qty, removeGoods, addGoods } from './Inventory.js';
 import { BUSINESS_TYPES, isTrading, freshLedger } from './Businesses.js';
 import { adjustPrices, cashReserve, ownerAccount } from './Marketplace.js';
 import { layOff, leaveJob, updateOpenings, wageBill } from './Employment.js';
@@ -98,6 +98,9 @@ const owners = (b) => (b.ownerId === 'council' ? [] : [b.ownerId]);
  * put up for sale (the building stays standing until a new owner decides).
  */
 export function closeBusiness(state, b, status = 'CLOSED') {
+  // Goods set aside for a caravan go back into stock before anything is sold off.
+  for (const [g, n] of Object.entries(b.held ?? {})) if (n > 0) addGoods(b.inventory, g, n);
+  b.held = {};
   b.status = status;
   b.closedDay = state.day;
   b.openings = 0;

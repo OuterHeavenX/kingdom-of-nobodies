@@ -140,12 +140,12 @@ function foreignHouses(state) {
     const k = state.region.settlements[id];
     // Hungry kingdoms look harder for food; content ones trade when it pays.
     const urgency = k.shortages.food ? 0.9 : 0.5;
-    if (house.active >= 2 || !chance(state, urgency)) continue;
+    if (house.active >= 3 || !chance(state, urgency)) continue;
     const funds = balance(state, KINGDOMS[id].account) - 400;
     if (funds < 40) continue;
     // Merchants invited to the Midsummer Fair accept thinner margins to trade with First Hearth.
     const fair = state.culture?.current?.foreignMerchants?.includes(id) && ['PREPARING', 'ACTIVE'].includes(state.culture.current.phase);
-    const trader = { id: 'house:' + id, name: `the ${KINGDOMS[id].name} merchants`, account: KINGDOMS[id].account, home: id, capacity: CARAVAN.capacityHouse, funds: Math.min(funds, 900), minProfit: fair ? 6 : 12, minMargin: k.shortages.food ? 0.04 : fair ? 0.05 : 0.12 };
+    const trader = { id: 'house:' + id, name: `the ${KINGDOMS[id].name} merchants`, account: KINGDOMS[id].account, home: id, capacity: CARAVAN.capacityHouse, funds: Math.min(funds, 900), minProfit: fair ? 6 : 10, minMargin: k.shortages.food ? 0.04 : fair ? 0.05 : 0.1 };
     const plan = bestOpportunity(state, trader);
     if (!plan) continue;
     const res = launch(state, trader, plan);
