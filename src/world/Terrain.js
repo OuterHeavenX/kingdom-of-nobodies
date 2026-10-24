@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { mat, PALETTE as P, G, part } from './Materials.js';
+import { ROAD_KINDS, RIVER } from '../navigation/RoadNetwork.js';
+import { bridgeModel } from './Models.js';
 
 // Ground, roads, the town square and all instanced scenery. The forest north
 // of Timber Edge mirrors the simulation's forest commons: as lumberyards cut
@@ -30,13 +32,19 @@ export function buildTerrain(scene) {
   ground.name = 'ground';
   scene.add(ground);
 
-  const road = mat(P.path, { roughness: 1 });
+  // Roads are drawn from simulation state (see syncRoads); the river is fixed geography.
   const roads = new THREE.Group();
-  for (const [x, z, w, d] of [[0, 0, 74, 3.2], [0, 0, 3.2, 52], [-24, 15, 2.2, 10], [21, -4, 2.2, 6], [32, -1, 6, 2.2], [0, 15, 38, 2.4]]) {
-    const m = part(roads, G.plane(), road, [w, 1, d], [x, 0.025, z], null, false);
-    m.receiveShadow = true;
-  }
   scene.add(roads);
+  const river = new THREE.Group();
+  const riverZ = (RIVER.zMin + RIVER.zMax) / 2, riverD = RIVER.zMax - RIVER.zMin;
+  const water = new THREE.MeshStandardMaterial({ color: '#5d9db5', roughness: 0.25, metalness: 0.1, flatShading: true, emissive: '#16384a', emissiveIntensity: 0.25 });
+  part(river, G.plane(), mat('#b9a77c', { roughness: 1 }), [320, 1, riverD + 3.4], [0, 0.02, riverZ], null, false);
+  part(river, G.plane(), water, [320, 1, riverD], [0, 0.05, riverZ], null, false);
+  for (let i = 0; i < 70; i++) {
+    const x = -150 + rand() * 300, side = rand() < 0.5 ? -1 : 1;
+    part(river, G.cone(4), mat('#6f8f4a'), [0.25, 0.9 + rand() * 0.6, 0.25], [x, 0.45, riverZ + side * (riverD / 2 + 0.6 + rand())], null, false);
+  }
+  scene.add(river);
 
   const square = new THREE.Group();
   part(square, G.disc(), mat(P.stone, { roughness: 1 }), [9, 1, 9], [0, 0.04, 0], null, false);
@@ -76,7 +84,11 @@ export function buildTerrain(scene) {
   // Woodland surrounds the valley beyond the land the town can grow into.
   for (let i = 0; i < 260; i++) {
     const a = rand() * Math.PI * 2, r = 82 + rand() * 46;
-    place(Math.cos(a) * r, Math.sin(a) * r, 0.9 + rand() * 0.8, rand() < 0.45 ? 'pine' : 'round');
+    const x = Math.cos(a) * r, z = Math.sin(a) * r;
+    // Keep the river and the three regional roads clear of trees.
+    if (z > RIVER.zMin - 3 && z < RIVER.zMax + 3) continue;
+    if (Math.abs(z) < 4 && x < 0 || Math.abs(x) < 4) continue;
+    place(x, z, 0.9 + rand() * 0.8, rand() < 0.45 ? 'pine' : 'round');
   }
   for (let i = 0; i < 44; i++) place(10 + rand() * 26, -20 - rand() * 14, 0.75 + rand() * 0.45, rand() < 0.5 ? 'pine' : 'round', true);
 
@@ -116,18 +128,42 @@ export function buildTerrain(scene) {
   scene.add(petals);
 
   const roadMeshes = new Map();
+  const surface = {
+    footpath: mat(ROAD_KINDS.footpath.color, { roughness: 1 }),
+    dirt: mat(ROAD_KINDS.dirt.color, { roughness: 1 }),
+    stone: mat(ROAD_KINDS.stone.color, { roughness: 0.9 }),
+    ford: mat('#8fb4c4', { roughness: 0.4 }),
+  };
+  const makeRoad = (r) => {
+    const g = new THREE.Group();
+    if (r.kind === 'bridge') g.add(bridgeModel(r));
+    else {
+      const y = r.kind === 'stone' ? 0.034 : r.kind === 'ford' ? 0.07 : 0.026;
+      const m = part(g, G.plane(), surface[r.kind] ?? surface.dirt, [r.w, 1, r.d], [r.x, y, r.z], null, false);
+      m.receiveShadow = true;
+      if (r.kind === 'stone') {
+        // Kerb stones along both edges.
+        const along = r.w >= r.d;
+        const len = along ? r.w : r.d;
+        for (const side of [-1, 1]) part(g, G.box(), mat(P.stoneDark), along ? [len, 0.08, 0.18] : [0.18, 0.08, len], along ? [r.x, 0.06, r.z + side * (r.d / 2)] : [r.x + side * (r.w / 2), 0.06, r.z], null, false);
+      }
+      if (r.kind === 'ford') for (let i = 0; i < 6; i++) part(g, G.dodeca(), mat(P.stone), [0.7, 0.25, 0.6], [r.x + (i % 2 ? 0.7 : -0.7), 0.1, r.z - r.d / 2 + 0.6 + i * (r.d - 1.2) / 5], null, false);
+    }
+    roads.add(g);
+    return g;
+  };
   return {
     fire, fireLight, lamps, lampGlass, ground,
     leafMaterials: [mat(P.leaf), mat(P.leafDark), mat(P.pine)],
-    /** Lay any district roads that have been surveyed since the last call. */
+    /** Match the drawn roads to the simulation's roads (new, paved or removed). */
     syncRoads(list) {
-      for (const [x, z, w, d] of list) {
-        const key = `${x},${z},${w},${d}`;
-        if (roadMeshes.has(key)) continue;
-        const m = part(roads, G.plane(), road, [w, 1, d], [x, 0.026, z], null, false);
-        m.receiveShadow = true;
-        roadMeshes.set(key, m);
+      const keep = new Set();
+      for (const r of list) {
+        const key = `${r.id}:${r.kind}`;
+        keep.add(key);
+        if (!roadMeshes.has(key)) roadMeshes.set(key, makeRoad(r));
       }
+      for (const [key, g] of roadMeshes) if (!keep.has(key)) { roads.remove(g); roadMeshes.delete(key); }
     },
     /** Show as many commons trees as the forest stock supports. */
     setForest(fraction) {

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { widthOf, depthOf, heightOf } from '../property/Footprints.js';
 import { mat, PALETTE as P, G, part } from './Materials.js';
 
 // Procedural low-poly building models. Every model is built in local space
@@ -207,9 +208,6 @@ export function buildingModel(type, opts) {
   return g;
 }
 
-const depthOf = (type) => ({ hall: 5.4, townhall: 5.6, cottage: 3.2, blacksmith: 3.6, bakery: 3.4, tavern: 3.8, general_store: 3.4, lumberyard: 3, school: 3.8, granary: 3.4, well: 2.2 }[type] ?? 3.2);
-const heightOf = (type) => ({ hall: 3.2, townhall: 4.8, tavern: 4.0, lumberyard: 2.6, school: 2.6, granary: 2.6, well: 1.2 }[type] ?? 2.5);
-const widthOf = (type) => ({ hall: 7, townhall: 7.6, tavern: 4.8, blacksmith: 4.2, bakery: 4, general_store: 4.2, lumberyard: 5, stall: 3.6, school: 5.6, granary: 5, well: 2.2 }[type] ?? 3.6);
 
 function scaffold(g, w, d, h) {
   const pole = mat('#9c7a52');
@@ -283,6 +281,25 @@ export function memorialModel(allPassed) {
     part(g, G.box(), mat('#a8874a', { metalness: 0.4 }), [0.36, 0.26, 0.05], [Math.sin(a) * 0.82, 0.68, Math.cos(a) * 0.82], [0, a, 0], false);
   }
   if (allPassed) part(g, G.sphere(10), mat('#e2c46a', { metalness: 0.6, roughness: 0.3 }), [0.6, 0.6, 0.6], [0, 5.05, 0]);
+  return g;
+}
+
+/** A timber bridge on stone piers, spanning a road record's rectangle. */
+export function bridgeModel(r) {
+  const g = new THREE.Group();
+  const along = r.d >= r.w;
+  const len = along ? r.d : r.w, wide = along ? r.w : r.d;
+  const deck = new THREE.Group();
+  part(deck, G.box(), mat(P.plank), [wide, 0.22, len], [0, 0.42, 0]);
+  for (let i = 0; i < len; i += 0.9) part(deck, G.box(), mat(P.timber), [wide + 0.1, 0.06, 0.12], [0, 0.55, -len / 2 + 0.3 + i], null, false);
+  for (const side of [-1, 1]) {
+    part(deck, G.box(), mat(P.timberDark), [0.12, 0.12, len], [side * (wide / 2 - 0.05), 1.15, 0], null, false);
+    for (let i = 0; i <= 4; i++) part(deck, G.box(), mat(P.timberDark), [0.14, 0.8, 0.14], [side * (wide / 2 - 0.05), 0.8, -len / 2 + (i * len) / 4], null, false);
+  }
+  for (const z of [-len / 4, len / 4]) part(deck, G.box(), mat(P.stoneDark), [wide * 0.8, 0.9, 0.9], [0, 0, z]);
+  if (!along) deck.rotation.y = Math.PI / 2;
+  deck.position.set(r.x, 0, r.z);
+  g.add(deck);
   return g;
 }
 

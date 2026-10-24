@@ -7,7 +7,6 @@ import { mat, G, part, PALETTE as P } from './Materials.js';
 import { stagesFor } from '../property/Construction.js';
 import { facingAngle } from '../property/LandRegistry.js';
 import { isTrading } from '../economy/Businesses.js';
-import { roadsFor } from '../population/Expansion.js';
 import { seasonIndex } from '../core/Calendar.js';
 import { byId } from '../core/EntityRegistry.js';
 
@@ -72,6 +71,9 @@ export class World {
     this.market = null;
     this.villagers = new Villagers(this.scene);
     this.fires = new Map();
+    this.roadWorks = new Map();
+    this.roadWorkLayer = new THREE.Group();
+    this.scene.add(this.roadWorkLayer);
     this.memorial = null;
     this.season = -1;
     this.leafBase = this.terrain.leafMaterials.map((m) => m.color.clone());
@@ -157,6 +159,7 @@ export class World {
     for (const [id, node] of this.plotNodes) if (!s.plots.some((p) => p.id === id)) { this.plotLayer.remove(node); disposeInstanced(node); this.plotNodes.delete(id); }
     if (s.council.marketplace && !this.market) this.market = this.makeMarket();
     this.syncMemorial();
+    this.syncRoadWorks();
   }
 
   /** The Founders' Memorial stands in the square; it gains a crown once every founder has passed. */
@@ -173,6 +176,33 @@ export class World {
     m.traverse((o) => { o.userData.monument = 'founders'; });
     this.scene.add(m);
     this.memorial = m;
+  }
+
+  /** Road works in progress: a pegged-out strip that fills in as the crew works. */
+  syncRoadWorks() {
+    const active = (this.sim.state.roadProjects ?? []).filter((p) => p.status === 'BUILDING');
+    const keep = new Set();
+    for (const p of active) {
+      const progress = Math.min(1, p.work / p.need.work);
+      const key = `${p.id}:${Math.round(progress * 5)}:${p.waiting ? 'w' : ''}`;
+      keep.add(key);
+      if (this.roadWorks.has(key)) continue;
+      for (const [k, g] of this.roadWorks) if (k.startsWith(p.id + ':')) { this.roadWorkLayer.remove(g); this.roadWorks.delete(k); }
+      const g = new THREE.Group();
+      const along = p.w >= p.d;
+      part(g, G.plane(), mat('#a68a64', { transparent: true, opacity: 0.55 }), [p.w, 1, p.d], [p.x, 0.03, p.z], null, false);
+      const done = along ? [p.w * progress, 1, p.d] : [p.w, 1, p.d * progress];
+      if (progress > 0) part(g, G.plane(), mat(p.kind === 'stone' ? '#b9b2a2' : '#c9b48e'), done, along ? [p.x - p.w / 2 + done[0] / 2, 0.04, p.z] : [p.x, 0.04, p.z - p.d / 2 + done[2] / 2], null, false);
+      const len = along ? p.w : p.d;
+      for (let t = 0; t <= len; t += 3) for (const side of [-1, 1]) {
+        const px = along ? p.x - p.w / 2 + t : p.x + side * (p.w / 2 + 0.2), pz = along ? p.z + side * (p.d / 2 + 0.2) : p.z - p.d / 2 + t;
+        part(g, G.box(), mat('#e9d8b4'), [0.08, 0.5, 0.08], [px, 0.25, pz], null, false);
+      }
+      if (p.waiting) part(g, G.dodeca(), mat(P.stone), [0.8, 0.4, 0.7], [p.x, 0.2, p.z], null, false);
+      this.roadWorkLayer.add(g);
+      this.roadWorks.set(key, g);
+    }
+    for (const [k, g] of this.roadWorks) if (!keep.has(k)) { this.roadWorkLayer.remove(g); this.roadWorks.delete(k); }
   }
 
   /** Seasonal colour of the land, trees and (in winter) snow on roofs. */
@@ -274,7 +304,7 @@ export class World {
       this.syncPlots();
       this.villagers.sync(s.citizens, s.day);
       this.terrain.setForest(s.commons.forest / s.commons.forestCap);
-      this.terrain.syncRoads(roadsFor(s));
+      this.terrain.syncRoads(s.roads ?? []);
       this.applySeason(seasonIndex(s.day));
       this.lastSync = time;
     }
