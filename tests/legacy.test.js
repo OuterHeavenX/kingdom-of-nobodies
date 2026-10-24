@@ -2,6 +2,7 @@
 // milestone brief (23–25 are covered by the e2e and build tests).
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { Simulation } from '../src/sim/Simulation.js';
 import { createKingdom } from '../src/sim/Setup.js';
 import { GameClock } from '../src/core/GameClock.js';
@@ -290,4 +291,24 @@ test('saves taken during births, deaths, weddings, elections, inheritance, const
   assert.equal(new Set(ids).size, ids.length, 'no duplicated events after loading');
   assert.equal(checkInvariants(copy.state, 'save', 0), 0, 'all invariants hold');
   assert.deepEqual(badNumbers(copy.state), []);
+});
+
+test('a real Milestone 2 save (version 3) migrates into a working Milestone 3 world', () => {
+  const text = readFileSync(new URL('./fixtures/m2-save.json', import.meta.url), 'utf8');
+  const old = JSON.parse(JSON.parse(text).data);
+  assert.equal(old.version, 3);
+  const s = deserialize(text);
+  assert.equal(s.version, 4);
+  assert.equal(s.citizens.length, old.citizens.length, 'nobody is lost');
+  for (const c of s.citizens) {
+    const before = old.citizens.find((x) => x.id === c.id);
+    assert.ok(before, `${c.firstName} existed before`);
+    assert.ok(Number.isFinite(c.birthDay) && ['F', 'M'].includes(c.sex));
+    assert.equal(balance(s, c.id), old.accounts[c.id] ?? 0, `${c.firstName} keeps their savings`);
+    assert.ok(Array.isArray(c.family.parentIds) && c.family.childIds);
+  }
+  for (const n of ['Ada', 'Bram', 'Cora', 'Dain', 'Elin']) assert.ok(s.citizens.find((c) => c.firstName === n)?.founder, `${n} is a founder`);
+  const sim = new Simulation(s);
+  advanceDays(sim, DAYS_PER_YEAR);
+  assert.equal(checkInvariants(sim.state, 'm2', 1), 0);
 });
