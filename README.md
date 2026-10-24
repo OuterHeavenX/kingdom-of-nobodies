@@ -161,7 +161,20 @@ instead of the Vite build. **Settings → Pages → Source must be "GitHub Actio
 
 ## Stress test results (200 in-game years)
 
-STRESS_TABLE
+`npm run test:longevity -- 200 <seed>`, run on four seeds. Every invariant was checked each decade: unique ids,
+non-negative ages, valid and acyclic families, mutual marriages, employment only at trading businesses,
+plots owned by the living, valid elections, no NaN, and exact money conservation every year. All held.
+
+| Seed | Peak / final pop. | Births | Deaths | Immigrants | Marriages | Generations | Elections | Businesses opened / closed | Estates & sales | Fires | Hunger deaths | Save size | Time |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 176 / 166 | 186 | 389 | 364 | 285 | 8 | 52 | 457 / 445 | 170 | 164 | 17 | 2.6 MB | 282 s |
+| 2 | 150 / 136 | 195 | 424 | 360 | 289 | 8 | 49 | 364 / 352 | 163 | 199 | 30 | 2.3 MB | 282 s |
+| 3 | 152 / 151 | 201 | 404 | 349 | 271 | 8 | 53 | 234 / 221 | 167 | 182 | 12 | 2.3 MB | 266 s |
+| 4 | 178 / 174 | 190 | 421 | 400 | 296 | 9 | 52 | 424 / 411 | 172 | 158 | 15 | 2.6 MB | 304 s |
+
+All six discoveries happened in every run. Eras included *The Marsh Dynasty*, *The Great Harvest*, *The Great
+Fire of Year 154* and *The Years of Recovery*. Times are for four runs in parallel on one machine. Births,
+deaths, disasters and the economy were all active.
 
 ## Known limitations
 
@@ -169,7 +182,7 @@ STRESS_TABLE
 - The simulation pauses while the page is closed. There is no offline catch-up.
 - The economy and demography are tuned for stability across seeds, not for historical realism. Immigration
   does much of the work of keeping the population up, and births alone don't replace deaths.
-- Emigration is rare, because the welfare systems keep most people content.
+- Emigration exists but never triggered in the four 200-year runs: the welfare systems keep people content enough.
 - The district layout is a fixed set of ten blocks. After that, the town grows only by expanding buildings.
 
 ## Toward Milestone 4
