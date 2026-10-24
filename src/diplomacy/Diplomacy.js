@@ -4,6 +4,8 @@ import { DAYS_PER_YEAR } from '../core/Config.js';
 import { chance, pick } from '../core/Random.js';
 import { record } from '../society/Chronicle.js';
 import { HEARTH, KINGDOMS, ROUTES } from '../region/RegionData.js';
+import { villageFood } from '../economy/Marketplace.js';
+import { qty, addGoods, removeGoods } from '../economy/Inventory.js';
 
 // Foreign relations between First Hearth and the three kingdoms (and among
 // the kingdoms themselves). Every change to a relationship carries a cause:
@@ -159,14 +161,23 @@ export function sendGift(state, to, coins = 40) {
 }
 
 /** Food aid under a mutual assistance treaty: real grain, carried as a gift contract. */
+/** First Hearth's food lives in its shops, homes and pantry: it is hungry when that falls below a day's portion each. */
+export const hearthHungry = (state) => villageFood(state) < state.citizens.length;
+
+/** Is a party short of food right now? */
+const famished = (state, party) => (party === HEARTH ? hearthHungry(state) : !!state.region.settlements[party]?.shortages.food);
+
 function sendAid(state, from, to) {
   const giver = state.region.settlements[from];
   const taker = state.region.settlements[to];
-  if (!giver || !taker) return false;
-  const n = Math.floor(Math.min(40, (giver.inventory.grain ?? 0) - (giver.reserved.grain ?? 0) - 60));
-  if (n < 10) return false;
-  giver.inventory.grain -= n;
-  taker.inventory.grain = (taker.inventory.grain ?? 0) + n;
+  // The village gives from the council pantry, keeping its own relief stock; aid to the village goes into the pantry.
+  const spare = from === HEARTH ? qty(state.council.pantry, 'grain') - (6 + state.citizens.length) : (giver?.inventory.grain ?? 0) - (giver?.reserved.grain ?? 0) - 60;
+  const n = Math.floor(Math.min(40, spare));
+  if (n < 10 || (to !== HEARTH && !taker)) return false;
+  if (from === HEARTH) removeGoods(state.council.pantry, 'grain', n);
+  else giver.inventory.grain -= n;
+  if (to === HEARTH) addGoods(state.council.pantry, 'grain', n);
+  else taker.inventory.grain = (taker.inventory.grain ?? 0) + n;
   adjustRelation(state, from, to, 8, 'food aid in a famine');
   say(state, `${nameOf(from)} sent ${n} grain to famine-struck ${nameOf(to)} under their mutual assistance treaty.`, 2);
   return true;
@@ -190,8 +201,7 @@ export function dailyDiplomacy(state) {
   // Mutual assistance in famine.
   for (const t of d.treaties.filter((x) => x.status === 'ACTIVE' && x.kind === 'assistance')) {
     for (const [a, b] of [t.parties, [...t.parties].reverse()]) {
-      const k = state.region.settlements[b];
-      if (k && k.shortages.food && (t.lastAid?.[b] ?? -99) < state.day - 6 && sendAid(state, a, b)) t.lastAid = { ...(t.lastAid ?? {}), [b]: state.day };
+      if (famished(state, b) && (t.lastAid?.[b] ?? -99) < state.day - 6 && sendAid(state, a, b)) t.lastAid = { ...(t.lastAid ?? {}), [b]: state.day };
     }
   }
   if (!isNewSeason(state.day)) return;

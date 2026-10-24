@@ -142,3 +142,19 @@ test('roads are proposed for reasons, approved, paid for and built over several 
   assert.ok(need.stone > 0);
   addGoods(s.council.stores, 'stone', need.stone);
 });
+
+test('a building raised across a later leg of a route makes the walker replan, not walk through it', () => {
+  const sim = fresh();
+  const s = sim.state;
+  const plot = plotByName(s, 'North Lane');
+  const c = s.citizens[0];
+  c.x = plot.x - 12; c.z = plot.z;
+  c.activity = { kind: 'explore', label: 'Wandering', x: plot.x + 8, z: plot.z, duration: 4, elapsed: 0, phase: 'travel',
+    path: [[plot.x - 8, plot.z], [plot.x + 8, plot.z]], wp: 0, navV: navGrid(s).version };
+  // The first leg stays open; the second now crosses a new tavern.
+  plot.building = { type: 'tavern', level: 1, condition: 100 };
+  markNavDirty(s);
+  const trail = [];
+  for (let i = 0; i < 60 && c.activity?.kind === 'explore' && c.activity.phase === 'travel'; i++) { sim.step(); trail.push([c.x, c.z]); }
+  assert.equal(wallHit(s, { x: plot.x - 12, z: plot.z }, trail), null, 'never stepped inside the building');
+});

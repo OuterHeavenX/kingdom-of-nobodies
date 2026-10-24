@@ -156,10 +156,14 @@ function foreignHouses(state) {
   }
 }
 
-/** When a merchant dies or leaves, their caravans' proceeds go to their heir (or the council). */
-export function onMerchantGone(state, c) {
+/**
+ * When a merchant dies or leaves, their caravans' proceeds go to their heir (or the council).
+ * `leaving` lists everyone departing with them, who cannot inherit.
+ */
+export function onMerchantGone(state, c, leaving = []) {
   const t = ensureTrade(state);
-  const heir = byId(state.citizens, c.family?.spouseId) ?? c.family?.childIds?.map((id) => byId(state.citizens, id)).find((x) => x && ageOf(state, x) >= LIFE.adultAge) ?? null;
+  const staying = (id) => (leaving.includes(id) ? null : byId(state.citizens, id));
+  const heir = staying(c.family?.spouseId) ?? c.family?.childIds?.map(staying).find((x) => x && ageOf(state, x) >= LIFE.adultAge) ?? null;
   const account = heir ? heir.id : 'treasury';
   for (const cv of t.caravans.filter((x) => x.account === c.id && x.status !== 'COMPLETED')) {
     cv.account = account;

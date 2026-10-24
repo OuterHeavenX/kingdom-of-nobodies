@@ -99,9 +99,11 @@ const r2 = (v) => Math.round(v * 100) / 100;
 function travel(state, c, act) {
   const grid = navGrid(state);
   if (act.path && act.navV !== grid.version) {
-    const next = act.path[act.wp ?? 0];
-    if (next && !segmentClear(state, c.x, c.z, next[0], next[1])) act.path = null;
-    else act.navV = grid.version;
+    // The town changed: keep the route only if every remaining leg is still clear.
+    const rest = [[c.x, c.z], ...act.path.slice(act.wp ?? 0)];
+    const clear = rest.every((p, i) => i === 0 || segmentClear(state, rest[i - 1][0], rest[i - 1][1], p[0], p[1]));
+    if (clear) act.navV = grid.version;
+    else act.path = null;
   }
   if (!act.path) {
     // Someone standing where a wall now is steps out first.

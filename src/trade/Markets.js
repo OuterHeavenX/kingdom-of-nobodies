@@ -30,7 +30,7 @@ export function hearthSellers(state, g) {
 /** Who in First Hearth wants a good, how much, and who would pay. */
 export function hearthBuyers(state, g) {
   const out = [];
-  const add = (party, want, account, pantry) => { if (want > 0) out.push({ party, want: Math.floor(want), account, pantry }); };
+  const add = (party, want, account, pantry) => { if (want > 0) out.push({ party, want: Math.floor(want), account, ...(pantry ? { pantry } : {}) }); };
   const trading = state.businesses.filter((b) => isTrading(b));
   if (g === 'grain') {
     for (const b of trading.filter((x) => BUSINESS_TYPES[x.type].inputs.grain)) add(b.id, 14 - qty(b.inventory, 'grain'), b.id);
@@ -158,7 +158,7 @@ export function collect(state, sid, g, parts, payer, unitPrice, memo) {
 export function buyerFor(state, sid, g, n, unitPrice) {
   if (sid !== HEARTH) return { party: sid, account: KINGDOMS[sid].account };
   const b = hearthBuyers(state, g).find((x) => balance(state, x.account) >= Math.min(n, x.want) * unitPrice);
-  return b ? { party: b.party, account: b.account, pantry: b.pantry, want: b.want } : null;
+  return b ? { party: b.party, account: b.account, ...(b.pantry ? { pantry: b.pantry } : {}), want: b.want } : null;
 }
 
 /** Put delivered goods into the buyer's stock. */

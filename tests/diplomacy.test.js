@@ -100,3 +100,46 @@ test('23. migration moves real people between settlements and keeps populations 
   assert.equal(checkInvariants(s, 'migration', 0), 0);
   assert.equal(totalMoney(s), money);
 });
+
+test('a married merchant who emigrates mid-run hands the caravan to someone who stays, and escrow still settles', () => {
+  const sim = fresh(1);
+  const s = sim.state;
+  let cv = null;
+  for (let i = 0; i < 400 * 144 && !cv; i++) {
+    sim.step();
+    cv = s.trade.caravans.find((x) => x.status !== 'COMPLETED' && x.status !== 'CANCELLED' && s.citizens.some((c) => c.id === x.account && c.family.spouseId && !c.founder && s.government?.leaderId !== c.id && s.government?.leaderId !== c.family.spouseId)) ?? null;
+  }
+  assert.ok(cv, 'a married villager has a caravan on the road');
+  const merchant = s.citizens.find((c) => c.id === cv.account);
+  const leaving = new Set([merchant.id, merchant.family.spouseId]);
+  const money = totalMoney(s);
+  emigrate(s, merchant, { why: 'for a better life', destination: 'greenvale' });
+  assert.ok(!leaving.has(cv.account), 'the proceeds go to someone still in First Hearth');
+  assert.ok(cv.account in s.accounts, 'and to an account that exists');
+  for (let i = 0; i < 30 * 144 && !['COMPLETED', 'CANCELLED'].includes(cv.status); i++) sim.step();
+  assert.equal(totalMoney(s), money);
+  assert.equal(checkInvariants(s, 'emigrating merchant', 0), 0, 'escrow and cargo still balance');
+});
+
+
+test('a mutual assistance treaty feeds First Hearth in a famine, and lets the village help a hungry kingdom', () => {
+  const s = fresh(2).state;
+  signTreaty(s, 'assistance', 'hearth', 'greenvale');
+  const g = s.region.settlements.greenvale;
+  g.inventory.grain = 400;
+  // The village runs out of food everywhere.
+  for (const b of s.businesses) for (const f of ['grain', 'bread', 'meal', 'berries']) b.inventory[f] = 0;
+  for (const c of s.citizens) for (const f of ['grain', 'bread', 'meal', 'berries']) c.inventory[f] = 0;
+  s.council.pantry = {};
+  dailyDiplomacy(s);
+  assert.ok((s.council.pantry.grain ?? 0) >= 10, 'Greenvale sent grain to the council pantry');
+  assert.equal(g.inventory.grain, 400 - s.council.pantry.grain, 'it came out of Greenvale\'s stores');
+  // Later the village has plenty and Greenvale is hungry.
+  s.day += 7;
+  s.council.pantry.grain = 80;
+  g.shortages.food = true;
+  const before = g.inventory.grain;
+  dailyDiplomacy(s);
+  assert.ok(g.inventory.grain > before && s.council.pantry.grain < 80, 'the village sent grain from its pantry');
+  assert.ok(s.council.pantry.grain >= 6 + s.citizens.length, 'keeping its own relief stock');
+});

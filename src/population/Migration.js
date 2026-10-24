@@ -262,7 +262,7 @@ export function emigrate(state, c, { why = 'hard times', destination = null } = 
     const rec = archiveCitizen(state, m, 'emigrated', why);
     rec.destination = destination;
   }
-  for (const m of household) { onCitizenGone(state, m); onMerchantGone(state, m); }
+  for (const m of household) { onCitizenGone(state, m); onMerchantGone(state, m, household.map((x) => x.id)); }
   const ids = new Set(household.map((m) => m.id));
   state.citizens = state.citizens.filter((x) => !ids.has(x.id));
   for (const m of household) { reassignWards(state, m); delete state.accounts[m.id]; }
