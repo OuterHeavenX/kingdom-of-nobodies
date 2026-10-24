@@ -48,7 +48,7 @@ export function attractiveness(state) {
   const foodPerHead = villageFood(state) / Math.max(1, pop);
   const mood = state.citizens.reduce((s, c) => s + c.mood, 0) / Math.max(1, pop);
   const troubled = (state.season?.troubledUntil ?? 0) > state.day;
-  let score = 0.4 + Math.min(0.5, free * 0.05) + openings * 0.2 + Math.min(0.3, foodPerHead * 0.05) + (mood - 50) / 100 - jobless / Math.max(4, adults.length) - (troubled ? 0.4 : 0);
+  let score = 0.4 + Math.min(0.5, free * 0.05) + openings * (jobless > 2 ? 0.05 : 0.2) + Math.min(0.3, foodPerHead * 0.05) + (mood - 50) / 100 - 1.6 * jobless / Math.max(4, adults.length) - (troubled ? 0.4 : 0);
   if (pop < 12) score += 0.3; // a tiny hamlet needs hands
   return { score: Math.max(0, score), free };
 }
@@ -163,7 +163,13 @@ export function maybeEmigrate(state) {
     c.joblessDays = !c.employment && !c.retired ? (c.joblessDays ?? 0) + 1 : 0;
     if (leaver || c.founder || state.government?.leaderId === c.id) continue;
     if (c.unhappyDays >= 6 && chance(state, 0.15)) { leaver = { c, why: 'hard times' }; continue; }
-    const push = (c.joblessDays > 5 ? 0.35 : 0) + (!c.homePlotId ? 0.3 : 0) + (c.mood < 45 ? 0.2 : 0) + ((state.government?.approval ?? 60) < 30 ? 0.15 : 0) + (age < 35 ? 0.1 : 0);
+    let push = (c.joblessDays > 5 ? 0.35 : 0) + (!c.homePlotId ? 0.3 : 0) + (c.mood < 45 ? 0.2 : 0) + ((state.government?.approval ?? 60) < 30 ? 0.15 : 0) + (age < 35 ? 0.1 : 0);
+    if (push < 0.3) continue;
+    // A household with a thriving business or savings has a stake here and
+    // does not leave for vague prospects abroad.
+    const household = householdOf(state, c);
+    if (household.some((m) => state.businesses.some((b) => b.ownerId === m.id && b.status === 'OPEN'))) continue;
+    if (household.reduce((t, m) => t + balance(state, m.id), 0) > 90) push -= 0.2;
     if (push < 0.3) continue;
     const dest = bestDestination(state, c);
     if (!dest || dest.pull + push < 0.55) continue;
@@ -237,7 +243,7 @@ export function emigrate(state, c, { why = 'hard times', destination = null } = 
   const household = householdOf(state, c);
   for (const m of household) {
     if (m.employment) leaveJob(state, m, 'left the village');
-    for (const b of state.businesses.filter((x) => x.ownerId === m.id && isTrading(x))) closeBusiness(state, b, 'CLOSED');
+    for (const b of state.businesses.filter((x) => x.ownerId === m.id && isTrading(x))) closeBusiness(state, b, 'CLOSED', 'owner emigrated');
     // Their land is sold to the council if it can pay; otherwise it is left for sale.
     for (const p of state.plots.filter((x) => x.ownerId === m.id)) {
       const price = Math.min(p.price, balance(state, 'treasury') - 20);

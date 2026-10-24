@@ -28,6 +28,9 @@ export const SURVEY_COST = 40;
 
 export function openedBlocks(state) { return state.districts?.opened ?? []; }
 
+/** Population the town must reach before the next district is surveyed. */
+export const districtThreshold = (state) => 10 + openedBlocks(state).length * 7;
+
 export function needsLand(state) {
   const vacant = state.plots.filter((p) => !p.building && !p.projectId && p.marketStatus === 'FOR_SALE');
   const freeHomeLand = vacant.filter((p) => p.landType === 'residential').length;
@@ -45,6 +48,10 @@ export function maybeExpand(state) {
   state.districts = state.districts ?? { opened: [] };
   const next = BLOCKS.find((b) => !state.districts.opened.includes(b.name));
   if (!next || !needsLand(state) || balance(state, 'treasury') < SURVEY_COST + 30) return null;
+  // Only real population pressure justifies a new district: enough people to
+  // fill it, or villagers already sleeping without a home.
+  const homeless = state.citizens.filter((c) => !c.homePlotId).length;
+  if (homeless < 2 && state.citizens.length < districtThreshold(state)) return null;
   const crews = state.citizens.filter((c) => ageOf(state, c) >= LIFE.adultAge && !c.retired && (!c.employment || c.profession === 'Builder')).slice(0, 4);
   if (crews.length) {
     const each = Math.floor(SURVEY_COST / crews.length);

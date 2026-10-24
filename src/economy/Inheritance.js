@@ -102,7 +102,7 @@ export function settleEstate(state, c) {
       if (outcome === 'trust') estate.status = 'trust';
       estate.businesses.push({ id: b.id, to: heir.id, outcome });
     } else {
-      closeBusiness(state, b, 'CLOSED');
+      closeBusiness(state, b, 'CLOSED', 'owner died');
       record(state, 'business', `${b.name} closed after ${c.firstName}'s death; ${heir ? `${heir.firstName} chose to sell rather than run it` : 'no heir could take it on'}.`, { citizens: [c.id], business: b.id }, 2);
       estate.businesses.push({ id: b.id, to: null, outcome: 'closed' });
     }
@@ -170,7 +170,7 @@ export function resolveTrusts(state, c) {
     b.inTrust = false;
     if (successionScore(state, c, b) >= 22) transferBusiness(state, b, c, c, 'successor', 'came of age');
     else {
-      closeBusiness(state, b, 'CLOSED');
+      closeBusiness(state, b, 'CLOSED', 'heir sold');
       record(state, 'business', `${c.firstName} came of age and chose to sell ${b.name} rather than run it.`, { citizens: [c.id], business: b.id }, 2);
     }
   }

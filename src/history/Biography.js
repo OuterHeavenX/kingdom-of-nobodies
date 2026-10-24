@@ -30,7 +30,7 @@ export function biography(state, id) {
   if (living) sentences.push(`Still living, aged ${ageOn(p.birthDay, state.day)}.`);
   return {
     id: p.id, name: name(p), title, living, founder: !!p.founder,
-    born: dateLabel(p.birthDay), died: p.deathDay ? dateLabel(p.deathDay) : null, cause: p.cause ?? null,
+    born: dateLabel(p.birthDay), died: p.deathDay ? dateLabel(p.deathDay) : null, cause: p.cause ? (p.hungerCause ? `${p.cause}: ${p.hungerCause}` : p.cause) : null,
     occupation: p.profession, spouses: spouses.map((s) => ({ id: s.id, name: name(s) })), children: children.map((c) => ({ id: c.id, name: name(c) })),
     parents: parents.map((x) => ({ id: x.id, name: name(x) })), achievements: ach, text: sentences.join(' '), businesses: founded,
   };

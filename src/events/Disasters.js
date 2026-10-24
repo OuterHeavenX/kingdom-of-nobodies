@@ -100,7 +100,7 @@ function destroyBuilding(state, plot, heroes) {
   const label = old.name;
   if (plot.businessId) {
     const b = state.businesses.find((x) => x.id === plot.businessId);
-    if (b) closeBusiness(state, b, 'CLOSED');
+    if (b) closeBusiness(state, b, 'CLOSED', 'building destroyed');
   }
   for (const id of plot.residents) {
     const c = state.citizens.find((x) => x.id === id);

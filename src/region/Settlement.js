@@ -168,7 +168,9 @@ function distantWorld(state, k) {
 function leadership(state, k) {
   const def = KINGDOMS[k.id];
   const L = k.leader;
-  const target = 70 - k.hunger * 120 - Object.keys(k.shortages).length * 6 + (k.prosperity - 1) * 60;
+  // Feuds wear on a people: every embargo it imposes or suffers costs the leader support.
+  const feuds = (state.diplomacy?.embargoes ?? []).filter((e) => e.status === 'ACTIVE' && (e.by === k.id || e.against === k.id)).length;
+  const target = 70 - k.hunger * 120 - Object.keys(k.shortages).length * 6 + (k.prosperity - 1) * 60 - feuds * 9;
   L.approval = Math.round(Math.max(0, Math.min(100, L.approval + (target - L.approval) * 0.08)));
   k.unrestDays = L.approval < 28 ? k.unrestDays + 1 : 0;
   const tenure = state.day - L.since;
@@ -176,8 +178,8 @@ function leadership(state, k) {
     const previous = L.name;
     const ousted = k.unrestDays >= 6;
     const others = def.leaders.filter((n) => n !== previous);
-    // A hungry or embattled people elects protection; a prosperous one, trade.
-    const stance = k.hunger > 0.1 || Object.keys(k.shortages).length > 2 ? (nextRandom(state) < 0.6 ? 'protectionist' : 'cooperative') : pick(state, def.stances);
+    // A hungry or embattled people elects protection; a prosperous one, trade; one tired of feuds, peace.
+    const stance = feuds >= 2 ? 'cooperative' : k.hunger > 0.1 || Object.keys(k.shortages).length > 2 ? (nextRandom(state) < 0.6 ? 'protectionist' : 'cooperative') : pick(state, def.stances);
     k.leader = { name: pick(state, others), title: def.leaderTitle, stance, since: state.day, approval: 60 };
     k.unrestDays = 0;
     k.tariff = stance === 'protectionist' ? 0.16 : stance === 'mercantile' ? 0.06 : 0.09;

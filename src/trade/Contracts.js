@@ -30,6 +30,9 @@ export function logCargo(state, entry) {
   const t = ensureTrade(state);
   t.cargoLog.push({ day: state.day, ...entry });
   if (t.cargoLog.length > 240) t.cargoLog.shift();
+  // Running per-caravan tallies, so every unit loaded can be accounted for.
+  const cv = t.caravans.find((x) => x.id === entry.caravanId);
+  if (cv) { cv.tally = cv.tally ?? { load: 0, deliver: 0, sold: 0, spoil: 0 }; cv.tally[entry.kind] += entry.n; }
 }
 
 export const contractById = (state, id) => ensureTrade(state).contracts.find((c) => c.id === id) ?? null;

@@ -86,7 +86,7 @@ function updateLifecycle(state, b, startup) {
     b.struggleDays++;
     if (b.employees.length && cash < wageBill(state, b) * 2) layOff(state, b, 'losses');
     const councilCanCarry = b.ownerId === 'council' && balance(state, 'treasury') > 40;
-    if (b.struggleDays >= ECONOMY.closeAfterStruggleDays && !councilCanCarry) closeBusiness(state, b, cash <= 3 ? 'BANKRUPT' : 'CLOSED');
+    if (b.struggleDays >= ECONOMY.closeAfterStruggleDays && !councilCanCarry) closeBusiness(state, b, cash <= 3 ? 'BANKRUPT' : 'CLOSED', cash <= 3 ? 'bankrupt' : 'unprofitable');
   }
 }
 
@@ -97,12 +97,13 @@ const owners = (b) => (b.ownerId === 'council' ? [] : [b.ownerId]);
  * sold off to traders, remaining cash returns to the owner and the property is
  * put up for sale (the building stays standing until a new owner decides).
  */
-export function closeBusiness(state, b, status = 'CLOSED') {
+export function closeBusiness(state, b, status = 'CLOSED', why = null) {
   // Goods set aside for a caravan go back into stock before anything is sold off.
   for (const [g, n] of Object.entries(b.held ?? {})) if (n > 0) addGoods(b.inventory, g, n);
   b.held = {};
   b.status = status;
   b.closedDay = state.day;
+  b.closedWhy = why ?? (status === 'BANKRUPT' ? 'bankrupt' : 'closed');
   b.openings = 0;
   for (const id of [...b.employees]) {
     const c = byId(state.citizens, id);

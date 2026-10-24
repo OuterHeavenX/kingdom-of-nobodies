@@ -235,12 +235,21 @@ function seasonalDiplomacy(state) {
     }
     d.tradeLog[pairKey(a, b)] = Math.round(volume * 0.5);
   }
+  // Time softens old grudges: bitter relations drift back toward indifference.
+  for (const [key, r] of Object.entries(d.relations)) {
+    if (r.score >= 0) continue;
+    const [a, b] = key.split('|');
+    if (embargoBetween(state, a, b)) continue;
+    adjustRelation(state, a, b, Math.max(1, Math.round(-r.score * 0.08)), 'old grievances fading with time');
+  }
   // Embargoes: protectionist leaders punish bitter rivals; they lift when tempers cool.
   for (const e of d.embargoes.filter((x) => x.status === 'ACTIVE')) {
     if (relationScore(state, e.by, e.against) > -15 || state.day - e.startDay > DAYS_PER_YEAR * 2) liftEmbargo(state, e, relationScore(state, e.by, e.against) > -15 ? 'relations have improved' : 'it had outlived its purpose');
   }
   for (const a of kingdoms) for (const b of PARTIES) {
     if (a === b || embargoBetween(state, a, b)) continue;
+    // After an embargo is lifted, neither side imposes a new one for three years.
+    if (d.embargoes.some((e) => [e.by, e.against].includes(a) && [e.by, e.against].includes(b) && e.endDay && state.day - e.endDay < DAYS_PER_YEAR * 3)) continue;
     const stance = state.region.settlements[a].leader.stance;
     if (relationScore(state, a, b) < -45 && (stance === 'protectionist' || relationScore(state, a, b) < -70)) imposeEmbargo(state, a, b, `relations had sunk to ${Math.round(relationScore(state, a, b))}`);
   }
