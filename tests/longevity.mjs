@@ -14,7 +14,9 @@ const seeds = (process.argv[3] ?? '1,2,3').split(',').map(Number);
 let failures = 0;
 const fail = (seed, year, msg) => { failures++; console.error(`  ✗ seed ${seed} year ${year}: ${msg}`); };
 
+/** Check every multigenerational invariant; returns the number of violations found. */
 export function checkInvariants(s, seed, year) {
+  const before = failures;
   const ids = new Set();
   for (const c of s.citizens) {
     if (ids.has(c.id)) fail(seed, year, `duplicate citizen id ${c.id}`);
@@ -50,6 +52,7 @@ export function checkInvariants(s, seed, year) {
     if (e.candidates[0].id !== e.winnerId) fail(seed, year, `election winner is not the top vote-getter`);
   }
   if (JSON.stringify(s).match(/NaN|Infinity/)) fail(seed, year, 'NaN or Infinity in state');
+  return failures - before;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
