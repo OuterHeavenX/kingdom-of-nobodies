@@ -1,3 +1,5 @@
+import { leaveJob } from '../economy/Employment.js';
+import { needsCourthouse } from '../law/Courts.js';
 import { byId } from '../core/EntityRegistry.js';
 import { COUNCIL, ECONOMY, FOOD_GOODS, GOODS, TIME } from '../core/Config.js';
 import { transfer, balance } from '../economy/Transactions.js';
@@ -147,7 +149,7 @@ export function collectTithe(state) {
  * replaces the old Hearth Hall.
  */
 export function councilInfrastructure(state) {
-  if (state.day % 4 !== 0 || state.projects.some((p) => p.ownerId === 'council' && ['well', 'granary', 'townhall'].includes(p.buildingType))) return;
+  if (state.day % 4 !== 0 || state.projects.some((p) => p.ownerId === 'council' && ['well', 'granary', 'townhall', 'courthouse'].includes(p.buildingType))) return;
   const t = balance(state, 'treasury');
   const pop = state.citizens.length;
   const have = (type) => state.plots.some((p) => p.building?.type === type);
@@ -155,6 +157,7 @@ export function councilInfrastructure(state) {
   let plan = null;
   if (pop >= 18 && !have('well') && t > 80) plan = { buildingType: 'well', plot: civicLand() };
   else if (pop >= 30 && !have('granary') && t > 150) plan = { buildingType: 'granary', plot: civicLand() };
+  else if (needsCourthouse(state) && pop >= 25 && !have('courthouse') && t > 120) plan = { buildingType: 'courthouse', plot: civicLand() };
   else if (pop >= 45 && !have('townhall') && t > 220) plan = { buildingType: 'townhall', plot: state.plots.find((p) => p.building?.type === 'hall' && !p.projectId), refit: true };
   else if (pop >= 60 && state.plots.filter((p) => p.building?.type === 'well').length < 2 && t > 160) plan = { buildingType: 'well', plot: civicLand() };
   if (!plan?.plot) return;
@@ -164,6 +167,7 @@ export function councilInfrastructure(state) {
 
 export function councilDaily(state) {
   collectTithe(state);
+  trimWorksCrew(state);
   for (const b of state.businesses) {
     if (b.ownerId !== 'council' || !isTrading(b)) continue;
     if (balance(state, b.id) < 20 && balance(state, 'treasury') > 50) transfer(state, 'treasury', b.id, 15, 'grant', `Council funding for ${b.name}`);
@@ -260,6 +264,21 @@ function fundPublicWorks(state) {
   const want = Math.min(idle + works.employees.length, 8) * 12 - balance(state, works.id);
   const amount = Math.min(want, balance(state, 'treasury') - 40);
   if (amount > 0) transfer(state, 'treasury', works.id, amount, 'grant', 'Wages for the Village Works crew');
+}
+
+/** The crew is cut back to what the council can actually pay for two shifts a day. */
+function trimWorksCrew(state) {
+  const works = state.businesses.find((b) => b.type === 'works');
+  if (!works?.employees.length) return;
+  const funds = balance(state, works.id) + Math.max(0, balance(state, 'treasury') - COUNCIL.reserve / 2);
+  const wage = 5;
+  const affordable = Math.floor(funds / (wage * 2 * 2));
+  while (works.employees.length > Math.max(0, affordable)) {
+    const c = byId(state.citizens, works.employees[works.employees.length - 1]);
+    if (!c) { works.employees.pop(); continue; }
+    leaveJob(state, c, 'the council could not fund the post');
+    remember(state, c, 'Lost my place on the works crew when the council ran short of money.', 2, 'career');
+  }
 }
 
 function restockPantry(state) {

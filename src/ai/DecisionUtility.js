@@ -7,7 +7,7 @@ import { schoolOpen } from '../education/Education.js';
 import { isCandidate, electionToday, currentLeader } from '../politics/Government.js';
 import { balance } from '../economy/Transactions.js';
 import { qty } from '../economy/Inventory.js';
-import { businessById, retailPrice } from '../economy/Businesses.js';
+import { businessById, retailPrice, isTrading } from '../economy/Businesses.js';
 import { bestFoodOffer, ownStockFood, isOpenNow, businessLocation, rankSellers } from '../economy/Marketplace.js';
 import { openPositions } from '../economy/Employment.js';
 import { needsLabour, canPayBuilder, projectById } from '../property/Construction.js';
@@ -84,6 +84,14 @@ export function generateCandidates(state, c, plan) {
           ...(thrift > 2 ? [[`I'm careful with money`, -thrift]] : [])], { businessId: offer.business.id, good: offer.good, price: offer.price, payer }));
       } else if (hunger < 50 && age >= 8 && state.commons.berries > 2 && h > 5 && h < 20) {
         out.push(candidate('forage', urgency * 0.95, [[`I'm hungry but ${money < 2 ? 'have no money' : 'nobody is selling food'}`, urgency], ['wild berries grow in the forest', 0]], { hungry: true }));
+      }
+      // Desperation: with no money, no relief and nothing to forage, some will steal.
+      const shop = !offer && age >= 13 && (hunger < 8 || (hunger < 22 && trait(c, 'dishonest') > 0.3)) && state.day - (c.lastTheftDay ?? -9) > 2
+        ? state.businesses.find((b) => isTrading(b) && b.ownerId !== c.id && FOOD_GOODS.some((g) => qty(b.inventory, g) > 0)) : null;
+      if (shop) {
+        const good = FOOD_GOODS.find((g) => qty(shop.inventory, g) > 0);
+        out.push(candidate('steal', urgency * (0.5 + trait(c, 'dishonest') * 0.6) - trait(c, 'honest') * 40, [[`I'm starving (fullness ${Math.round(hunger)}%) and have nothing`, urgency * 0.5],
+          [`${shop.name} has ${GOODS[good].label.toLowerCase()} lying about`, 0], ...(trait(c, 'honest') > 0.2 ? [['but stealing is wrong', -trait(c, 'honest') * 40]] : [])], { businessId: shop.id, good }));
       }
     }
   }

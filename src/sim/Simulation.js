@@ -1,3 +1,5 @@
+import { considerLaws } from '../law/LegalCode.js';
+import { dailyCourts, hourlyCourts } from '../law/Courts.js';
 import { TIME, ECONOMY } from '../core/Config.js';
 import { createKingdom } from './Setup.js';
 import { updateCitizen } from '../ai/CitizenBrain.js';
@@ -82,6 +84,7 @@ export class Simulation {
     const h = s.minute / 60;
     updateProjects(s);
     updateFires(s);
+    hourlyCourts(s);
     if (h === 6 || h === 12) restockAll(s);
   }
 
@@ -123,6 +126,8 @@ export class Simulation {
     dailyExploration(s);
     dailyTrade(s);
     dailyDiplomacy(s);
+    considerLaws(s);
+    dailyCourts(s);
     considerRoads(s);
     approveRoads(s);
     decayTraffic(s);

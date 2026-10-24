@@ -1,3 +1,4 @@
+import { noteEmbezzlement } from '../law/Courts.js';
 import { POLITICS, LIFE, DAYS_PER_YEAR, EDUCATION } from '../core/Config.js';
 import { chance } from '../core/Random.js';
 import { isNewSeason, yearOf, dateLabel } from '../core/Calendar.js';
@@ -275,7 +276,7 @@ function attemptEmbezzlement(state) {
   if (temptation <= 0.25 || !chance(state, POLITICS.embezzleChancePerSeason * temptation)) return;
   const amount = Math.min(15, Math.floor(balance(state, 'treasury') * 0.06));
   if (amount < 2 || !transfer(state, 'treasury', leader.id, amount, 'embezzlement', 'Unrecorded withdrawal')) return;
-  gov.scandals.push({ id: 's' + (gov.scandals.length + 1), leaderId: leader.id, amount, day: state.day, discovered: false });
+  gov.scandals.push({ id: 's' + (gov.scandals.length + 1), leaderId: leader.id, amount, day: state.day, discovered: false, txId: state.nextId.tx });
 }
 
 function discoverScandals(state) {
@@ -289,9 +290,11 @@ function discoverScandals(state) {
     const finder = watchers[Math.floor(state.day % Math.max(1, watchers.length))];
     const leader = person(state, sc.leaderId) ?? state.archive[sc.leaderId];
     if (!leader) continue;
-    const repaid = person(state, leader.id) ? Math.min(sc.amount, balance(state, leader.id)) : 0;
+    // Restitution is now a matter for the court; without a legal system the money is taken back at once.
+    const repaid = person(state, leader.id) && !state.law ? Math.min(sc.amount, balance(state, leader.id)) : 0;
     if (repaid > 0) transfer(state, leader.id, 'treasury', repaid, 'fine', `${leader.firstName} repaid misused funds`);
     sc.repaid = repaid;
+    if (state.law && person(state, leader.id)) noteEmbezzlement(state, sc, leader);
     if (person(state, leader.id)) {
       bump(leader, 'honesty', -30);
       bump(leader, 'standing', -15);

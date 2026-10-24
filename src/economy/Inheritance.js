@@ -1,3 +1,4 @@
+import { noteEstateDispute } from '../law/Courts.js';
 import { byId } from '../core/EntityRegistry.js';
 import { transfer, balance } from './Transactions.js';
 import { qty, moveGoods } from './Inventory.js';
@@ -147,6 +148,12 @@ export function settleEstate(state, c) {
       plotHistory(state, p, `Passed to the council as part of ${c.firstName}'s unclaimed estate.`);
       estate.plots.push({ id: p.id, to: 'council' });
     }
+  }
+  // Children left with nothing while one heir took several plots may go to court.
+  const landed = new Set(estate.plots.map((p) => p.to));
+  const main = estate.plots.length >= 2 && landed.size === 1 ? byId(state.citizens, [...landed][0]) : null;
+  if (main) for (const sib of children.filter((h) => h !== main && ageOf(state, h) >= LIFE.adultAge)) {
+    if (trait(sib, 'greedy') + trait(sib, 'jealous') + trait(sib, 'stubborn') > 0.6) noteEstateDispute(state, estate, sib, main);
   }
   if (estate.heirs.length || estate.plots.length || estate.businesses.length) {
     const names = [...new Set([...estate.heirs.map((h) => h.id), ...estate.plots.map((p) => p.to), ...estate.businesses.map((b) => b.to)])]

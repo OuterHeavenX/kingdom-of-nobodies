@@ -26,6 +26,7 @@ import { schoolOpen, completeLesson, completeApprenticeship, completeMentoring }
 import { findPath, segmentClear } from '../navigation/Pathfinding.js';
 import { navGrid, costAt, cellOf, nearestOpen, cellX, cellZ, walkable } from '../navigation/NavigationGrid.js';
 import { roadWorkSpot } from '../navigation/RoadConstruction.js';
+import { noteTheft } from '../law/Courts.js';
 import { recordTrip, crowdFactor, ensureNavigation } from '../navigation/Traffic.js';
 
 // Each citizen is always either performing an activity or choosing one.
@@ -36,7 +37,7 @@ import { recordTrip, crowdFactor, ensureNavigation } from '../navigation/Traffic
 const clamp = (v) => Math.max(0, Math.min(100, v));
 
 const LABELS = {
-  eat_own: 'Eating', eat_stock: 'Eating from stock', buy_food: 'Buying food', sleep: 'Sleeping', work: 'Working', build: 'Building',
+  eat_own: 'Eating', steal: 'Stealing food', eat_stock: 'Eating from stock', buy_food: 'Buying food', sleep: 'Sleeping', work: 'Working', build: 'Building',
   seek_job: 'Looking for work', forage: 'Foraging in the forest', sell_goods: 'Selling goods', socialize: 'Socialising',
   tavern: 'At the tavern', help: 'Helping a neighbour', festival: 'Enjoying the festival', buy_plot: 'Buying property',
   start_project: 'Starting a building project', explore: 'Wandering', idle: 'Taking a moment',
@@ -222,6 +223,10 @@ function begin(state, c, k) {
       const b = businessById(state, k.businessId);
       return activity('buy_food', `Buying ${GOODS[k.good].label.toLowerCase()} at ${b.name}`, businessLocation(state, b), 2, { businessId: b.id, good: k.good, payer: k.payer });
     }
+    case 'steal': {
+      const b = businessById(state, k.businessId);
+      return b ? activity('steal', `Hanging about ${b.name}`, businessLocation(state, b), 2, { businessId: b.id, good: k.good }) : null;
+    }
     case 'sleep': return activity('sleep', plotById(state, c.homePlotId)?.ownerId === c.id ? 'Sleeping at home' : 'Sleeping at the hall', homeOf(state, c), 80);
     case 'work': {
       const b = businessById(state, k.businessId);
@@ -338,6 +343,25 @@ function finish(state, c) {
       const n = balance(state, payer) > 12 + retailPrice(b ?? { priceMult: {} }, a.good) * 2 ? 2 : 1;
       const res = b ? buyRetail(state, c, b, a.good, n, payer) : { ok: false };
       if (res.ok) eatFrom(c, a.good);
+      break;
+    }
+    case 'steal': {
+      const b = businessById(state, a.businessId);
+      const n = b ? Math.min(2, qty(b.inventory, a.good)) : 0;
+      if (n <= 0) break;
+      removeGoods(b.inventory, a.good, n);
+      addGoods(c.inventory, a.good, n);
+      eatFrom(c, a.good);
+      const witnesses = state.citizens.filter((o) => o !== c && !o.away && o.activity?.kind !== 'sleep' && Math.hypot(o.x - c.x, o.z - c.z) < 10).slice(0, 3);
+      if (witnesses.length) {
+        noteTheft(state, c, b.id, a.good, n, retailPrice(b, a.good) * n, witnesses);
+        bump(c, 'honesty', -12);
+        for (const w of witnesses) { adjust(state, w.id, c.id, { trust: -15, respect: -8 }); remember(state, w, `Saw ${c.firstName} steal ${a.good} from ${b.name}.`, 2, 'gossip'); }
+        record(state, 'citizen', `${c.firstName} ${c.lastName}, starving and penniless, was seen stealing ${a.good} from ${b.name}.`, { citizens: [c.id, ...witnesses.map((w) => w.id)], business: b.id }, 2);
+      }
+      remember(state, c, `Took ${a.good} from ${b.name} because I was starving.`, 3, 'grievance');
+      state.stats.thefts = (state.stats.thefts ?? 0) + 1;
+      c.lastTheftDay = state.day;
       break;
     }
     case 'sleep': if (plotById(state, c.homePlotId)?.ownerId === c.id) c.mood = clamp(c.mood + 2); break;

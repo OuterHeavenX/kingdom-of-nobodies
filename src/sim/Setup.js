@@ -1,3 +1,4 @@
+import { ensureLaw } from '../law/LegalCode.js';
 import { foundingRoads, addRoad } from '../navigation/RoadNetwork.js';
 import { BLOCKS } from '../population/Expansion.js';
 import { ensureRegion } from '../region/RegionManager.js';
@@ -120,6 +121,7 @@ export function addMilestone4State(state) {
   ensureRegion(state);
   ensureTrade(state);
   ensureDiplomacy(state);
+  ensureLaw(state);
   if (state.government?.policies) state.government.policies = { tariffLevel: 'normal', openDiplomacy: true, ...state.government.policies };
   return state;
 }

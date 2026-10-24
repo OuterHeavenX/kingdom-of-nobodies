@@ -171,6 +171,19 @@ const BUILDERS = {
     part(g, G.box(), mat(P.door), [1.8, 2.1, 0.16], [0, 1.35, 2.86]);
     for (const sx of [-1, 1]) part(g, G.box(), mat(sx < 0 ? '#3f6fa3' : '#b8443a'), [0.8, 1.6, 0.05], [sx * 2.6, 3.8, 2.9], null, false);
   },
+  courthouse(g) {
+    part(g, G.box(), mat(P.stoneDark), [6.4, 0.5, 4.8], [0, 0.25, 0]);
+    part(g, G.box(), mat(P.stone), [6, 3, 4.4], [0, 2, 0]);
+    part(g, G.prism(), mat(P.roofSlate), [6.8, 1.8, 5], [0, 3.5, 0]);
+    // A portico of four columns under a pediment, and the scales of justice.
+    for (const x of [-2.1, -0.7, 0.7, 2.1]) part(g, G.cyl(8), mat('#d9d3c4'), [0.4, 2.9, 0.4], [x, 1.95, 2.7]);
+    part(g, G.box(), mat('#d9d3c4'), [5.2, 0.3, 1.2], [0, 3.5, 2.7]);
+    part(g, G.prism(), mat('#d9d3c4'), [5.2, 0.8, 1.2], [0, 3.65, 2.7]);
+    part(g, G.box(), mat(P.door), [1.2, 2, 0.12], [0, 1.5, 2.22]);
+    part(g, G.box(), mat('#c9a442', { metalness: 0.5 }), [0.06, 0.6, 0.06], [0, 4.1, 3.3], null, false);
+    part(g, G.box(), mat('#c9a442', { metalness: 0.5 }), [0.9, 0.05, 0.05], [0, 4.4, 3.3], null, false);
+    for (const x of [-0.42, 0.42]) part(g, G.cyl(8), mat('#c9a442', { metalness: 0.5 }), [0.26, 0.04, 0.26], [x, 4.2, 3.3], null, false);
+  },
   ruins(g) {
     part(g, G.box(), mat('#3a3330'), [4.2, 0.3, 3.6], [0, 0.15, 0]);
     for (let i = 0; i < 6; i++) part(g, G.box(), mat(i % 2 ? '#2f2925' : '#5b4c40'), [0.4 + (i % 3) * 0.3, 0.6 + (i % 4) * 0.5, 0.3], [-1.6 + i * 0.65, 0.5, (i % 2 ? 1 : -1) * 1.2], [0, i * 0.7, (i % 3) * 0.2]);

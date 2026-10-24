@@ -119,7 +119,9 @@ test('7 & 8. death settles the estate exactly once without duplicating wealth', 
   assert.equal(again.id, rich.estateId);
   assert.equal(totalMoney(s), money, 'money is conserved through inheritance');
   assert.equal(balance(s, rich.id), 0, 'nothing is left in the dead person\'s account');
-  assert.equal(again.heirs.reduce((t, h) => t + h.coins, 0) || coins, coins);
+  // Heirs share the estate's coins (which include cash returned by any business that closed).
+  assert.ok(again.coins >= coins);
+  assert.equal(again.heirs.reduce((t, h) => t + h.coins, 0) || again.coins, again.coins);
   assert.equal(die(s, rich, 'old age'), null, 'a person cannot die twice');
 });
 

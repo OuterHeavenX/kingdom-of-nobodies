@@ -118,7 +118,7 @@ export const SOCIAL = {
   cheatNoticeChance: 0.5,
 };
 
-export const CHRONICLE = { max: 420, keepImportant: 160 };
+export const CHRONICLE = { max: 640, keepImportant: 200 };
 export const LEDGER = { max: 260 };
 
 export const COUNCIL = {

@@ -1,3 +1,4 @@
+import { noteContractShortfall } from '../law/Courts.js';
 import { balance, transfer } from '../economy/Transactions.js';
 import { byId } from '../core/EntityRegistry.js';
 import { record } from '../society/Chronicle.js';
@@ -107,6 +108,7 @@ export function deliverContract(state, c, caravan) {
   c.delivered = n;
   c.revenue = pay;
   c.status = n >= c.qty ? 'DELIVERED' : n > 0 ? 'PARTIAL' : 'FAILED';
+  if (n < c.qty) noteContractShortfall(state, c, c.qty - n, (caravan.spoiled?.[c.commodity] ?? 0) > 0 ? 'cargo spoiled on the road' : 'goods sold or lost on the way');
   c.deliveredDay = state.day;
   c.profit = pay - (c.paidSeller ?? 0) - tariff - (c.transportCost ?? 0);
   const t = ensureTrade(state);
@@ -119,7 +121,7 @@ export function deliverContract(state, c, caravan) {
   logCargo(state, { caravanId: caravan.id, kind: 'deliver', g: c.commodity, n, at: c.destination, contractId: c.id });
   const citizen = byId(state.citizens, c.merchantId);
   const to = c.destination === HEARTH ? `${c.buyerName} in First Hearth` : settlementName(c.destination);
-  record(state, 'trade', sentence(`${possessive(c.merchantName)} caravan delivered ${n} ${COMMODITIES[c.commodity].label.toLowerCase()} from ${settlementName(c.origin)} to ${to} for ${pay} coins${tariff ? ` (tariff ${tariff})` : ''}.`), { citizens: citizen ? [citizen.id] : [] }, 2);
+  record(state, 'trade', sentence(`${possessive(c.merchantName)} caravan delivered ${n} ${COMMODITIES[c.commodity].label.toLowerCase()} from ${settlementName(c.origin)} to ${to} for ${pay} coins${tariff ? ` (tariff ${tariff})` : ''}.`), { citizens: citizen ? [citizen.id] : [] }, citizen ? 2 : 1);
   return n;
 }
 

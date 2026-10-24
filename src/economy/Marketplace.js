@@ -19,6 +19,7 @@ const hour = (state) => state.minute / 60;
 
 export function isOpenNow(state, b) {
   if (!isTrading(b)) return false;
+  if ((b.suspendedUntil ?? 0) >= state.day) return false; // licence suspended by the court
   const h = hour(state);
   if (b.type === 'tavern') return h >= 10 && h < TIME.tavernCloseHour;
   return h >= TIME.shopOpenHour && h < TIME.shopCloseHour;
