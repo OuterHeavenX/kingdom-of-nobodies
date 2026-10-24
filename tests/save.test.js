@@ -63,3 +63,14 @@ test('14. Milestone 1 saves migrate safely', () => {
   assert.equal(totalMoney(sim.state), money);
   assert.ok(migrateMilestone1({ version: 2, people: [] }).citizens.length === 5, 'tolerates empty data');
 });
+
+test('the most recently written save wins, even if an older one has more progress', async () => {
+  const { newestSave } = await import('../src/core/Serialization.js');
+  const long = makeSim(1); long.runDays(10);
+  const imported = makeSim(2); imported.runDays(1);
+  const older = JSON.parse(serialize(long.state)); older.savedAt = '2026-01-01T10:00:00.000Z';
+  const newer = JSON.parse(serialize(imported.state)); newer.savedAt = '2026-01-01T10:05:00.000Z';
+  const best = newestSave([['previous save', JSON.stringify(older)], ['saved game', JSON.stringify(newer)], ['broken', '{oops']]);
+  assert.equal(best.label, 'saved game');
+  assert.equal(best.state.seed, 2);
+});

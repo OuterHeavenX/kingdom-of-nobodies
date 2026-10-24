@@ -71,7 +71,7 @@ export const COUNCIL_ACTIONS = {
   },
 
   setTax(state, level) {
-    if (!ECONOMY.tax[level]) return fail('Unknown tax level.');
+    if (!Object.hasOwn(ECONOMY.tax, level)) return fail('Unknown tax level.');
     state.council.taxLevel = level;
     record(state, 'council', `The council set the business levy to ${level} (${ECONOMY.tax[level]} coins a day per business).`, {}, 2);
     return done(`Taxes set to ${level}.`);

@@ -1,4 +1,4 @@
-import { serialize, deserialize } from './Serialization.js';
+import { serialize, deserialize, newestSave } from './Serialization.js';
 
 // Browser persistence. The primary store is IndexedDB with two slots: a new
 // save is written as 'current' and the previous one is kept as 'previous' in
@@ -78,15 +78,8 @@ export class SaveManager {
       candidates.push(['saved game', current], ['previous save', previous]);
     } catch { /* IndexedDB unavailable */ }
     try { candidates.push(['backup save', localStorage.getItem(LS_BACKUP)]); } catch { /* ignore */ }
-    const parsed = [];
-    for (const [label, text] of candidates) {
-      if (!text) continue;
-      try { parsed.push({ label, state: deserialize(text) }); } catch (e) { console.warn(`Skipping ${label}:`, e.message); }
-    }
-    if (parsed.length) {
-      parsed.sort((a, b) => b.state.tick - a.state.tick);
-      return { state: parsed[0].state, source: parsed[0].label };
-    }
+    const best = newestSave(candidates);
+    if (best) return { state: best.state, source: best.label };
     try {
       const legacy = localStorage.getItem(LEGACY_KEY);
       if (legacy && !localStorage.getItem(LEGACY_DONE)) {

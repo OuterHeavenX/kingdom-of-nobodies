@@ -130,3 +130,12 @@ test('sustained losses drive a business through STRUGGLING to closure', () => {
   assert.ok(['CLOSED', 'BANKRUPT'].includes(b.status));
   assert.ok(state.chronicle.some((e) => e.business === b.id || e.refs.business === b.id));
 });
+
+test('every advertised levy level, including the zero levy, can be selected', () => {
+  const sim = makeSim();
+  for (const level of ['low', 'normal', 'high']) {
+    assert.equal(sim.council('setTax', level).ok, true, level);
+    assert.equal(sim.state.council.taxLevel, level);
+  }
+  assert.equal(sim.council('setTax', 'toString').ok, false);
+});

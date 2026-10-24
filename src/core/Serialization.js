@@ -34,6 +34,27 @@ export function deserialize(text) {
   throw new Error('This is not a Kingdom of Nobodies save.');
 }
 
+/**
+ * Choose the most recently written valid save from labelled candidates
+ * ([label, text] pairs). Write time decides, not simulation progress, so an
+ * imported or newly started kingdom is never displaced by an older, longer one.
+ */
+export function newestSave(candidates) {
+  let best = null;
+  for (const [label, text] of candidates) {
+    if (!text) continue;
+    try {
+      const state = deserialize(text);
+      let savedAt = '';
+      try { savedAt = JSON.parse(text).savedAt ?? ''; } catch { /* bare legacy state */ }
+      if (!best || savedAt > best.savedAt) best = { label, state, savedAt };
+    } catch (e) {
+      console.warn(`Skipping ${label}:`, e.message);
+    }
+  }
+  return best;
+}
+
 export function validateState(s) {
   const problems = [];
   if (!s || typeof s !== 'object') return ['missing state'];
