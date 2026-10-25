@@ -17,6 +17,12 @@ export const FOOTPRINT = {
   well: { w: 2.2, d: 2.2, h: 1.2 },
   courthouse: { w: 6, d: 4.4, h: 3.4 },
   ruins: { w: 4.2, d: 3.6, h: 0.6 },
+  bank: { w: 4.6, d: 3.8, h: 3.4 },
+  guildhall: { w: 6, d: 4.4, h: 3.6 },
+  shrine: { w: 2.2, d: 2, h: 2.2 },
+  chapel: { w: 4, d: 5.2, h: 3.4 },
+  temple: { w: 6, d: 6, h: 4.6 },
+  barracks: { w: 6.4, d: 4, h: 2.8 },
 };
 
 export const widthOf = (type) => FOOTPRINT[type]?.w ?? 3.6;

@@ -1,3 +1,4 @@
+import { spendable, raiseCash } from '../finance/BankAccounts.js';
 import { launchExpedition } from '../region/Exploration.js';
 import { sendGift } from '../diplomacy/Diplomacy.js';
 import { leaveJob } from '../economy/Employment.js';
@@ -150,7 +151,9 @@ export function collectTithe(state) {
   let total = 0;
   if (balance(state, 'treasury') > ECONOMY.treasuryComfort) return 0; // coffers are full: no tithe today
   for (const c of state.citizens) {
-    const due = Math.floor((balance(state, c.id) - ECONOMY.titheFloor) * rate);
+    // Savings in the bank are savings too.
+    const due = Math.floor((spendable(state, c.id) - ECONOMY.titheFloor) * rate);
+    if (due > balance(state, c.id)) raiseCash(state, c.id, due);
     if (due > 0 && transfer(state, c.id, 'treasury', due, 'tax', `${c.firstName}'s tithe`)) total += due;
   }
   return total;

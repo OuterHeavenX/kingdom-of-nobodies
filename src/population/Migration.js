@@ -238,6 +238,9 @@ function returnHome(state, records, k) {
   return back;
 }
 
+/** Called for each member of a departing household after their land is sold and before their coins leave. */
+export const emigrationHooks = [];
+
 export function emigrate(state, c, { why = 'hard times', destination = null } = {}) {
   destination = destination ?? bestDestination(state, c)?.id ?? null;
   const household = householdOf(state, c);
@@ -253,6 +256,7 @@ export function emigrate(state, c, { why = 'hard times', destination = null } = 
       p.reservedBy = null;
       listForSale(state, p.id);
     }
+    for (const fn of emigrationHooks) fn(state, m);
     const coins = balance(state, m.id);
     const to = destination ? KINGDOMS[destination].account : 'outside';
     if (coins > 0) transfer(state, m.id, to, coins, 'emigration', `${m.firstName} took their savings away`);

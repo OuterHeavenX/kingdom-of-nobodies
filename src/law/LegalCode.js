@@ -22,6 +22,7 @@ export const LAWS = {
   licensing: { name: 'Market Licensing Act', issue: 'trust', description: 'Every shop must hold a council licence.', requirement: 'Businesses pay a licence when they open.', remedy: 'A fine, and suspension for repeat offenders.' },
   safety: { name: 'Fire Safety Act', issue: 'works', description: 'Buildings must be kept in repair.', requirement: 'A building below 40% condition must be repaired within six days.', remedy: 'A fine and an order to repair.' },
   permits: { name: 'Building Permits Act', issue: 'trust', description: 'New buildings need a council permit.', requirement: 'Builders pay a permit fee when work begins.', remedy: 'A fine for building without a permit.' },
+  debts: { name: 'Debt Recovery Act', issue: 'business', description: 'Loans freely made must be repaid.', requirement: 'A borrower pays what the loan agreement says, when it says.', remedy: 'Repayment from the borrower\'s means, a forced sale of pledged land, or bankruptcy.' },
   land: { name: 'Land Development Act', issue: 'works', description: 'Land is for building on, not hoarding.', requirement: 'Land bought must be built on within two years.', remedy: 'Idle land is bought back by the council at the price paid.' },
 };
 

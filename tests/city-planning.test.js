@@ -15,6 +15,7 @@ import { considerDevelopment, roadAccess, buildCost } from '../src/city/UrbanDev
 import { totalMoney, transfer, balance } from '../src/economy/Transactions.js';
 import { CITY } from '../src/core/Config.js';
 import { ageOf } from '../src/citizens/Citizen.js';
+import { dailyHooks } from '../src/sim/Hooks.js';
 
 const fixture = () => deserialize(readFileSync(new URL('./fixtures/m4-save.json', import.meta.url), 'utf8'));
 const overlaps = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
@@ -139,7 +140,7 @@ test('a developer builds a cottage for sale only when buyers exist, and sale mov
   // Wait (a day at a time) for the village's building sites to free up.
   for (let i = 0; i < 60 && !d; i++) {
     for (const p of fresh) if (!p.building && !p.projectId) { p.marketStatus = 'FOR_SALE'; p.ownerId = 'council'; p.reservedBy = null; }
-    if (s.day % 3 === 1) d = considerDevelopment(s);
+    if (s.day % 3 === 1) d = considerDevelopment(s, dailyHooks.developmentFunding(s));
     if (!d) sim.runDays(1);
   }
   assert.ok(d, 'a development started');

@@ -122,7 +122,7 @@ test('acceptance: Ironhold goes hungry, a First Hearth merchant brings Greenvale
   for (const t of legs) assert.ok(ROUTES.some((r) => t.includes(r.name)), `"${t}" names a real road`);
   assert.ok((delivered.tick - departTick) * TIME.minutesPerTick / 60 >= 12, 'the journey took simulated hours');
   // Goods and money changed hands exactly once.
-  if (delivered.minute !== 0) assert.equal(s().region.settlements.ironhold.inventory[c.commodity] - grainBefore, c.delivered, "Ironhold's food store grew by the delivery");
+  if (delivered.minute !== 0) assert.ok(Math.abs(s().region.settlements.ironhold.inventory[c.commodity] - grainBefore - c.delivered) < 1e-6, "Ironhold's food store grew by the delivery"); // stores are fractional
   assert.equal(balance(s(), c.merchantAccount) - merchantBefore, c.revenue - c.tariffPaid, 'the merchant was paid, less the tariff');
   assert.equal(s().chronicle.filter((e) => e.category === 'trade' && e.text.includes(`delivered ${c.delivered} ${COMMODITIES[c.commodity].label.toLowerCase()} from Greenvale to Ironhold`)).length >= 1, true, 'the Chronicle records the delivery');
   assert.ok(relation(s(), 'hearth', 'ironhold').log.some((l) => l.why === 'profitable trade'), 'the trade warmed relations');

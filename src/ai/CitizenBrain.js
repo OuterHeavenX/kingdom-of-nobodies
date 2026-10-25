@@ -10,6 +10,7 @@ import { applyForJob, completeShift } from '../economy/Employment.js';
 import { buyPlot, reservePlot } from '../property/Ownership.js';
 import { startProject, projectById, addWork, joinCrew, needsLabour, openBusiness, moveHome } from '../property/Construction.js';
 import { householdOf } from '../population/Housing.js';
+import { raiseCash } from '../finance/BankAccounts.js';
 import { plotById, plotHistory, frontOf } from '../property/LandRegistry.js';
 import { socialize, adjust } from '../citizens/Relationships.js';
 import { shareGossip, createFact } from '../society/Gossip.js';
@@ -440,6 +441,8 @@ function finish(state, c) {
     }
     case 'festival': chat(state, c, nearby(state, c, 7).slice(0, 3), 1.4); c.needs.social = clamp(c.needs.social + 30); c.mood = clamp(c.mood + 5); if (a.seasonal) enjoyFestival(state, c); break;
     case 'buy_plot': {
+      const target = plotById(state, a.plotId);
+      if (target && balance(state, c.id) < target.price) raiseCash(state, c.id, target.price);
       const res = buyPlot(state, a.plotId, c.id);
       if (res.ok) {
         if (a.home) (c.homeVenture ?? (c.homeVenture = {})).plotId = a.plotId;

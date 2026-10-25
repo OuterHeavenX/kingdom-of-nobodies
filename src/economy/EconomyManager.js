@@ -12,6 +12,7 @@ import { record } from '../society/Chronicle.js';
 import { remember } from '../ai/MemorySystem.js';
 import { bump } from '../society/Reputation.js';
 import { createFact } from '../society/Gossip.js';
+import { spendable, raiseCash } from '../finance/BankAccounts.js';
 
 // End-of-day bookkeeping: taxes, profit and loss, dividends, prices, staffing,
 // and the business life cycle OPEN → STRUGGLING → CLOSED/BANKRUPT.
@@ -55,8 +56,10 @@ function considerUpgrade(state, b) {
   const owner = byId(state.citizens, b.ownerId);
   const plot = plotById(state, b.plotId);
   if (!owner || !plot?.building || plot.projectId || (b.level ?? 1) >= 3 || b.status !== 'OPEN') return;
-  if (b.history.length < 6 || recentProfit(b, 6) <= 10 || balance(state, owner.id) < 70 + (b.level ?? 1) * 30) return;
+  const needed = 70 + (b.level ?? 1) * 30;
+  if (b.history.length < 6 || recentProfit(b, 6) <= 10 || spendable(state, owner.id) < needed) return;
   if (state.projects.length >= ECONOMY.maxActiveProjects + 2) return;
+  if (balance(state, owner.id) < needed) raiseCash(state, owner.id, needed);
   const res = startProject(state, { plotId: plot.id, ownerId: owner.id, kind: 'upgrade' });
   if (res.ok) remember(state, owner, `Began expanding ${b.name}.`, 2, 'career');
 }
@@ -170,9 +173,10 @@ export { BUSINESS_TYPES };
  */
 export function dailyLuxuries(state) {
   for (const c of state.citizens) {
-    const excess = balance(state, c.id) - ECONOMY.luxuryReserve;
+    const excess = spendable(state, c.id) - ECONOMY.luxuryReserve;
     if (excess <= 0) continue;
     const spend = Math.floor(excess * ECONOMY.luxuryShare);
+    if (spend > balance(state, c.id)) raiseCash(state, c.id, spend);
     if (spend > 0 && transfer(state, c.id, 'outside', spend, 'purchase', `${c.firstName} bought goods from a travelling pedlar`)) {
       c.stats.spent += spend;
       c.mood = Math.min(100, c.mood + 1);

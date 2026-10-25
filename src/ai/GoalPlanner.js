@@ -1,6 +1,6 @@
 import { byId } from '../core/EntityRegistry.js';
 import { ECONOMY } from '../core/Config.js';
-import { balance } from '../economy/Transactions.js';
+import { spendable } from '../finance/BankAccounts.js';
 import { BUSINESS_TYPES, businessById, isTrading } from '../economy/Businesses.js';
 import { plotById, plotsForSale, buildingClass, BUILDING_INFO, bedsAt } from '../property/LandRegistry.js';
 import { projectById, estimateMaterialsCost, canStart } from '../property/Construction.js';
@@ -70,7 +70,7 @@ const PLANNERS = {
     const type = d.businessType;
     const label = BUSINESS_TYPES[type].label.toLowerCase();
     const v = c.venture ?? (c.venture = {});
-    const money = balance(state, c.id);
+    const money = spendable(state, c.id);
     const actions = [];
     const b = v.businessId ? businessById(state, v.businessId) : null;
     if (b && isTrading(b)) {
@@ -129,7 +129,7 @@ const PLANNERS = {
   },
 
   homestead(state, c) {
-    const money = balance(state, c.id);
+    const money = spendable(state, c.id);
     const home = c.homePlotId ? plotById(state, c.homePlotId) : null;
     const ownsHome = home && home.ownerId === c.id && home.building?.type === 'cottage';
     const owned = ownedPlots(state, c.id);
@@ -183,7 +183,7 @@ const PLANNERS = {
   },
 
   wealth(state, c, d) {
-    const money = balance(state, c.id);
+    const money = spendable(state, c.id);
     return {
       goal: money >= d.target ? 'Enjoy my savings' : `Save ${d.target - money} more coins`,
       need: Math.max(0, d.target - money),

@@ -11,6 +11,7 @@ import { isTrading } from '../src/economy/Businesses.js';
 import { TIME } from '../src/core/Config.js';
 import { ESCROW } from '../src/trade/Contracts.js';
 import { cargoUnits } from '../src/trade/Caravans.js';
+import { validOwner } from '../src/institutions/Registry.js';
 
 const years = Number(process.argv[2] ?? 200);
 const seeds = (process.argv[3] ?? '1,2,3').split(',').map(Number);
@@ -46,7 +47,7 @@ export function checkInvariants(s, seed, year) {
   for (const p of s.plots) {
     if (owners.has(p.id)) fail(seed, year, `plot ${p.id} listed twice`);
     owners.set(p.id, p.ownerId);
-    if (p.ownerId !== 'council' && !ids.has(p.ownerId)) fail(seed, year, `plot ${p.name} owned by absent ${p.ownerId}`);
+    if (!validOwner(s, p.ownerId)) fail(seed, year, `plot ${p.name} owned by absent ${p.ownerId}`);
   }
   const gov = s.government;
   for (const e of gov?.elections ?? []) {

@@ -61,7 +61,7 @@ const activeDevelopments = (state) => ensureCity(state).developments.filter((d) 
  * `funds(c)` reports what a citizen could spend (cash plus deposits); `finance`
  * may top a developer up with a loan (supplied by the finance system).
  */
-export function considerDevelopment(state, { funds = (c) => balance(state, c.id), borrow = null } = {}) {
+export function considerDevelopment(state, { funds = (c) => balance(state, c.id), raise = null, borrow = null } = {}) {
   if (state.day % 3 !== 1) return null;
   const demand = landDemand(state);
   if (demand.housingShortage < 1) return null;
@@ -84,6 +84,7 @@ export function considerDevelopment(state, { funds = (c) => balance(state, c.id)
   // Builders are only so many: no new speculative site while the village's building sites are full.
   if (state.projects.filter((p) => byId(state.citizens, p.ownerId)).length >= ECONOMY.maxActiveProjects) return null;
   // Make the money liquid: withdraw savings, then borrow any remaining shortfall.
+  if (balance(state, c.id) < cost && raise) raise(state, c.id, cost);
   if (balance(state, c.id) < cost && borrow) borrow(state, c, cost - balance(state, c.id), land);
   if (balance(state, c.id) < cost) return null;
   const bought = buyPlot(state, land.id, c.id);
