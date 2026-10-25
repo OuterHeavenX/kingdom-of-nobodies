@@ -31,7 +31,7 @@ test('39. a real Milestone 3 save (version 4) migrates into a working Milestone 
   assert.equal(old.version, 4);
   const s = deserialize(text);
   assert.equal(s.version, SAVE_VERSION);
-  assert.equal(SAVE_VERSION, 5);
+  assert.equal(SAVE_VERSION, 6); // Milestone 5 raised the format; a v4 save now migrates through v5 to v6
   assert.equal(s.citizens.length, old.citizens.length, 'nobody is lost');
   for (const [acct, coins] of Object.entries(old.accounts)) if (acct !== 'outside') assert.equal(s.accounts[acct], coins, `${acct} keeps its coins`);
   const topUp = s.migrationNotes.find((n) => n.version === 5).outsideTopUp;
@@ -63,7 +63,7 @@ test('saving during caravan unloading, a pending court case, road works, a festi
     'the last hour before a new season': () => (s().day - 1) % CALENDAR.daysPerSeason === CALENDAR.daysPerSeason - 1 && s().minute >= 23 * 60,
   };
   const pending = new Set(Object.keys(moments));
-  const limit = 80 * TIME.ticksPerDay;
+  const limit = 140 * TIME.ticksPerDay; // searched for in ordinary play; Milestone 5 changed when the first road works happen
   for (let i = 0; i < limit && pending.size; i++) {
     sim.step();
     for (const what of [...pending]) {
@@ -122,7 +122,7 @@ test('acceptance: Ironhold goes hungry, a First Hearth merchant brings Greenvale
   for (const t of legs) assert.ok(ROUTES.some((r) => t.includes(r.name)), `"${t}" names a real road`);
   assert.ok((delivered.tick - departTick) * TIME.minutesPerTick / 60 >= 12, 'the journey took simulated hours');
   // Goods and money changed hands exactly once.
-  if (delivered.minute !== 0) assert.equal(s().region.settlements.ironhold.inventory[c.commodity] - grainBefore, c.delivered, "Ironhold's food store grew by the delivery");
+  if (delivered.minute !== 0) assert.ok(Math.abs(s().region.settlements.ironhold.inventory[c.commodity] - grainBefore - c.delivered) < 1e-6, "Ironhold's food store grew by the delivery"); // stores are fractional
   assert.equal(balance(s(), c.merchantAccount) - merchantBefore, c.revenue - c.tariffPaid, 'the merchant was paid, less the tariff');
   assert.equal(s().chronicle.filter((e) => e.category === 'trade' && e.text.includes(`delivered ${c.delivered} ${COMMODITIES[c.commodity].label.toLowerCase()} from Greenvale to Ironhold`)).length >= 1, true, 'the Chronicle records the delivery');
   assert.ok(relation(s(), 'hearth', 'ironhold').log.some((l) => l.why === 'profitable trade'), 'the trade warmed relations');

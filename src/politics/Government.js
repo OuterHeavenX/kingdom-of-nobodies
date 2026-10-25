@@ -1,3 +1,4 @@
+import { guildEndorsements, grantPrivileges, activeGuilds } from '../institutions/GuildManager.js';
 import { noteEmbezzlement } from '../law/Courts.js';
 import { POLITICS, LIFE, DAYS_PER_YEAR, EDUCATION } from '../core/Config.js';
 import { chance } from '../core/Random.js';
@@ -102,6 +103,8 @@ function candidacyScore(state, c) {
   return s;
 }
 
+const guildName = (state, id) => activeGuilds(state).find((g) => g.id === id)?.name ?? 'a guild';
+
 export function openCampaign(state) {
   const gov = state.government;
   const pool = adults(state).map((c) => ({ c, s: candidacyScore(state, c) })).filter((x) => Number.isFinite(x.s)).sort((a, b) => b.s - a.s || a.c.id.localeCompare(b.c.id));
@@ -119,12 +122,14 @@ export function openCampaign(state) {
     }
     if (best) best.endorsedBy.push(key);
   }
-  gov.campaign = { startDay: state.day, electionDay: Math.max(state.day + 1, gov.nextElectionDay), candidates, ballots: {} };
+  const guildBacking = guildEndorsements(state, candidates);
+  for (const cand of candidates) cand.guildBacking = guildBacking[cand.id] ?? [];
+  gov.campaign = { startDay: state.day, electionDay: Math.max(state.day + 1, gov.nextElectionDay), candidates, ballots: {}, guildBacking };
   for (const cand of candidates) {
     const c = person(state, cand.id);
     remember(state, c, `Stood for ${gov.title}, promising to ${cand.promises.join(', ')}.`, 3, 'politics');
   }
-  record(state, 'council', `Election campaign for ${gov.title}: ${candidates.map((x) => `${x.name} (${x.promises.slice(0, 2).join('; ')}${x.endorsedBy.length ? `; backed by the ${x.endorsedBy.map((k) => FACTIONS[k].name).join(' and ')}` : ''})`).join(' vs ')}. Voting on ${dateLabel(gov.campaign.electionDay)}.`,
+  record(state, 'council', `Election campaign for ${gov.title}: ${candidates.map((x) => `${x.name} (${x.promises.slice(0, 2).join('; ')}${x.endorsedBy.length ? `; backed by the ${x.endorsedBy.map((k) => FACTIONS[k].name).join(' and ')}` : ''}${x.guildBacking.length ? `; the ${x.guildBacking.map((id) => guildName(state, id)).join(' and the ')} campaigned for them` : ''})`).join(' vs ')}. Voting on ${dateLabel(gov.campaign.electionDay)}.`,
     { citizens: candidates.map((x) => x.id) }, 3);
   return gov.campaign;
 }
@@ -184,6 +189,7 @@ export function tally(state) {
   remember(state, w, `Won the election for ${gov.title}.`, 3, 'politics');
   bump(w, 'standing', 8);
   for (const x of ranked.slice(1)) { const loser = person(state, x.id); remember(state, loser, `Lost the election to ${w.firstName}.`, 2, 'politics'); loser.mood = Math.max(0, loser.mood - 10); }
+  grantPrivileges(state, winner.id, camp.guildBacking ?? {});
   const changes = platformPromises(gov.policies, before);
   record(state, 'council', `${w.firstName} ${w.lastName} was ${previous === w.id ? 're-elected' : 'elected'} ${gov.title} with ${votes[winner.id]} of ${cast} votes (${ranked.map((x) => `${x.name.split(' ')[0]} ${votes[x.id]}`).join(', ')}). ${changes[0] === 'keep things as they are' ? 'Policies stay as they were.' : `New policies: ${changes.join(', ')}.`}`,
     { citizens: ranked.map((x) => x.id) }, 3);

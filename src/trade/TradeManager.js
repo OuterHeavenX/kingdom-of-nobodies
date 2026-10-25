@@ -1,3 +1,5 @@
+import { leadMerchant, merchantSetsOut } from '../region/ForeignCitizenManager.js';
+import { spendable, raiseCash } from '../finance/BankAccounts.js';
 import { balance, transfer } from '../economy/Transactions.js';
 import { removeGoods, qty } from '../economy/Inventory.js';
 import { isTrading } from '../economy/Businesses.js';
@@ -85,14 +87,14 @@ function launch(state, trader, plan) {
 function merchantFunds(state, c) {
   const store = state.businesses.find((b) => b.ownerId === c.id && b.type === 'general_store' && isTrading(b));
   if (store && balance(state, store.id) > 90) return { account: store.id, funds: balance(state, store.id) - 50, via: store.name };
-  return { account: c.id, funds: balance(state, c.id) - 10, via: null };
+  return { account: c.id, funds: spendable(state, c.id) - 10, via: null };
 }
 
 export function isMerchant(state, c) {
   if (c.away || c.retired || ageOf(state, c) < LIFE.adultAge) return false;
   if (c.profession === 'Merchant') return true;
   if (state.businesses.some((b) => b.ownerId === c.id && b.type === 'general_store' && isTrading(b))) return true;
-  return trait(c, 'ambitious') > 0.6 && trait(c, 'riskTaking') > 0.4 && balance(state, c.id) >= 90;
+  return trait(c, 'ambitious') > 0.6 && trait(c, 'riskTaking') > 0.4 && spendable(state, c.id) >= 90;
 }
 
 function buyCart(state, c, account) {
@@ -119,6 +121,8 @@ function localMerchants(state) {
     const plan = bestOpportunity(state, trader);
     m.lastPlan = plan ? { day: state.day, text: plan.factors.join('; ') } : { day: state.day, text: 'No trade worth the road right now.' };
     if (!plan) continue;
+    // Savings in the bank are drawn to fund the venture.
+    if (account === c.id) raiseCash(state, c.id, funds + 10);
     if (!m.cart && !buyCart(state, c, account)) continue;
     m.cart = true;
     const res = launch(state, trader, plan);
@@ -146,10 +150,14 @@ function foreignHouses(state) {
     // Merchants invited to the Midsummer Fair accept thinner margins to trade with First Hearth.
     const fair = state.culture?.current?.foreignMerchants?.includes(id) && ['PREPARING', 'ACTIVE'].includes(state.culture.current.phase);
     const trader = { id: 'house:' + id, name: `the ${KINGDOMS[id].name} merchants`, account: KINGDOMS[id].account, home: id, capacity: CARAVAN.capacityHouse, funds: Math.min(funds, 900), minProfit: fair ? 6 : 10, minMargin: k.shortages.food ? 0.04 : fair ? 0.05 : 0.1 };
+    // A named merchant of the house leads the caravan and travels with it.
+    const lead = state.foreign ? leadMerchant(state, id) : null;
+    if (lead) trader.name = `${lead.firstName} ${lead.lastName} of ${KINGDOMS[id].name}`;
     const plan = bestOpportunity(state, trader);
     if (!plan) continue;
     const res = launch(state, trader, plan);
     if (res.error) continue;
+    if (lead) merchantSetsOut(state, lead, res.caravan);
     house.active++;
     house.trips++;
     if (plan.destination === HEARTH || plan.origin === HEARTH) record(state, 'trade', `Merchants of ${KINGDOMS[id].name} contracted to ${plan.destination === HEARTH ? 'bring' : 'buy'} ${plan.qty} ${COMMODITIES[plan.commodity].label.toLowerCase()} ${plan.destination === HEARTH ? 'to' : 'from'} First Hearth.`, {}, 1);

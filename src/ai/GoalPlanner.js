@@ -1,6 +1,6 @@
 import { byId } from '../core/EntityRegistry.js';
 import { ECONOMY } from '../core/Config.js';
-import { balance } from '../economy/Transactions.js';
+import { spendable } from '../finance/BankAccounts.js';
 import { BUSINESS_TYPES, businessById, isTrading } from '../economy/Businesses.js';
 import { plotById, plotsForSale, buildingClass, BUILDING_INFO, bedsAt } from '../property/LandRegistry.js';
 import { projectById, estimateMaterialsCost, canStart } from '../property/Construction.js';
@@ -70,7 +70,7 @@ const PLANNERS = {
     const type = d.businessType;
     const label = BUSINESS_TYPES[type].label.toLowerCase();
     const v = c.venture ?? (c.venture = {});
-    const money = balance(state, c.id);
+    const money = spendable(state, c.id);
     const actions = [];
     const b = v.businessId ? businessById(state, v.businessId) : null;
     if (b && isTrading(b)) {
@@ -129,7 +129,7 @@ const PLANNERS = {
   },
 
   homestead(state, c) {
-    const money = balance(state, c.id);
+    const money = spendable(state, c.id);
     const home = c.homePlotId ? plotById(state, c.homePlotId) : null;
     const ownsHome = home && home.ownerId === c.id && home.building?.type === 'cottage';
     const owned = ownedPlots(state, c.id);
@@ -149,6 +149,13 @@ const PLANNERS = {
         steps.push(step('Save for land and timber', true), step('Buy a residential plot', true), step('Build a cottage', false));
         if (!canStart(state, myLand, c.id, 'construction', 'cottage')) actions.push({ kind: 'start_project', plotId: myLand.id, projectKind: 'construction', home: true, score: 72, factors: [[`I own ${myLand.name} and can start my cottage`, 35]] });
         return { goal: 'Start building my cottage', need: 0, steps, actions };
+      }
+      // A finished cottage on the market (often built by a developer) can be bought outright.
+      const house = plotsForSale(state, 'cottage', c.id).filter((p) => p.building?.type === 'cottage' && p.constructionStatus === 'COMPLETE' && !p.residents.length && !p.businessId)[0];
+      if (house && money >= house.price) {
+        steps.push(step(`Buy the cottage on ${house.name} (${house.price} coins)`, false));
+        actions.push({ kind: 'buy_plot', plotId: house.id, home: true, moveIn: true, score: 76, factors: [[`a finished cottage on ${house.name} is for sale at ${house.price}, and I can pay`, 38]] });
+        return { goal: `Buy the cottage on ${house.name}`, need: 0, steps, actions, target: house };
       }
       const land = plotsForSale(state, 'cottage', c.id).filter((p) => !p.building)[0];
       const required = land ? land.price + estimateMaterialsCost(state, 'construction') + 8 : 999;
@@ -176,7 +183,7 @@ const PLANNERS = {
   },
 
   wealth(state, c, d) {
-    const money = balance(state, c.id);
+    const money = spendable(state, c.id);
     return {
       goal: money >= d.target ? 'Enjoy my savings' : `Save ${d.target - money} more coins`,
       need: Math.max(0, d.target - money),

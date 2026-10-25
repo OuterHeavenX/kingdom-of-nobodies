@@ -1,3 +1,4 @@
+import { setProfession } from '../citizens/Careers.js';
 import { noteUnpaidWage } from '../law/Courts.js';
 import { workOnRoad } from '../navigation/RoadConstruction.js';
 import { byId } from '../core/EntityRegistry.js';
@@ -57,7 +58,7 @@ export function hire(state, c, b, wage) {
   if (boss) boss.stats.maxStaff = Math.max(boss.stats.maxStaff ?? 0, b.employees.length);
   const profession = PROFESSION_FOR_BUSINESS[b.type];
   const changed = profession !== c.profession && c.profession !== 'Builder' && b.type !== 'works';
-  if (changed) c.profession = profession;
+  if (changed) setProfession(state, c, profession);
   c.employmentHistory.push({ businessId: b.id, name: b.name, from: state.day, to: null, role: 'worker' });
   record(state, 'business', `${b.name} hired ${c.firstName} as a ${profession.toLowerCase()} for ${wage} coins a shift.`, { citizens: [c.id], business: b.id }, 2);
   remember(state, c, `Hired at ${b.name}${changed ? `, becoming a ${profession.toLowerCase()}` : ''}.`, 2, 'career');

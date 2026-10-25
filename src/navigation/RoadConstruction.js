@@ -50,16 +50,22 @@ export function estimate(kind, w, d) {
 function propose(state, spec) {
   state.roadProjects = state.roadProjects ?? [];
   const open = state.roadProjects.filter((p) => p.status === 'PROPOSED' || p.status === 'BUILDING' || p.status === 'APPROVED');
-  if (open.length >= MAX_PROPOSALS) return null;
+  if (open.length >= MAX_PROPOSALS && !spec.preApproved) return null;
   const rect = roadRect(spec);
   if (spec.kind !== 'bridge' && (blocked(state, rect) || alreadyPlanned(state, rect))) return null;
   state.nextId.roadProject = (state.nextId.roadProject ?? 0) + 1;
   const need = estimate(spec.kind, spec.w, spec.d);
-  const p = { id: 'rp' + state.nextId.roadProject, status: 'PROPOSED', proposedDay: state.day, work: 0, materials: { timber: 0, stone: 0 }, paid: 0, need, ...spec };
+  const p = { id: 'rp' + state.nextId.roadProject, status: spec.preApproved ? 'APPROVED' : 'PROPOSED', proposedDay: state.day, work: 0, materials: { timber: 0, stone: 0 }, paid: 0, need, ...spec };
   state.roadProjects.push(p);
   record(state, 'construction', `${spec.proposerName ?? 'The council'} proposed ${p.upgradeOf ? 'paving' : 'a new'} ${ROAD_KINDS[spec.kind].label.toLowerCase()}: ${p.name} (${p.reason}).`, { citizens: spec.proposedBy && spec.proposedBy !== 'council' ? [spec.proposedBy] : [] }, 1);
   return p;
 }
+
+/** Streets planned (and already approved) by the town planners go through here. */
+export const proposeRoad = (state, spec) => propose(state, spec);
+
+/** Called with (state, project) when a road project is finished. */
+export const roadCompletionHooks = [];
 
 /** Straight access path from a building's door until it meets a road. */
 function accessProposal(state, plot) {
@@ -155,6 +161,14 @@ export function approveRoads(state) {
   }
   for (const p of projects.filter((x) => x.status === 'BUILDING' && x.waiting)) supply(state, p);
   if (projects.filter((x) => x.status === 'BUILDING' && !x.waiting).length >= MAX_ACTIVE) return;
+  // Streets the council has already approved and funded through the town plan go first.
+  const queued = projects.find((x) => x.status === 'APPROVED');
+  if (queued) {
+    queued.status = 'BUILDING';
+    queued.startDay = state.day;
+    record(state, 'construction', `Work began on ${queued.name} for ${queued.reason}.`, {}, 2);
+    return;
+  }
   const works = state.government?.policies?.publicWorks ?? true;
   const candidates = projects.filter((x) => x.status === 'PROPOSED').sort((a, b) => (b.proposedBy !== 'council') - (a.proposedBy !== 'council') || a.proposedDay - b.proposedDay);
   for (const p of candidates) {
@@ -224,10 +238,11 @@ function completeRoad(state, p) {
     // A bridge replaces the ford it was built over.
     if (p.kind === 'bridge') { state.roads = state.roads.filter((r) => r.kind !== 'ford' || Math.abs(r.x - p.x) > 3); markNavDirty(state); }
   }
+  for (const fn of roadCompletionHooks) fn(state, p);
   const names = (p.crew ?? []).map((id) => byId(state.citizens, id)?.firstName).filter(Boolean);
   record(state, 'construction', `${p.name} is finished after ${state.day - p.startDay} days of work${names.length ? ` by ${names.join(', ')}` : ''}, costing the council ${p.paid} coins.`, { citizens: p.crew ?? [] }, p.kind === 'bridge' ? 3 : 2);
   // Keep the record list bounded.
-  const done = state.roadProjects.filter((x) => x.status === 'COMPLETE' || x.status === 'REJECTED');
+  const done = state.roadProjects.filter((x) => (x.status === 'COMPLETE' || x.status === 'REJECTED') && x !== p);
   if (done.length > 30) state.roadProjects = state.roadProjects.filter((x) => !done.slice(0, done.length - 30).includes(x));
 }
 

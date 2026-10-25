@@ -5,10 +5,10 @@ import { byId } from '../core/EntityRegistry.js';
 
 export const LAND_TYPES = {
   farmland: { label: 'Farmland', base: 44, allows: ['farm', 'cottage'] },
-  commercial: { label: 'Commercial', base: 38, allows: ['bakery', 'general_store', 'tavern', 'blacksmith'] },
-  workshop: { label: 'Workshop land', base: 34, allows: ['lumberyard', 'blacksmith', 'general_store'] },
-  residential: { label: 'Residential', base: 22, allows: ['cottage'] },
-  civic: { label: 'Civic', base: 50, allows: ['hall', 'market', 'school', 'granary', 'well', 'townhall', 'memorial', 'courthouse'] },
+  commercial: { label: 'Commercial', base: 38, allows: ['bakery', 'general_store', 'tavern', 'blacksmith', 'bank', 'guildhall'] },
+  workshop: { label: 'Workshop land', base: 34, allows: ['lumberyard', 'blacksmith', 'general_store', 'guildhall', 'barracks'] },
+  residential: { label: 'Residential', base: 22, allows: ['cottage', 'shrine'] },
+  civic: { label: 'Civic', base: 50, allows: ['hall', 'market', 'school', 'granary', 'well', 'townhall', 'memorial', 'courthouse', 'shrine', 'chapel', 'temple', 'barracks'] },
 };
 
 export const BUILDING_INFO = {
@@ -28,6 +28,12 @@ export const BUILDING_INFO = {
   townhall: { label: 'Town Hall', class: 'civic', value: 90 },
   ruins: { label: 'Ruins', class: 'ruins', value: 0 },
   courthouse: { label: 'Courthouse', class: 'civic', value: 80 },
+  bank: { label: 'Counting House', class: 'institution', value: 70 },
+  guildhall: { label: 'Guild Hall', class: 'institution', value: 80 },
+  shrine: { label: 'Shrine', class: 'faith', value: 20 },
+  chapel: { label: 'Chapel', class: 'faith', value: 50 },
+  temple: { label: 'Temple', class: 'faith', value: 95 },
+  barracks: { label: 'Barracks', class: 'civic', value: 60 },
 };
 
 // Hand-placed village layout around the crossroads at (0, 0).

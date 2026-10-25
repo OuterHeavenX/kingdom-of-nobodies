@@ -11,6 +11,10 @@ import { isTrading } from '../src/economy/Businesses.js';
 import { TIME } from '../src/core/Config.js';
 import { ESCROW } from '../src/trade/Contracts.js';
 import { cargoUnits } from '../src/trade/Caravans.js';
+import { validOwner } from '../src/institutions/Registry.js';
+import { balanceSheet, financeSummary } from '../src/finance/BankManager.js';
+import { MILITARY } from '../src/core/Config.js';
+import { affiliationCounts } from '../src/institutions/FaithManager.js';
 
 const years = Number(process.argv[2] ?? 200);
 const seeds = (process.argv[3] ?? '1,2,3').split(',').map(Number);
@@ -46,7 +50,7 @@ export function checkInvariants(s, seed, year) {
   for (const p of s.plots) {
     if (owners.has(p.id)) fail(seed, year, `plot ${p.id} listed twice`);
     owners.set(p.id, p.ownerId);
-    if (p.ownerId !== 'council' && !ids.has(p.ownerId)) fail(seed, year, `plot ${p.name} owned by absent ${p.ownerId}`);
+    if (!validOwner(s, p.ownerId)) fail(seed, year, `plot ${p.name} owned by absent ${p.ownerId}`);
   }
   const gov = s.government;
   for (const e of gov?.elections ?? []) {
@@ -76,6 +80,41 @@ export function checkInvariants(s, seed, year) {
     if (c.status === 'JUDGED' && !c.judgment?.executedDay) fail(seed, year, `${c.id} judged but never executed`);
     for (const t of c.judgment?.transfers ?? []) { if (txs.has(t.tx)) fail(seed, year, `judgment transaction ${t.tx} executed twice`); txs.add(t.tx); }
   }
+  // Milestone 5: banks, loans, institutions, armies, wars, the town plan and foreign people.
+  const f = s.finance;
+  if (f) {
+    for (const b of f.banks) {
+      const sh = balanceSheet(s, b);
+      if (sh.assets !== sh.liabilities + sh.equity || sh.cash !== balance(s, b.id)) fail(seed, year, `${b.name}'s books do not reconcile`);
+      for (const [h, n] of Object.entries(b.deposits)) if (!Number.isInteger(n) || n <= 0) fail(seed, year, `${b.name} owes ${h} an impossible ${n}`);
+      if (b.status === 'FAILED' && (Object.keys(b.deposits).length || balance(s, b.id))) fail(seed, year, `failed ${b.name} still holds money or deposits`);
+    }
+    for (const l of f.loans) {
+      if (!Number.isInteger(l.balance) || l.balance < 0) fail(seed, year, `loan ${l.id} has balance ${l.balance}`);
+      if (l.balance > l.principal * 3) fail(seed, year, `loan ${l.id} has grown impossibly (${l.balance} on ${l.principal})`);
+      if (l.bankId !== 'council' && !f.banks.some((b) => b.id === l.bankId)) fail(seed, year, `loan ${l.id} belongs to an unknown bank`);
+      if (['ACTIVE', 'DELINQUENT'].includes(l.status) && l.borrowerId !== 'council' && !ids.has(l.borrowerId)) fail(seed, year, `live loan ${l.id} owed by someone who is gone`);
+    }
+  }
+  for (const g of s.guilds?.list ?? []) if (g.status === 'ACTIVE') for (const id of g.members) if (!ids.has(id)) fail(seed, year, `${g.name} lists absent member ${id}`);
+  const m = s.military;
+  if (m) {
+    for (const w of m.wars) if (w.status === 'ACTIVE' && s.day - w.startDay > MILITARY.maxWarDays + 2) fail(seed, year, `${w.name} has lasted ${s.day - w.startDay} days`);
+    for (const a of m.armies) {
+      if (a.status === 'DISBANDED') continue;
+      const war = m.wars.find((w) => w.id === a.warId);
+      if (!war || (war.status !== 'ACTIVE' && s.day - (war.endDay ?? s.day) > 30)) fail(seed, year, `${a.name} is still in the field ${war ? `${s.day - war.endDay} days after the peace` : 'with no war'}`);
+      if (!(a.soldiers >= 0) || !(a.supplies >= 0)) fail(seed, year, `${a.name} has impossible numbers`);
+    }
+    for (const c of s.citizens) if (c.away?.reason === 'militia' && !m.armies.some((a) => a.status !== 'DISBANDED' && a.citizenIds.includes(c.id))) fail(seed, year, `${c.firstName} is away with a militia that no longer exists`);
+  }
+  if ((s.plots?.length ?? 0) > 420) fail(seed, year, `runaway expansion: ${s.plots.length} plots`);
+  for (const kid of Object.keys(s.region?.settlements ?? {})) {
+    const named = Object.values(s.foreign?.people ?? {}).filter((p) => p.kingdom === kid && p.status === 'alive');
+    if (named.length > 45) fail(seed, year, `${kid} has ${named.length} named people`);
+    const r = s.foreign?.people[s.region.settlements[kid].leader.citizenId];
+    if (s.foreign && (!r || `${r.firstName} ${r.lastName}` !== s.region.settlements[kid].leader.name)) fail(seed, year, `${kid}'s ruler is not a living named citizen`);
+  }
   const kb = JSON.stringify(s).length / 1024;
   if (kb > 6000) fail(seed, year, `state has grown to ${Math.round(kb)} KB`);
   if (JSON.stringify(s).match(/NaN|Infinity/)) fail(seed, year, 'NaN or Infinity in state');
@@ -100,6 +139,26 @@ export function regional(s, year) {
     festivalAttendance: fest.length ? Math.round(fest.slice(-4).reduce((a, f) => a + f.attendance / Math.max(1, f.population), 0) / Math.min(4, fest.length) * 100) : null,
     traditions: (s.culture?.traditions ?? []).filter((x) => x.active).length,
     treasury: balance(s, 'treasury'), widerWorld: balance(s, 'outside'),
+    ...milestone5(s),
+  };
+}
+
+/** Milestone 5 metrics at a point in time. */
+export function milestone5(s) {
+  const fin = s.finance ? financeSummary(s) : null;
+  const m = s.military;
+  return {
+    banking: fin && { banks: fin.banks.filter((b) => b.status !== 'FAILED').length, failures: fin.failures, deposits: fin.deposits, outstanding: fin.outstanding, loans: fin.loans, issued: fin.issued, defaults: fin.defaults, writtenOff: fin.writtenOff },
+    guilds: (s.guilds?.list ?? []).filter((g) => g.status === 'ACTIVE').map((g) => `${g.key}:${g.members.length}${g.plotId ? '+hall' : ''}`),
+    faith: s.faith ? affiliationCounts(s) : null,
+    faithBuildings: (s.faith?.communities ?? []).filter((x) => x.tier).map((x) => `${x.tradition}:${x.tier}`),
+    alliances: (s.diplomacy?.treaties ?? []).filter((t) => t.status === 'ACTIVE' && (t.kind === 'defense' || t.kind === 'assistance_mil')).length,
+    wars: m?.wars.length ?? 0, activeWars: (m?.wars ?? []).filter((w) => w.status === 'ACTIVE').length, battles: m?.nextId.battle ?? 0, sieges: m?.nextId.siege ?? 0,
+    peaceTreaties: (s.diplomacy?.treaties ?? []).filter((t) => t.kind === 'peace' || t.kind === 'ceasefire' || t.kind === 'border').length,
+    disputes: (m?.disputes ?? []).map((d) => `${d.id}:${d.status}:${d.controller}`),
+    plannedDistricts: Object.values(s.city?.districts ?? {}).filter((d) => d.origin === 'planned').length, plots: s.plots.length,
+    developments: (s.city?.developments ?? []).length, foreignNamed: Object.keys(s.foreign?.people ?? {}).length,
+    chronicle: s.chronicle.length, refugees: s.citizens.filter((c) => c.refugee).length,
   };
 }
 
@@ -135,7 +194,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       fires: s.stats.fires, discoveries: Object.keys(s.discoveries ?? {}).length,
       eras: s.eras.map((e) => e.name), hungerDeaths: dead.filter((p) => p.cause === 'hunger').length,
       founderBiographiesKept: ['Ada', 'Bram', 'Cora', 'Dain', 'Elin'].every((n) => [...s.citizens, ...Object.values(s.archive)].some((p) => p.firstName === n && p.founder)),
-      stateKB: Math.round(JSON.stringify(s).length / 1024),
+      stateKB: Math.round(JSON.stringify(s).length / 1024), heapMB: Math.round(process.memoryUsage().heapUsed / 1048576),
+      msPerTick: Math.round(((Date.now() - t0) / (years * DAYS_PER_YEAR * TIME.ticksPerDay)) * 1000) / 1000,
       hungerCauses: dead.filter((p) => p.cause === 'hunger').reduce((m, p) => ({ ...m, [p.hungerCause ?? 'unrecorded']: (m[p.hungerCause ?? 'unrecorded'] ?? 0) + 1 }), {}),
       regional: regional(s, years), every25Years: series,
     }));

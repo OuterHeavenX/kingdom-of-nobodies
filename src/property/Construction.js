@@ -1,3 +1,4 @@
+import { setProfession } from '../citizens/Careers.js';
 import { lawInForce } from '../law/LegalCode.js';
 import { byId } from '../core/EntityRegistry.js';
 import { STAGES, REFIT_STAGE, DEMOLITION, BUILD, GOODS, ECONOMY } from '../core/Config.js';
@@ -14,6 +15,11 @@ import { PROFESSION_FOR_BUSINESS } from '../citizens/Careers.js';
 import { adjustBoth } from '../citizens/Relationships.js';
 import { leaveJob } from '../economy/Employment.js';
 import { achieve } from '../citizens/Citizen.js';
+import { validOwner, institutionName, isInstitutionId } from '../institutions/Registry.js';
+
+// Systems that commission buildings for their own purposes (banks, guild halls,
+// shrines) register what happens when one is finished.
+export const completionHooks = {};
 
 // Construction, refits and demolition. Projects advance through stages; each
 // stage needs timber delivered (bought by the owner) and labour (builder shifts).
@@ -31,7 +37,7 @@ export function stagesFor(kind) {
 export function canStart(state, plot, ownerId, kind, buildingType) {
   if (!plot || plot.ownerId !== ownerId) return 'not the owner';
   if (plot.projectId) return 'work already under way';
-  if (state.projects.filter((p) => p.ownerId !== 'council').length >= ECONOMY.maxActiveProjects && ownerId !== 'council') return 'too many building sites in the village';
+  if (state.projects.filter((p) => p.ownerId !== 'council' && !isInstitutionId(p.ownerId)).length >= ECONOMY.maxActiveProjects && ownerId !== 'council' && !isInstitutionId(ownerId)) return 'too many building sites in the village';
   if (kind === 'construction' && (plot.building || !allows(plot, buildingType))) return 'plot cannot take that building';
   if (kind === 'refit' && (!plot.building || buildingClass(plot.building.type) !== buildingClass(buildingType) || plot.businessId)) return 'building cannot be refitted';
   if (kind === 'demolition' && (!plot.building || plot.businessId)) return 'nothing to demolish';
@@ -60,13 +66,13 @@ export function startProject(state, { plotId, ownerId, kind, buildingType = null
   }
   state.projects.push(project);
   plot.projectId = project.id;
-  if (state.government?.policies?.constructionGrants && ownerId !== 'council' && kind !== 'demolition' && balance(state, 'treasury') > 60) {
+  if (state.government?.policies?.constructionGrants && ownerId !== 'council' && !isInstitutionId(ownerId) && kind !== 'demolition' && balance(state, 'treasury') > 60) {
     transfer(state, 'treasury', ownerId, 8, 'grant', `Construction grant for ${plot.name}`);
   }
   plot.marketStatus = 'NOT_FOR_SALE';
   plot.constructionStatus = kind === 'demolition' ? 'DEMOLISHING' : kind === 'upgrade' || kind === 'repair' ? 'COMPLETE' : 'PLANNING';
   const owner = byId(state.citizens, ownerId);
-  const who = owner ? owner.firstName : 'The council';
+  const who = owner ? owner.firstName : institutionName(state, ownerId) ?? 'The council';
   const what = kind === 'upgrade' ? `expanding the ${BUILDING_INFO[plot.building.type].label.toLowerCase()}` : kind === 'repair' ? `repairing the ${BUILDING_INFO[plot.building.type].label.toLowerCase()}` : kind === 'demolition' ? `demolition of the old ${BUILDING_INFO[plot.building.type].label.toLowerCase()}` :
     kind === 'refit' ? `refitting the ${BUILDING_INFO[plot.building.type].label.toLowerCase()} as a ${BUILDING_INFO[buildingType].label.toLowerCase()}` :
       `a ${BUILDING_INFO[buildingType].label.toLowerCase()}`;
@@ -123,7 +129,7 @@ function procure(state, p) {
 export function updateProjects(state) {
   // A site whose owner is gone, or that has made no progress for two years, is abandoned.
   for (const p of [...state.projects]) {
-    const ownerGone = p.ownerId !== 'council' && !state.citizens.some((c) => c.id === p.ownerId);
+    const ownerGone = !validOwner(state, p.ownerId);
     p.lastProgress = p.lastProgress ?? state.day;
     if (ownerGone || state.day - p.lastProgress > 24) abandonProject(state, p, ownerGone ? 'its owner is gone' : 'work stalled for two years');
   }
@@ -226,6 +232,8 @@ function complete(state, p) {
     record(state, 'construction', `${owner.firstName}'s new cottage on ${plot.name} is finished.`, { citizens: [owner.id], plot: plot.id }, 3);
     remember(state, owner, `Moved into my own cottage on ${plot.name}.`, 3, 'milestone');
     owner.mood = Math.min(100, owner.mood + 15);
+  } else if (completionHooks[p.purpose]) {
+    completionHooks[p.purpose](state, plot, p);
   } else if (p.purpose === 'council_business') {
     const b = createBusiness(state, { type: p.businessType, ownerId: 'council', plotId: plot.id, name: businessName(state, p.businessType, null) });
     plot.businessId = b.id;
@@ -244,7 +252,7 @@ export function abandonProject(state, p, why) {
   if (plot) {
     plot.projectId = null;
     plot.constructionStatus = plot.building ? 'COMPLETE' : 'NONE';
-    if (plot.ownerId !== 'council' && !state.citizens.some((c) => c.id === plot.ownerId)) { plot.ownerId = 'council'; plot.marketStatus = 'FOR_SALE'; }
+    if (!validOwner(state, plot.ownerId)) { plot.ownerId = 'council'; plot.marketStatus = 'FOR_SALE'; }
     plotHistory(state, plot, `Building work was abandoned (${why}).`);
     record(state, 'construction', `Work on ${plot.name} was abandoned because ${why}.`, { plot: plot.id }, 1);
   }
@@ -268,7 +276,7 @@ export function openBusiness(state, owner, plot, type) {
   if (owner.employment) leaveJob(state, owner, `opened ${b.name}`);
   owner.employment = { businessId: b.id, role: 'owner', wage: 0, since: state.day, unpaid: 0 };
   owner.employmentHistory.push({ businessId: b.id, name: b.name, from: state.day, to: null, role: 'owner' });
-  owner.profession = PROFESSION_FOR_BUSINESS[type];
+  setProfession(state, owner, PROFESSION_FOR_BUSINESS[type]);
   if (owner.venture) owner.venture.businessId = b.id;
   bump(owner, 'competence', 5);
   achieve(state, owner, 'founded', `Founded ${b.name}`, { business: b.id });

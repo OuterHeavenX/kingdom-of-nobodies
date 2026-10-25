@@ -29,7 +29,7 @@ export function rehouseFamilies(state) {
     if (home && home.building?.type !== 'hall' && home.building?.type !== 'townhall' && !sharingWithStrangers) continue;
     family.forEach((m) => done.add(m.id));
     if (family.length < 2) continue;
-    const free = state.plots.find((p) => p !== home && p.building?.type === 'cottage' && p.constructionStatus === 'COMPLETE' &&
+    const free = state.plots.find((p) => p !== home && p.building?.type === 'cottage' && p.constructionStatus === 'COMPLETE' && p.marketStatus !== 'FOR_SALE' &&
       (p.ownerId === 'council' || family.some((m) => m.id === p.ownerId)) && bedsAt(state, p) - p.residents.length >= family.length + (sharingWithStrangers ? 1 : 0) &&
       (!sharingWithStrangers || p.residents.length === 0));
     if (free) for (const m of family) moveHome(state, m, free);

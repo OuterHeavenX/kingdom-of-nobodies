@@ -1,5 +1,6 @@
 // Milestone 3 — Legacy & Generations. Numbered tests follow section 15 of the
 // milestone brief (23–25 are covered by the e2e and build tests).
+import { validOwner } from '../src/institutions/Registry.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -143,7 +144,8 @@ test('9. business ownership passes to an heir or the business closes', () => {
 test('10. property ownership remains unique and held by the living', () => {
   const s = grown().state;
   const valid = new Set([...s.citizens.map((c) => c.id), 'council', null]);
-  for (const p of s.plots) assert.ok(valid.has(p.ownerId ?? null), `${p.name} owner ${p.ownerId} is living or civic`);
+  // Milestone 5: active banks, guilds and faith communities may hold land too.
+  for (const p of s.plots) assert.ok(valid.has(p.ownerId ?? null) || validOwner(s, p.ownerId), `${p.name} owner ${p.ownerId} is living, civic or an active institution`);
   const ids = s.plots.map((p) => p.id);
   assert.equal(new Set(ids).size, ids.length);
   for (const c of s.citizens) {

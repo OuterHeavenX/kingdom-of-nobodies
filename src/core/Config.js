@@ -3,7 +3,7 @@
 
 /** Coins held by the wider world beyond the region (the 'outside' account) at the founding. */
 export const WIDER_WORLD = 250000;
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 
 export const TIME = {
   minutesPerTick: 10,
@@ -122,7 +122,7 @@ export const SOCIAL = {
   cheatNoticeChance: 0.5,
 };
 
-export const CHRONICLE = { max: 640, keepImportant: 200 };
+export const CHRONICLE = { max: 900, keepImportant: 200 }; // Milestone 5 records more institutions, wars and plans
 export const LEDGER = { max: 260 };
 
 export const COUNCIL = {
@@ -213,4 +213,51 @@ export const EVENTS = {
 export const HISTORY = {
   chronicleMax: 900,
   minEraYears: 6,
+};
+
+// ---------------------------------------------------------------------------
+// Milestone 5: The Age of Empires & Prosperity
+// ---------------------------------------------------------------------------
+
+export const CITY = {
+  reviewEveryDays: 3,
+  maxProceduralDistricts: 14,
+  maxSpeculativeHomes: 2, // cottages built for sale at any one time
+  developerMinWealth: 140,
+  homeSalePremium: 1.15, // asking price of a new cottage over its land and materials
+};
+
+export const FINANCE = {
+  // Rates are per year; interest accrues once per season on whole coins.
+  depositRate: 0.03,
+  baseLoanRate: 0.08,
+  maxRiskPremium: 0.14,
+  reserveRatio: 0.25, // a bank keeps at least this share of deposits as cash
+  cashCushion: 50, // a citizen keeps this much in hand before depositing
+  depositAbove: 90,
+  maxTermSeasons: 16,
+  penaltyRate: 0.05,
+  missedForDefault: 3,
+  bankFoundingCapital: 120,
+  savingsHouseCapital: 160,
+  clerkWage: 4,
+  maxLoansPerBorrower: 2,
+};
+
+export const INSTITUTIONS = {
+  guildMinMembers: 3,
+  guildDuesPerSeason: 1, // a season is three days: about four coins a year
+  guildHallCost: 140,
+  faithMinMembers: 3,
+  charityMealUnits: 3,
+};
+
+export const MILITARY = {
+  soldierUpkeep: 0.05, // coins per soldier per day (wages, equipment repair) paid out of the treasury
+  foodPerHundredSoldiers: 7,
+  marchKmh: 3.2,
+  maxWarDays: 36, // three years: exhaustion forces a settlement before this
+  garrisonShare: 0.04,
+  mobiliseShare: 0.12,
+  militiaWage: 3,
 };

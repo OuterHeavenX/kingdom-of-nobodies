@@ -1,5 +1,5 @@
 import { SAVE_VERSION, WIDER_WORLD } from './Config.js';
-import { createKingdom, createWorks, addMilestone4State } from '../sim/Setup.js';
+import { createKingdom, createWorks, addMilestone4State, addMilestone5State } from '../sim/Setup.js';
 import { adjustBoth } from '../citizens/Relationships.js';
 import { addGoods } from '../economy/Inventory.js';
 import { transfer } from '../economy/Transactions.js';
@@ -71,6 +71,22 @@ export function migrateV4(s) {
   return s;
 }
 
+/**
+ * Milestone 4 (v5) → Milestone 5 (v6). The village, its people and its region
+ * are kept as they are; it gains a town plan (districts already opened keep
+ * their identity), banking, guilds, faith communities, named foreign
+ * citizens, alliances and armies, weather and cloud-sync metadata. Nothing is
+ * funded out of thin air: new institutions start empty and grow from real
+ * deposits, dues and donations.
+ */
+export function migrateV5(s) {
+  addMilestone5State(s);
+  s.version = 6;
+  s.migratedFrom = s.migratedFrom ?? 'milestone-4';
+  s.migrationNotes = [...(s.migrationNotes ?? []), { version: 6, day: s.day, note: 'Added city planning, weather, banking, guilds, faith, named foreign citizens, territorial disputes and military records. Every new account starts empty; no coins were created.' }];
+  return s;
+}
+
 // Pure save-format helpers (no browser APIs) so they can be unit tested.
 // A save file is an envelope { format, version, savedAt, checksum, data }.
 
@@ -138,6 +154,7 @@ export function migrate(s) {
     s.events = [];
     return s;
   }
+  if (s.version === 5) return migrate(migrateV5(s));
   if (s.version === 4) return migrate(migrateV4(s));
   if (s.version === 3) return migrate(migrateV3(s));
   if (s.version === 2 && Array.isArray(s.people)) return migrateMilestone1(s);

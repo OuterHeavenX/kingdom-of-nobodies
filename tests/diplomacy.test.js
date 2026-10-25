@@ -102,12 +102,16 @@ test('23. migration moves real people between settlements and keeps populations 
 });
 
 test('a married merchant who emigrates mid-run hands the caravan to someone who stays, and escrow still settles', () => {
-  const sim = fresh(1);
-  const s = sim.state;
-  let cv = null;
-  for (let i = 0; i < 400 * 144 && !cv; i++) {
-    sim.step();
-    cv = s.trade.caravans.find((x) => x.status !== 'COMPLETED' && x.status !== 'CANCELLED' && s.citizens.some((c) => c.id === x.account && c.family.spouseId && !c.founder && s.government?.leaderId !== c.id && s.government?.leaderId !== c.family.spouseId)) ?? null;
+  // The scenario is searched for in ordinary play, so a few worlds are tried until one supplies it.
+  let sim = null, s = null, cv = null;
+  for (const seed of [1, 2, 3, 4, 5]) {
+    sim = fresh(seed);
+    s = sim.state;
+    for (let i = 0; i < 400 * 144 && !cv; i++) {
+      sim.step();
+      cv = s.trade.caravans.find((x) => x.status !== 'COMPLETED' && x.status !== 'CANCELLED' && s.citizens.some((c) => c.id === x.account && c.family.spouseId && !c.founder && s.government?.leaderId !== c.id && s.government?.leaderId !== c.family.spouseId)) ?? null;
+    }
+    if (cv) break;
   }
   assert.ok(cv, 'a married villager has a caravan on the road');
   const merchant = s.citizens.find((c) => c.id === cv.account);

@@ -25,6 +25,8 @@ export const BLOCKS = [
   { name: 'Highfield', road: [0, 57, 62, 2.4], plots: [[-24, 61, 'residential'], [-15, 61, 'residential'], [-6, 61, 'commercial'], [6, 61, 'residential'], [15, 61, 'residential'], [24, 61, 'residential']] },
 ];
 export const SURVEY_COST = 40;
+// The inner ring keeps its hand-drawn layout; beyond it the town planners lay out streets (city/CityPlanner.js).
+export const FIXED_DISTRICTS = 4;
 
 export function openedBlocks(state) { return state.districts?.opened ?? []; }
 
@@ -46,6 +48,7 @@ export function publicBeds(state) {
 /** Daily: open the next district if land is short and the treasury can pay the road crews. */
 export function maybeExpand(state) {
   state.districts = state.districts ?? { opened: [] };
+  if (state.districts.opened.length >= FIXED_DISTRICTS) return null;
   const next = BLOCKS.find((b) => !state.districts.opened.includes(b.name));
   if (!next || !needsLand(state) || balance(state, 'treasury') < SURVEY_COST + 30) return null;
   // Only real population pressure justifies a new district: enough people to
@@ -76,12 +79,14 @@ export const settlementStage = (pop) => STAGES.find(([min]) => pop >= min)[1];
 /** What a district has become, judged from what stands there. */
 export function districtCharacter(state, name) {
   const plots = state.plots.filter((p) => (p.district ?? 'Old Town') === name);
-  const count = { home: 0, shop: 0, workshop: 0, farm: 0, civic: 0 };
+  const count = { home: 0, shop: 0, workshop: 0, farm: 0, civic: 0, faith: 0, military: 0 };
   for (const p of plots) {
     const t = p.building?.type;
     if (!t) continue;
     if (t === 'cottage') count.home++;
-    else if (['bakery', 'general_store', 'tavern', 'stall'].includes(t)) count.shop++;
+    else if (['bakery', 'general_store', 'tavern', 'stall', 'bank', 'guildhall'].includes(t)) count.shop++;
+    else if (['shrine', 'chapel', 'temple'].includes(t)) count.faith++;
+    else if (t === 'barracks') count.military++;
     else if (['lumberyard', 'blacksmith'].includes(t)) count.workshop++;
     else if (t === 'farm') count.farm++;
     else count.civic++;
@@ -89,5 +94,5 @@ export function districtCharacter(state, name) {
   const built = Object.values(count).reduce((a, b) => a + b, 0);
   if (!built) return 'open land';
   const [kind] = Object.entries(count).sort((a, b) => b[1] - a[1])[0];
-  return { home: 'residential quarter', shop: 'market quarter', workshop: 'crafts quarter', farm: 'farmsteads', civic: 'civic centre' }[kind];
+  return { home: 'residential quarter', shop: 'market quarter', workshop: 'crafts quarter', farm: 'farmsteads', civic: 'civic centre', faith: 'temple quarter', military: 'garrison quarter' }[kind];
 }

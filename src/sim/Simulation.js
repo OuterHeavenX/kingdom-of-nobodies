@@ -35,12 +35,19 @@ import { dailyRegion } from '../region/RegionManager.js';
 import { dailyExploration } from '../region/Exploration.js';
 import { tickTrade, dailyTrade, onMerchantGone } from '../trade/TradeManager.js';
 import { dailyDiplomacy } from '../diplomacy/Diplomacy.js';
+import { planCity, reviewPlans, reviewDistricts } from '../city/CityPlanner.js';
+import { considerDevelopment } from '../city/UrbanDevelopment.js';
+import { dailyHooks, hourlyHooks } from './Hooks.js';
+import './Milestone5.js';
 
 lifecycleHooks.teen.push((state, c) => { chooseTrade(state, c); findMaster(state, c); });
 lifecycleHooks.adulthood.push((state, c) => onAdulthood(state, c));
 lifecycleHooks.death.push((state, c) => onCitizenGone(state, c));
 lifecycleHooks.death.push((state, c) => onMerchantGone(state, c));
 import { balance, totalMoney } from '../economy/Transactions.js';
+
+/** How a would-be developer can raise money (savings and bank credit, once banks exist). */
+const developmentOptions = (s) => dailyHooks.developmentFunding?.(s) ?? {};
 
 // The simulation orchestrator. It owns the plain-JSON game state and advances
 // it in fixed ticks (10 in-game minutes). It has no DOM or WebGL dependencies,
@@ -88,6 +95,7 @@ export class Simulation {
     updateFires(s);
     hourlyCourts(s);
     if (h === 6 || h === 12) restockAll(s);
+    for (const fn of hourlyHooks) fn(s, h);
   }
 
   endOfDay() {
@@ -124,6 +132,11 @@ export class Simulation {
     if (s.eventLog.length > 300) s.eventLog.splice(0, s.eventLog.length - 300);
     councilDaily(s);
     maybeExpand(s);
+    planCity(s);
+    reviewPlans(s);
+    reviewDistricts(s);
+    for (const fn of dailyHooks.early) fn(s);
+    considerDevelopment(s, developmentOptions(s));
     dailyLuxuries(s);
     dailyRegion(s);
     dailyExploration(s);
@@ -145,6 +158,7 @@ export class Simulation {
     softenListings(s);
     assignHomes(s);
     rehouseFamilies(s);
+    for (const fn of dailyHooks.late) fn(s);
     spoilCarriedFood(s);
     s.commons.forest = Math.min(s.commons.forestCap, s.commons.forest + 9);
     s.commons.berries = Math.min(s.commons.berriesCap, s.commons.berries + 26);

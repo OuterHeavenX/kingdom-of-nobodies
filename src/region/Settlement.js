@@ -70,8 +70,10 @@ export function simulateKingdom(state, k) {
   const scale = k.population / 100;
   k.modifiers = k.modifiers.filter((m) => m.until >= state.day);
   // Production, honouring input chains (iron needs ore, tools need iron).
+  // Soldiers called to the colours do not work the fields and mines.
+  const workforce = Math.max(0, k.population - (k.mobilised ?? 0)) / 100;
   for (const [g, rate] of Object.entries(def.produces)) {
-    let out = rate * scale * seasonalFactor(state, g) * k.prosperity * modifier(state, k, g);
+    let out = rate * workforce * (k.besieged ? 0.6 : 1) * seasonalFactor(state, g) * k.prosperity * modifier(state, k, g);
     for (const [input, per] of Object.entries(def.inputs?.[g] ?? {})) out = Math.min(out, available(k, input) / per);
     for (const [input, per] of Object.entries(def.inputs?.[g] ?? {})) k.inventory[input] -= out * per;
     k.inventory[g] = (k.inventory[g] ?? 0) + out;
@@ -173,6 +175,9 @@ function distantWorld(state, k) {
   }
 }
 
+/** Who chooses a new leader's person: set by the foreign-citizens system. */
+export const leaderHooks = { pick: null };
+
 /** Leaders keep office while people are content; stances follow circumstances. */
 function leadership(state, k) {
   const def = KINGDOMS[k.id];
@@ -189,7 +194,9 @@ function leadership(state, k) {
     const others = def.leaders.filter((n) => n !== previous);
     // A hungry or embattled people elects protection; a prosperous one, trade; one tired of feuds, peace.
     const stance = feuds >= 2 ? 'cooperative' : k.hunger > 0.1 || Object.keys(k.shortages).length > 2 ? (nextRandom(state) < 0.6 ? 'protectionist' : 'cooperative') : pick(state, def.stances);
-    k.leader = { name: pick(state, others), title: def.leaderTitle, stance, since: state.day, approval: 60 };
+    // Named foreign citizens supply the successor when they exist (ForeignCitizenManager).
+    const named = leaderHooks.pick?.(state, k, stance, ousted ? 'unrest' : 'a change of government') ?? null;
+    k.leader = { name: named ? `${named.firstName} ${named.lastName}` : pick(state, others), title: def.leaderTitle, stance, since: state.day, approval: 60, citizenId: named?.id ?? null };
     k.unrestDays = 0;
     k.tariff = stance === 'protectionist' ? 0.16 : stance === 'mercantile' ? 0.06 : 0.09;
     note(state, k, `${previous} ${ousted ? 'was driven from office by unrest' : 'stepped down after long service'}; ${k.leader.name} became ${def.leaderTitle} with a ${stance} outlook (Year ${yearOf(state.day)}).`, 2);

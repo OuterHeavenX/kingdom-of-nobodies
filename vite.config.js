@@ -8,6 +8,8 @@ function buildId() {
 
 export default defineConfig({
   base: '/kingdom-of-nobodies/',
-  build: { outDir: 'dist', chunkSizeWarningLimit: 900 },
-  define: { __BUILD__: JSON.stringify(buildId()) },
+  // Three.js goes in its own chunk so a game update does not make returning players re-download the engine.
+  build: { outDir: 'dist', chunkSizeWarningLimit: 900, rollupOptions: { output: { manualChunks: { three: ['three'] } } } },
+  // The optional cloud backup address is public configuration (no secrets); unset means local saves only.
+  define: { __BUILD__: JSON.stringify(buildId()), __CLOUD_URL__: JSON.stringify(process.env.VITE_CLOUD_SAVE_URL ?? '') },
 });

@@ -11,6 +11,10 @@ import { bump } from '../society/Reputation.js';
 import { plotById, plotHistory } from '../property/LandRegistry.js';
 import { listForSale } from '../property/Ownership.js';
 import { ensureLaw, lawInForce, LAWS } from './LegalCode.js';
+import { isInstitutionId, institutionName } from '../institutions/Registry.js';
+
+/** Judgments for case kinds owned by other systems (debts): (state, case, judgment, pay) => void. */
+export const judgmentHandlers = {};
 
 // Courts. Claims are captured at the moment something goes wrong (an unpaid
 // shift, a theft with witnesses, a short delivery, an estate left to one
@@ -30,6 +34,7 @@ const who = (state, id) => {
   if (c) return { kind: 'citizen', id, name: `${c.firstName} ${c.lastName}` };
   const b = businessById(state, id);
   if (b) return { kind: 'business', id, name: b.name, ownerId: b.ownerId };
+  if (isInstitutionId(id)) return { kind: 'institution', id, name: institutionName(state, id) ?? id };
   const a = state.archive[id];
   return { kind: 'citizen', id, name: a ? `${a.firstName} ${a.lastName}` : id };
 };
@@ -44,6 +49,9 @@ function claim(state, entry) {
   if (law.claims.length > 80) law.claims = law.claims.filter((c) => !c.filed).concat(law.claims.filter((c) => c.filed).slice(-20));
   return law.claims.at(-1);
 }
+
+/** Other systems file claims through here (a bank recovering a defaulted loan). */
+export const fileClaim = (state, entry) => claim(state, entry);
 
 /** An employer could not pay a shift. */
 export function noteUnpaidWage(state, worker, business, wage) {
@@ -112,7 +120,7 @@ function fileCase(state, cl) {
   const c = {
     id: 'case' + ++law.nextCase, kind: cl.kind, law: cl.law, claimId: cl.id, eventDay: cl.day, filedDay: state.day,
     plaintiff: who(state, cl.claimantId), defendant: who(state, cl.defendantId), amount: cl.amount,
-    evidence: cl.evidence.slice(0, 8), details: Object.fromEntries(Object.entries({ good: cl.good, n: cl.n, cause: cl.cause, estateId: cl.estateId, scandalId: cl.scandalId, plotId: cl.plotId }).filter(([, v]) => v !== undefined)),
+    evidence: cl.evidence.slice(0, 8), details: Object.fromEntries(Object.entries({ good: cl.good, n: cl.n, cause: cl.cause, estateId: cl.estateId, scandalId: cl.scandalId, plotId: cl.plotId, loanId: cl.loanId }).filter(([, v]) => v !== undefined)),
     status: 'FILED', hearingDay: null, judgment: null,
   };
   law.cases.push(c);
@@ -125,7 +133,7 @@ function fileCase(state, cl) {
 function filings(state) {
   const law = ensureLaw(state);
   for (const cl of law.claims.filter((x) => !x.filed)) {
-    if (cl.claimantId === 'council' || businessById(state, cl.claimantId)?.ownerId === 'council') { fileCase(state, cl); continue; }
+    if (cl.claimantId === 'council' || businessById(state, cl.claimantId)?.ownerId === 'council' || isInstitutionId(cl.claimantId)) { fileCase(state, cl); continue; }
     const plaintiff = byId(state.citizens, cl.claimantId) ?? byId(state.citizens, businessById(state, cl.claimantId)?.ownerId);
     if (!plaintiff) { cl.filed = true; cl.abandoned = true; continue; }
     const resolve = 0.15 + trait(plaintiff, 'honest') * 0.2 + trait(plaintiff, 'stubborn') * 0.25 - trait(plaintiff, 'shy') * 0.15 + (cl.amount >= 10 ? 0.2 : 0) + (cl.kind === 'wages' && cl.items.length >= 2 ? 0.25 : 0);
@@ -304,6 +312,7 @@ export function hearCase(state, c) {
       else { j.outcome = 'fine'; j.reason = `trading without a licence; fined ${fine}`; }
     }
   }
+  else if (judgmentHandlers[c.kind]) judgmentHandlers[c.kind](state, c, j, pay);
   if (j.outcome === 'dismissed') law.stats.dismissed++;
   for (const t of j.transfers) { if (t.kind === 'fine') law.stats.fines += t.amount; if (t.kind === 'restitution') law.stats.restitution += t.amount; }
   // The judge is paid for the hearing.

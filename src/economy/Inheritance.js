@@ -1,3 +1,4 @@
+import { setProfession } from '../citizens/Careers.js';
 import { noteEstateDispute } from '../law/Courts.js';
 import { byId } from '../core/EntityRegistry.js';
 import { transfer, balance } from './Transactions.js';
@@ -71,7 +72,7 @@ export function transferBusiness(state, b, from, to, outcome, why) {
     if (to.employment?.businessId === b.id) b.employees = b.employees.filter((id) => id !== to.id);
     to.employment = { businessId: b.id, role: 'owner', wage: 0, since: state.day, unpaid: 0 };
     to.employmentHistory.push({ businessId: b.id, name: b.name, from: state.day, to: null, role: 'owner' });
-    to.profession = PROFESSION_FOR_BUSINESS[b.type] ?? to.profession;
+    setProfession(state, to, PROFESSION_FOR_BUSINESS[b.type] ?? to.profession);
     if (to.venture && !to.venture.businessId && to.dream.businessType === b.type) to.venture.businessId = b.id;
     achieve(state, to, 'inherited_business', `Took over ${b.name} from ${from.firstName}`, { business: b.id });
     remember(state, to, `Took over ${b.name} from ${from.firstName}.`, 3, 'career');

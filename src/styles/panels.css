@@ -153,3 +153,18 @@ table.mkt.wide th { text-align: right; }
 .festival-card { border-color: var(--accent); }
 /* The sheet body is a flex column: never let the map or the scrolling mode bar shrink. */
 .region-map, .scroll-seg, .map-legend, table.mkt { flex-shrink: 0; }
+
+/* Milestone 5 */
+.view-banner { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 14px; border-radius: 999px;
+  background: rgba(20, 32, 27, .88); border: 1px solid #5d7a5f; color: #f5edd7; font: 600 13px/1.2 Georgia, serif; box-shadow: 0 4px 18px rgba(0,0,0,.35); max-width: calc(100% - 32px); white-space: nowrap; }
+.view-banner span { overflow: hidden; text-overflow: ellipsis; }
+.btn.small { padding: 6px 10px; font-size: 12px; min-height: 32px; }
+.segmented.scroll-seg { grid-auto-columns: max-content; overflow-x: auto; scrollbar-width: none; }
+.segmented.scroll-seg::-webkit-scrollbar { display: none; }
+.segmented.scroll-seg button { padding-left: 12px; padding-right: 12px; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 3px; vertical-align: middle; }
+.card.ruler { border-color: #c9a442; background: linear-gradient(180deg, rgba(201,164,66,.08), transparent 70%); }
+.conflict { margin-top: 8px; padding: 10px; border: 1px solid #d39a3a; border-radius: 10px; background: rgba(211,154,58,.08); }
+.region-map .army { cursor: pointer; }
+.region-map .army-x { font-size: 2px; text-anchor: middle; fill: #2a1a14; pointer-events: none; }
+.label.foreign { border-color: #c9a442; }
