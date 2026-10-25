@@ -1,3 +1,4 @@
+import { setProfession } from '../citizens/Careers.js';
 import { apprenticeBonus } from '../institutions/GuildEconomy.js';
 import { byId } from '../core/EntityRegistry.js';
 import { EDUCATION, LIFE } from '../core/Config.js';
@@ -123,7 +124,7 @@ export function completeMentoring(state, mentor, student, skill) {
 export function onAdulthood(state, c) {
   const trade = c.education.trade ?? pick(state, Object.keys(TRADES));
   const t = TRADES[trade];
-  c.profession = t.profession;
+  setProfession(state, c, t.profession);
   const master = byId(state.citizens, c.education.masterId);
   c.education.masterId = null;
   c.dream = dreamForYoungAdult(state, c, trade);

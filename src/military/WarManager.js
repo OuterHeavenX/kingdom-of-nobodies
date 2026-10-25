@@ -160,6 +160,13 @@ export function dailyWar(state) {
     else if (out.kind === 'parley' && nextRandom(state) < 0.35) makePeace(state, out.war, { reason: 'terms were agreed outside the walls' });
   }
   for (const war of activeWars(state)) considerPeace(state, war);
+  // After a peace, an army that could not find an open road home (a landslide, a siege elsewhere)
+  // keeps trying; after ten days its soldiers make their own way home and it stands down.
+  for (const a of liveArmies(state)) {
+    const war = m.wars.find((w) => w.id === a.warId);
+    if (war?.status === 'ACTIVE' || ['RETURNING', 'RETREATING', 'HOME'].includes(a.status)) continue;
+    if (!orderMarch(state, a, { kind: 'settlement', id: a.owner }, 'home') && state.day - (war?.endDay ?? a.raisedDay) > 10) disband(state, a, 'the soldiers made their own way home');
+  }
   // A retreating army that reached home stands down unless its war goes on and it can still fight.
   for (const a of liveArmies(state).filter((x) => x.status === 'HOME')) {
     const war = m.wars.find((w) => w.id === a.warId);

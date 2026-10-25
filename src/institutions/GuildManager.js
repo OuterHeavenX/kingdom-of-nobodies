@@ -239,6 +239,12 @@ export function seasonalGuilds(state) {
   }
 }
 
-export function onGuildMemberGone(state, c) {
-  for (const g of activeGuilds(state)) if (g.members.includes(c.id)) leave(state, g, c.id, 'died');
+/** Someone changed trade: they leave a guild that is not theirs at once. */
+export function onProfessionChange(state, c) {
+  const g = guildOf(state, c);
+  if (g && !GUILD_TYPES[g.key].professions.includes(tradeOf(c))) leave(state, g, c.id, `took up work as a ${String(c.profession).toLowerCase()}`);
+}
+
+export function onGuildMemberGone(state, c, why = 'died') {
+  for (const g of activeGuilds(state)) if (g.members.includes(c.id)) leave(state, g, c.id, why);
 }

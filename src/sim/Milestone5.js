@@ -13,7 +13,8 @@ import { milestone5Setup } from './Setup.js';
 import { saleHooks } from '../property/Ownership.js';
 import { emigrationHooks } from '../population/Migration.js';
 import { ensureFinance, spendable, raiseCash } from '../finance/BankAccounts.js';
-import { ensureGuilds, seasonalGuilds, onGuildMemberGone } from '../institutions/GuildManager.js';
+import { ensureGuilds, seasonalGuilds, onGuildMemberGone, onProfessionChange } from '../institutions/GuildManager.js';
+import { professionHooks } from '../citizens/Careers.js';
 import { guildEconomy } from '../institutions/GuildEconomy.js';
 import { evolveBeliefs } from '../institutions/FaithManager.js';
 import { ensureFaith, dailyFaith, consoleBereaved } from '../institutions/ReligiousInstitutions.js';
@@ -37,9 +38,10 @@ warHooks.besieged = besieged;
 casualtyHooks.die = (state, c, cause) => die(state, c, cause);
 dailyHooks.late.push(seasonalGuilds, guildEconomy, evolveBeliefs, dailyFaith);
 lifecycleHooks.death.push(onGuildMemberGone, consoleBereaved);
+professionHooks.push(onProfessionChange);
 dailyHooks.developmentFunding = (state) => ({ funds: (c) => spendable(state, c.id), raise: raiseCash, borrow: borrowForDevelopment });
 
 saleHooks.push((state, plot, sellerId) => pledgeNewLand(state, plot, plot.ownerId));
-emigrationHooks.push(settleBeforeLeaving);
+emigrationHooks.push(settleBeforeLeaving, (state, c) => onGuildMemberGone(state, c, 'left the village'));
 
 export { hourlyHooks };

@@ -15,7 +15,7 @@ import { startProject, completionHooks } from '../property/Construction.js';
 import { heirsOf } from '../economy/Inheritance.js';
 import { lifecycleHooks } from '../citizens/Lifecycle.js';
 import { ensureFinance, deposit, withdraw, depositOf, raiseCash, reassignDeposits, openBanks, bankById, spendable } from './BankAccounts.js';
-import { applyForLoan, collectPayment, liveLoans, loansOf, lenderAccount, isLive, setLien, clearLien } from './LoanManager.js';
+import { applyForLoan, collectPayment, liveLoans, loansOf, lenderAccount, isLive, setLien, clearLien, municipalLoan } from './LoanManager.js';
 import { seasonalInterest, depositRateFor } from './InterestSystem.js';
 import { reviewDelinquencies, ensureDebtLaw } from './DebtCollection.js';
 import { outstandingDebt } from './CreditAssessment.js';
@@ -318,6 +318,20 @@ export function settleBeforeLeaving(state, c) {
   reassignDeposits(state, c.id, null);
 }
 
+/**
+ * Famine credit: when villagers are going hungry and the treasury cannot
+ * restock the pantry, the council borrows from a bank against its land to
+ * buy grain. The loan is repaid from the treasury like any other.
+ */
+function famineCredit(state) {
+  const hungry = state.citizens.filter((c) => c.needs.hunger < 25).length;
+  if (hungry < 3 || balance(state, 'treasury') >= 60) return;
+  const security = state.plots.filter((p) => p.ownerId === 'council' && p.marketStatus === 'FOR_SALE').reduce((s, p) => s + p.price, 0);
+  const f = ensureFinance(state);
+  if (f.loans.some((l) => l.borrowerId === 'council' && isLive(l) && l.purpose === 'public works' && state.day - l.issuedDay < 12)) return;
+  municipalLoan(state, 80, { purpose: `to buy grain for ${hungry} hungry villagers`, security, seasons: 6 });
+}
+
 /** Daily: the whole round of finance. */
 export function dailyFinance(state) {
   ensureFinance(state);
@@ -325,6 +339,7 @@ export function dailyFinance(state) {
   for (const loan of liveLoans(state)) collectPayment(state, loan);
   reviewDelinquencies(state);
   personalBanking(state);
+  famineCredit(state);
   if (state.day % 2 === 0) loanApplications(state);
   if (isNewSeason(state.day)) {
     considerFounding(state);

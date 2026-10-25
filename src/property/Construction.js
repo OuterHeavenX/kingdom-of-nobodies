@@ -1,3 +1,4 @@
+import { setProfession } from '../citizens/Careers.js';
 import { lawInForce } from '../law/LegalCode.js';
 import { byId } from '../core/EntityRegistry.js';
 import { STAGES, REFIT_STAGE, DEMOLITION, BUILD, GOODS, ECONOMY } from '../core/Config.js';
@@ -275,7 +276,7 @@ export function openBusiness(state, owner, plot, type) {
   if (owner.employment) leaveJob(state, owner, `opened ${b.name}`);
   owner.employment = { businessId: b.id, role: 'owner', wage: 0, since: state.day, unpaid: 0 };
   owner.employmentHistory.push({ businessId: b.id, name: b.name, from: state.day, to: null, role: 'owner' });
-  owner.profession = PROFESSION_FOR_BUSINESS[type];
+  setProfession(state, owner, PROFESSION_FOR_BUSINESS[type]);
   if (owner.venture) owner.venture.businessId = b.id;
   bump(owner, 'competence', 5);
   achieve(state, owner, 'founded', `Founded ${b.name}`, { business: b.id });

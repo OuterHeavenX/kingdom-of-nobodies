@@ -25,6 +25,14 @@ export const PROFESSION_FOR_BUSINESS = {
   general_store: 'Merchant', tavern: 'Innkeeper', school: 'Teacher', works: 'Public worker',
 };
 
+/** Called with (state, citizen) whenever someone changes trade (guild membership follows). */
+export const professionHooks = [];
+export function setProfession(state, c, profession) {
+  if (!profession || c.profession === profession) return;
+  c.profession = profession;
+  for (const fn of professionHooks) fn(state, c);
+}
+
 export const baseWage = (profession) => WAGES[profession] ?? WAGES.Laborer;
 
 export function skillFor(c, businessType) {

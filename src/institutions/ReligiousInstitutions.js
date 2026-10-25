@@ -260,6 +260,13 @@ export function dailyFaith(state) {
     const festival = state.culture?.current?.phase === 'ACTIVE';
     for (const f of activeCommunities(state)) charity(state, f, { festival });
   }
+  // In a hunger crisis, any season, communities open their stores to the hungry.
+  const starving = state.citizens.filter((c) => c.needs.hunger < 22).length;
+  if (starving >= 3) for (const f of activeCommunities(state)) {
+    if (state.day - (f.lastRelief ?? -99) < 3) continue;
+    f.lastRelief = state.day;
+    charity(state, f);
+  }
   if (!isNewSeason(state.day)) return;
   found(state);
   const winter = seasonIndex(state.day) === 3;
