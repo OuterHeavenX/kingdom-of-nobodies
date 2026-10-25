@@ -1,4 +1,5 @@
 import { enjoyFestival } from '../culture/Festivals.js';
+import { celebrationSpot, celebrated, holidayNow } from '../culture/Holidays.js';
 import { byId } from '../core/EntityRegistry.js';
 import { NEEDS, MOVE, GOODS, FOOD_GOODS, ECONOMY } from '../core/Config.js';
 import { range, chance } from '../core/Random.js';
@@ -42,7 +43,7 @@ const clamp = (v) => Math.max(0, Math.min(100, v));
 const LABELS = {
   eat_own: 'Eating', steal: 'Stealing food', court: 'At court', see_caravan: 'Overseeing a caravan', eat_stock: 'Eating from stock', buy_food: 'Buying food', sleep: 'Sleeping', work: 'Working', build: 'Building',
   seek_job: 'Looking for work', forage: 'Foraging in the forest', sell_goods: 'Selling goods', socialize: 'Socialising',
-  tavern: 'At the tavern', help: 'Helping a neighbour', festival: 'Enjoying the festival', buy_plot: 'Buying property',
+  tavern: 'At the tavern', help: 'Helping a neighbour', festival: 'Enjoying the festival', celebrate: 'Celebrating the holiday', buy_plot: 'Buying property',
   start_project: 'Starting a building project', explore: 'Wandering', idle: 'Taking a moment',
   cradle: 'Being looked after', rest_sick: 'Resting while ill', vote: 'Voting', campaign: 'Campaigning', govern: 'Governing', fight_fire: 'Fighting a fire', lessons: 'Lessons', apprentice: 'Apprenticing', mentor: 'Mentoring', family_time: 'Family time',
 };
@@ -274,6 +275,12 @@ function begin(state, c, k) {
       const t = byId(state.citizens, k.citizenId);
       return activity('help', `Helping ${t.firstName}`, { x: t.x, z: t.z }, 2, { citizenId: t.id });
     }
+    case 'celebrate': {
+      const now = holidayNow(state);
+      if (!now || now.key !== k.key) return null;
+      const spot = celebrationSpot(state, c, now, (lo, hi) => range(state, lo, hi));
+      return activity('celebrate', spot.label, spot, 8, { holiday: now.id, key: now.key, partnerId: spot.partnerId ?? null });
+    }
     case 'festival': return activity('festival', k.seasonal ? `At the ${state.culture?.current?.name ?? 'festival'}` : 'Celebrating at the festival', square(state), 10, { seasonal: !!k.seasonal });
     case 'buy_plot': {
       if (!reservePlot(state, k.plotId, c.id)) return null;
@@ -439,6 +446,7 @@ function finish(state, c) {
       }
       break;
     }
+    case 'celebrate': celebrated(state, c, a, nearby(state, c, 6), (others) => chat(state, c, others, 1.2)); break;
     case 'festival': chat(state, c, nearby(state, c, 7).slice(0, 3), 1.4); c.needs.social = clamp(c.needs.social + 30); c.mood = clamp(c.mood + 5); if (a.seasonal) enjoyFestival(state, c); break;
     case 'buy_plot': {
       const target = plotById(state, a.plotId);

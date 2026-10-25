@@ -122,6 +122,38 @@ const BASE = process.env.BASE_URL ?? 'http://localhost:4173/kingdom-of-nobodies/
   await page.waitForFunction(() => /Greenvale/.test(document.getElementById('sheet-body').textContent));
   step('trade, laws & courts and foreign relations panels open');
 
+  // Milestone 5.1: Holiday Preview changes only the picture; settings and holiday choices are kept.
+  await page.evaluate(() => { if (!kingdom.clock.paused) kingdom.clock.togglePause(); });
+  const frozen = await page.evaluate(() => JSON.stringify(kingdom.sim.state));
+  await page.tap('#tabbar button[data-tab=council]');
+  await page.waitForSelector('#celebrations');
+  assert.match(await page.textContent('#sheet-body'), /v0\.5\.1/, 'version 0.5.1 shown');
+  await page.evaluate(() => document.getElementById('celebrations').scrollIntoView());
+  await page.tap('#sheet-body [data-act=preview][data-id=valentine]');
+  await page.waitForSelector('#view-banner:not([hidden])');
+  assert.match(await page.textContent('#view-banner'), /Previewing/);
+  assert.equal(await page.evaluate(() => kingdom.world.themes.preview?.id), 'valentine');
+  await page.waitForTimeout(1500);
+  assert.ok(await page.evaluate(() => kingdom.world.themes.set?.count > 20), 'the town is decorated');
+  assert.match(await page.textContent('#holiday-chip'), /Preview/);
+  await page.tap('#sheet-body [data-act=preview][data-id=halloween]');
+  await page.waitForTimeout(800);
+  await page.tap('#go-home');
+  await page.waitForSelector('#view-banner[hidden]', { state: 'attached' });
+  assert.equal(await page.evaluate(() => kingdom.world.themes.preview), null);
+  assert.equal(await page.evaluate(() => JSON.stringify(kingdom.sim.state)), frozen, 'preview changed nothing in the kingdom');
+  step('Holiday Preview shows Valentine\'s Day and Halloween and returns to the real season, changing nothing');
+  await page.evaluate(() => document.getElementById('celebrations').scrollIntoView());
+  await page.tap('#sheet-body [data-act=hset][data-key=density][data-value=low]');
+  await page.tap('#sheet-body [data-act=holiday-toggle][data-id=halloween]');
+  assert.equal(await page.evaluate(() => kingdom.settings.holidays.density), 'low');
+  assert.equal(await page.evaluate(() => kingdom.sim.state.holidays.enabled.halloween), false);
+  await page.evaluate(() => kingdom.hud.toasts.show('A test notice'));
+  await page.tap('#toasts .toast:last-child');
+  await page.waitForFunction(() => ![...document.querySelectorAll('#toasts .toast')].some((t) => t.textContent === 'A test notice' && !t.classList.contains('leaving')));
+  await page.evaluate(() => kingdom.clock.togglePause());
+  step('holiday and graphics settings respond to touch; a tap dismisses a notice');
+
   await page.evaluate(async () => { while (kingdom.sim.state.day < 9) kingdom.sim.step(); await kingdom.save(); });
   const saved = await page.evaluate(() => ({ day: kingdom.sim.state.day, tick: kingdom.sim.state.tick }));
   await page.reload();
@@ -129,7 +161,9 @@ const BASE = process.env.BASE_URL ?? 'http://localhost:4173/kingdom-of-nobodies/
   const loaded = await page.evaluate(() => ({ day: kingdom.sim.state.day, tick: kingdom.sim.state.tick }));
   assert.equal(loaded.day, saved.day);
   assert.ok(loaded.tick >= saved.tick);
-  step('the world survives a page reload');
+  assert.equal(await page.evaluate(() => kingdom.settings.holidays.density), 'low', 'display settings kept on this device');
+  assert.equal(await page.evaluate(() => kingdom.sim.state.holidays.enabled.halloween), false, 'holiday choices kept with the kingdom');
+  step('the world survives a page reload, with its holiday choices and settings');
 
   assert.deepEqual(errors, [], 'no page errors');
   await browser.close();

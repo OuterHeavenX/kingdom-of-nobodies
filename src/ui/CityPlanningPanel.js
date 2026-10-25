@@ -16,7 +16,7 @@ export function worldPanel(sim, view) {
   const d = landDemand(s);
   const mode = view.worldMode ?? 'overview';
   const seg = `<div class="segmented scroll-seg">${[['overview', 'Town'], ['plans', 'Plans'], ['districts', 'Districts'], ['building', 'Building']].map(([k, l]) => `<button class="${mode === k ? 'active' : ''}" data-act="world-mode" data-id="${k}">${l}</button>`).join('')}</div>`;
-  const camera = `<div class="grid2"><button class="btn" data-act="overview">🔭 Overview</button><button class="btn" data-act="tab" data-id="region">🗺️ Region</button></div>`;
+  const camera = `<div class="grid2"><button class="btn" data-act="overview">🔭 Overview</button><button class="btn" data-act="tab" data-id="region">🗺️ Region</button><button class="btn" data-act="celebrations">🎉 Seasons & holidays</button></div>`;
   let body = '';
   if (mode === 'overview') {
     const w = s.weather?.today;

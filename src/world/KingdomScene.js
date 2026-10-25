@@ -5,7 +5,8 @@ import { makeVillager } from './Villagers.js';
 import { cartModel } from './Caravans.js';
 import { KINGDOMS, HEARTH } from '../region/RegionData.js';
 import { peopleOf, foreignAge } from '../region/ForeignCitizenManager.js';
-import { stageForAge } from '../core/Calendar.js';
+import { stageForAge, seasonIndex } from '../core/Calendar.js';
+import { addSnow } from '../effects/SnowAccumulation.js';
 
 // A neighbouring kingdom drawn in 3D when the player visits it. Each has its
 // own landscape and architecture: Greenvale's rolling farmland and windmills,
@@ -45,13 +46,14 @@ function figureFor(p, kid, day) {
 /** Common ground: a large disc of land, coloured for the kingdom and season. */
 function ground(g, color, radius = 120) {
   const geo = new THREE.CircleGeometry(radius, 48).rotateX(-Math.PI / 2);
-  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color, roughness: 1, flatShading: true }));
+  const m = new THREE.Mesh(geo, addSnow(new THREE.MeshStandardMaterial({ color, roughness: 1, flatShading: true })));
   m.receiveShadow = true;
   g.add(m);
   return m;
 }
 
-function road(g, points, width = 3, color = P.path) {
+function road(g, spots, points, width = 3, color = P.path) {
+  spots.roads.push({ points, width });
   for (let i = 1; i < points.length; i++) {
     const [ax, az] = points[i - 1], [bx, bz] = points[i];
     const len = Math.hypot(bx - ax, bz - az);
@@ -86,12 +88,15 @@ function windmill(g, x, z, r) {
   return hub;
 }
 
-function field(g, x, z, w, d, ripe, r = 0) {
+/** A field whose crop follows the season: young shoots, full growth, ripe gold, winter stubble. */
+function field(g, x, z, w, d, season = 1, r = 0) {
+  const crop = [P.crop, P.crop, P.cropRipe, '#9a8a66'][season] ?? P.crop;
+  const grow = [0.55, 1, 1.05, 0.3][season] ?? 1;
   const f = new THREE.Group();
   f.position.set(x, 0, z);
   f.rotation.y = r;
   part(f, G.plane(), mat(P.field), [w, 1, d], [0, 0.03, 0], null, false);
-  for (let i = 0; i < Math.floor(d / 1.2); i++) part(f, G.box(), mat(ripe ? P.cropRipe : P.crop), [w - 0.6, 0.35, 0.5], [0, 0.2, -d / 2 + 0.6 + i * 1.2], null, false);
+  for (let i = 0; i < Math.floor(d / 1.2); i++) part(f, G.box(), mat(crop), [w - 0.6, 0.35 * grow, 0.5], [0, 0.2 * grow, -d / 2 + 0.6 + i * 1.2], null, false);
   g.add(f);
 }
 
@@ -130,46 +135,51 @@ function tents(g, x, z, n, color) {
 // --- Kingdom layouts -------------------------------------------------------------------
 
 const LAYOUTS = {
-  greenvale(g, r, anim) {
+  greenvale(g, r, anim, spots) {
     const geos = [ground(g, '#7fb069')];
     // Rolling hills.
     for (let i = 0; i < 14; i++) { const a = r() * Math.PI * 2, d = 45 + r() * 50; part(g, G.sphere(10), mat(i % 2 ? '#86b56c' : '#78a85f'), [22 + r() * 18, 6 + r() * 6, 22 + r() * 18], [Math.cos(a) * d, -1.5, Math.sin(a) * d], null, false); }
-    road(g, [[-60, 0], [-10, 0], [0, 0], [10, 6], [60, 20]], 3.2);
-    road(g, [[0, 0], [0, -40]], 2.4);
+    road(g, spots, [[-60, 0], [-10, 0], [0, 0], [10, 6], [60, 20]], 3.2);
+    road(g, spots, [[0, 0], [0, -40]], 2.4);
     // The steward's hall, farmhouses, barns and a grain store round the green.
     const hall = new THREE.Group(); house(hall, { w: 7, d: 5, h: 3, wall: P.plasterWarm, roof: P.thatch, roofH: 2.6, shutters: '#4f7a5a' }); hall.position.set(0, 0, -10); g.add(hall);
+    spots.homes.push({ x: 0, z: -10, yaw: 0, w: 7, d: 5 }); spots.ghosts.push([0, -6]);
     for (let i = 0; i < 9; i++) {
       const h = new THREE.Group();
       house(h, { w: 3.6 + r() * 0.8, d: 3.2, h: 2.2, wall: r() < 0.5 ? P.plaster : P.plasterWarm, roof: P.thatch, roofH: 1.8, shutters: ['#4f7a5a', '#a4553e', '#6a4a8a'][i % 3] });
       fence(h, 6, 5.6);
       const a = (i / 9) * Math.PI * 2 + 0.3, d = 18 + (i % 3) * 7;
       h.position.set(Math.cos(a) * d, 0, Math.sin(a) * d); h.rotation.y = -a - Math.PI / 2; g.add(h);
+      spots.homes.push({ x: h.position.x, z: h.position.z, yaw: h.rotation.y, w: 4.2, d: 3.2, fence: 6 });
     }
     const store = buildingModel('granary', { id: 'gv-granary', open: true }); store.position.set(14, 0, -6); g.add(store);
-    for (const [x, z, w, d, rot] of [[-38, -22, 18, 12, 0.2], [-30, 26, 16, 10, -0.3], [34, -28, 20, 12, 0.5], [30, 34, 14, 12, 0.1], [-52, 4, 12, 16, 0]]) field(g, x, z, w, d, true, rot);
+    for (const [x, z, w, d, rot] of [[-38, -22, 18, 12, 0.2], [-30, 26, 16, 10, -0.3], [34, -28, 20, 12, 0.5], [30, 34, 14, 12, 0.1], [-52, 4, 12, 16, 0]]) { field(g, x, z, w, d, spots.season, rot); spots.fields.push([x, z, w, d, rot]); }
     anim.push(...[[-24, -40, 0.3], [40, -10, -1.2], [-12, 44, 2.4]].map(([x, z, rr]) => ({ kind: 'spin', obj: windmill(g, x, z, rr), speed: 0.9 })));
+    spots.windmills.push([-24, -40], [40, -10], [-12, 44]);
     for (let i = 0; i < 6; i++) { const s = buildingModel('stall', { id: 'gvs' + i, open: true }); const a = i * 1.05; s.position.set(Math.cos(a) * 7, 0, 4 + Math.sin(a) * 5); s.rotation.y = -a; s.scale.setScalar(0.75); g.add(s); }
     for (let i = 0; i < 30; i++) { const a = r() * Math.PI * 2, d = 40 + r() * 60; tree(g, Math.cos(a) * d, Math.sin(a) * d, 0.8 + r() * 0.6); }
     for (let i = 0; i < 6; i++) crate(g, 10 + r() * 6, 2 + r() * 6, 0.6);
     return { geos, market: { x: 0, z: 4 }, gate: { x: -60, z: 0 }, camp: { x: -70, z: 18 }, sky: '#b9dcef' };
   },
-  ironhold(g, r, anim) {
+  ironhold(g, r, anim, spots) {
     const geos = [ground(g, '#8a8a80')];
     // The mountains behind the town and a scree of rocks.
     for (let i = 0; i < 9; i++) { const x = -70 + i * 18 + r() * 6, h = 26 + r() * 22; part(g, G.cone(6), mat(i % 2 ? '#6f7178' : '#7d8088'), [26 + r() * 10, h, 22], [x, h / 2 - 1, -62 - r() * 12], [0, r(), 0]); part(g, G.cone(6), mat('#eef2f4'), [9, h * 0.3, 8], [x, h * 0.9, -62 - 4], null, false); }
     for (let i = 0; i < 40; i++) { const a = r() * Math.PI * 2, d = 30 + r() * 60; part(g, G.dodeca(), mat(i % 3 ? '#77777a' : '#8c8b86'), [1 + r() * 3, 0.8 + r() * 2, 1 + r() * 3], [Math.cos(a) * d, 0.4, Math.sin(a) * d + 10], [r(), r(), r()]); }
-    road(g, [[0, 70], [0, 20], [0, 0], [-6, -30], [-14, -50]], 3, '#9a948a');
+    road(g, spots, [[0, 70], [0, 20], [0, 0], [-6, -30], [-14, -50]], 3, '#9a948a');
     wallRing(g, 0, -2, 30, [Math.PI / 2]);
     // Stone houses, the guildmaster's keep, smithies and the smelter.
     const keep = new THREE.Group();
     part(keep, G.box(), mat(P.stoneDark), [8, 8, 7], [0, 4, 0]); part(keep, G.cone(4), mat(P.roofSlate), [10, 4, 9], [0, 10, 0], [0, Math.PI / 4, 0]);
     part(keep, G.box(), mat(P.door), [1.6, 2.4, 0.2], [0, 1.2, 3.55]); part(keep, G.box(), litWindow, [0.6, 1, 0.1], [-2, 5, 3.56], null, false); part(keep, G.box(), litWindow, [0.6, 1, 0.1], [2, 5, 3.56], null, false);
     keep.position.set(0, 0, -20); g.add(keep);
+    spots.homes.push({ x: 0, z: -20, yaw: 0, w: 8, d: 7 }); spots.ghosts.push([0, -15]); spots.wall = { x: 0, z: -2, r: 30, gap: Math.PI / 2 };
     for (let i = 0; i < 10; i++) {
       const h = new THREE.Group();
       house(h, { w: 3.8, d: 3.4, h: 2.4, stone: true, roof: P.roofSlate, roofH: 1.6 });
       const a = (i / 10) * Math.PI * 2, d = 14 + (i % 2) * 6;
       h.position.set(Math.cos(a) * d, 0, -2 + Math.sin(a) * d); h.rotation.y = -a - Math.PI / 2; g.add(h);
+      spots.homes.push({ x: h.position.x, z: h.position.z, yaw: h.rotation.y, w: 3.8, d: 3.4 });
     }
     for (const [x, z] of [[-10, 8], [10, 8]]) { const b = buildingModel('blacksmith', { id: 'ih' + x, open: true }); b.position.set(x, 0, z); b.rotation.y = Math.PI; g.add(b); }
     // The smelter with its glowing furnace, and the mine mouth in the mountain.
@@ -180,7 +190,7 @@ const LAYOUTS = {
     logPile(g, 16, 10, 6);
     return { geos, market: { x: 0, z: 2 }, gate: { x: 0, z: 34 }, camp: { x: 6, z: 52 }, sky: '#a9b8c8' };
   },
-  saltmere(g, r, anim) {
+  saltmere(g, r, anim, spots) {
     const geos = [ground(g, '#c9c08e')];
     // The sea, with a gentle swell.
     const sea = new THREE.Mesh(new THREE.PlaneGeometry(260, 140, 20, 10).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#4f8fb0', roughness: 0.35, metalness: 0.1, flatShading: true, transparent: true, opacity: 0.94 }));
@@ -188,27 +198,30 @@ const LAYOUTS = {
     g.add(sea);
     geos.push(sea);
     anim.push({ kind: 'swell', obj: sea });
-    road(g, [[-60, 6], [60, 6]], 3.2, '#d4c49c');
-    road(g, [[0, 6], [0, -50]], 2.6, '#d4c49c');
+    road(g, spots, [[-60, 6], [60, 6]], 3.2, '#d4c49c');
+    road(g, spots, [[0, 6], [0, -50]], 2.6, '#d4c49c');
     // Whitewashed houses with blue roofs, warehouses on the quay, the Doge's palace.
     const palace = new THREE.Group();
     house(palace, { w: 9, d: 6, h: 3.2, wall: '#f4f1ea', roof: '#3f6fa3', roofH: 2.4, shutters: '#3f6fa3' });
     part(palace, G.box(), mat('#f4f1ea'), [2, 6, 2], [3.5, 3, -2]); part(palace, G.cone(4), mat('#3f6fa3'), [2.8, 2, 2.8], [3.5, 7, -2], [0, Math.PI / 4, 0]);
     palace.position.set(0, 0, -16); g.add(palace);
+    spots.homes.push({ x: 0, z: -16, yaw: 0, w: 9, d: 6 }); spots.ghosts.push([0, -11]); spots.sea = 34;
     for (let i = 0; i < 12; i++) {
       const h = new THREE.Group();
       house(h, { w: 3.4, d: 3.2, h: 2.4 + (i % 3) * 0.5, wall: '#f4f1ea', roof: i % 2 ? '#3f6fa3' : '#5fa8c4', roofH: 1.4, frame: false, shutters: '#3f6fa3' });
       const x = -40 + (i % 6) * 14 + r() * 3, z = i < 6 ? -6 : -26;
       h.position.set(x, 0, z); h.rotation.y = i < 6 ? 0 : Math.PI; g.add(h);
+      spots.homes.push({ x, z, yaw: h.rotation.y, w: 3.4, d: 3.2 });
     }
     for (let i = 0; i < 4; i++) { const w = new THREE.Group(); house(w, { w: 7, d: 5, h: 3, wall: P.plank, roof: P.roofBrown, roofH: 1.6, frame: true, chimney: null }); w.position.set(-36 + i * 22, 0, 18); w.rotation.y = Math.PI; g.add(w); for (let k = 0; k < 3; k++) barrel(g, -32 + i * 22 + k, 22); }
     // Docks on posts, and the fishing and merchant fleet.
     for (const x of [-30, -6, 18, 40]) {
+      spots.docks.push(x);
       part(g, G.box(), mat(P.plank), [3, 0.3, 26], [x, 0.9, 40]);
       for (let z = 28; z <= 52; z += 4) for (const s of [-1, 1]) part(g, G.cyl(6), mat(P.timberDark), [0.3, 2.6, 0.3], [x + s * 1.4, 0, z], null, false);
     }
     const sails = ['#f0e2c6', '#c45c49', '#f4f1ea', '#5fa8c4', '#d39a3a'];
-    for (let i = 0; i < 7; i++) anim.push({ kind: 'bob', obj: boat(g, -36 + i * 12 + r() * 3, 46 + (i % 2) * 10, r() * 0.4 - 0.2, sails[i % sails.length]), phase: i * 1.3 });
+    for (let i = 0; i < 7; i++) { const a = { kind: 'bob', obj: boat(g, -36 + i * 12 + r() * 3, 46 + (i % 2) * 10, r() * 0.4 - 0.2, sails[i % sails.length]), phase: i * 1.3 }; anim.push(a); spots.boats.push(a.obj); }
     // A lighthouse on the point.
     part(g, G.cyl(8), mat('#f4f1ea'), [3, 12, 3], [62, 6, 40]); part(g, G.cyl(8), litWindow, [2, 1.6, 2], [62, 12.8, 40], null, false); part(g, G.cone(8), mat('#b8443a'), [2.8, 2, 2.8], [62, 14.6, 40]);
     for (let i = 0; i < 6; i++) { const s = buildingModel('stall', { id: 'sms' + i, open: true }); s.position.set(-10 + i * 4, 0, 10); s.rotation.y = Math.PI; s.scale.setScalar(0.75); g.add(s); }
@@ -223,7 +236,8 @@ export class KingdomScene {
     this.group = new THREE.Group();
     this.anim = [];
     const r = rng(kid);
-    this.layout = LAYOUTS[kid](this.group, r, this.anim);
+    this.spots = { homes: [], roads: [], fields: [], windmills: [], docks: [], boats: [], ghosts: [], wall: null, sea: null, season: seasonIndex(state.day) };
+    this.layout = LAYOUTS[kid](this.group, r, this.anim, this.spots);
     this.people = new Map();
     this.peopleRoot = new THREE.Group();
     this.group.add(this.peopleRoot);
@@ -231,6 +245,64 @@ export class KingdomScene {
     this.group.add(this.extras);
     this.extrasKey = '';
     this.sync(state);
+  }
+
+  /**
+   * Where this kingdom can be decorated, in the same shape DecorationSpawner
+   * uses for First Hearth: beside doors, along verges, round the market, in
+   * the fields, plus its own landmarks (windmills, docks, ships, walls).
+   */
+  decorSites() {
+    const sp = this.spots, m = this.layout.market;
+    const homesR = sp.homes.map((h) => [h.x, h.z, Math.max(h.w, h.d) / 2 + 1.1]);
+    const onRoad = (x, z, r) => sp.roads.some(({ points, width }) => points.some((p, i) => {
+      if (!i) return false;
+      const [ax, az] = points[i - 1], [bx, bz] = p;
+      const L = Math.hypot(bx - ax, bz - az) || 1;
+      const t = Math.max(0, Math.min(1, ((x - ax) * (bx - ax) + (z - az) * (bz - az)) / (L * L)));
+      return Math.hypot(x - (ax + (bx - ax) * t), z - (az + (bz - az) * t)) < width / 2 + r + 0.3;
+    }));
+    const free = (x, z, r = 0.5) => Math.hypot(x, z) < 95 && (sp.sea == null || z < sp.sea - r) && !onRoad(x, z, r)
+      && !homesR.some(([hx, hz, hr]) => Math.hypot(x - hx, z - hz) < hr + r) && Math.hypot(x - m.x, z - m.z) > 6.5 + r
+      && !(sp.wall && Math.abs(Math.hypot(x - sp.wall.x, z - sp.wall.z) - sp.wall.r) < 1.6 + r);
+    const local = (h, lx, lz) => [h.x + lx * Math.cos(h.yaw) + lz * Math.sin(h.yaw), h.z - lx * Math.sin(h.yaw) + lz * Math.cos(h.yaw)];
+    const homes = [], doors = [], corners = [], yards = [];
+    for (const h of sp.homes) {
+      const [dx, dz] = local(h, 0, h.d / 2 + 0.1);
+      doors.push([dx, dz, h.yaw]);
+      for (const s of [-1, 1]) {
+        const [x, z] = local(h, s * (h.w / 2 + 0.95), h.d / 2 - 0.2);
+        if (free(x, z, 0.3) || Math.hypot(x - h.x, z - h.z) > Math.max(h.w, h.d) / 2) homes.push([x, z, h.yaw]);
+        corners.push([...local(h, s * (h.w / 2 - 0.05), h.d / 2 + 0.05), h.yaw]);
+        const [yx, yz] = local(h, s * (h.w / 2 + 1.6), -h.d / 2 - 1.2);
+        if (free(yx, yz, 0.4)) yards.push([yx, yz, h.yaw]);
+      }
+    }
+    const verges = [];
+    for (const { points, width } of sp.roads) for (let i = 1; i < points.length; i++) {
+      const [ax, az] = points[i - 1], [bx, bz] = points[i];
+      const L = Math.hypot(bx - ax, bz - az), nx = -(bz - az) / (L || 1), nz = (bx - ax) / (L || 1);
+      for (let t = 2; t < L - 2; t += 4) for (const side of [-1, 1]) {
+        const x = ax + ((bx - ax) * t) / L + nx * side * (width / 2 + 0.8), z = az + ((bz - az) * t) / L + nz * side * (width / 2 + 0.8);
+        if (free(x, z, 0.35)) verges.push([x, z, Math.atan2(nx * side, nz * side)]);
+      }
+    }
+    const square = [];
+    for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2; const x = m.x + Math.cos(a) * 9.5, z = m.z + Math.sin(a) * 8; if (free(x, z, 0.4) || !onRoad(x, z, 0.4)) square.push([x, z, -a - Math.PI / 2]); }
+    const features = [];
+    for (let i = 0; i < 24 && features.length < 6; i++) { const a = i * 2.4, d = 13 + (i % 4) * 3; const x = m.x + Math.cos(a) * d, z = m.z + Math.sin(a) * d; if (free(x, z, 1.7)) features.push([x, z]); }
+    const farms = [];
+    for (const [fx, fz, w, d, rot] of sp.fields) for (let i = -2; i <= 2; i++) for (const j of [-1, 1]) farms.push([fx + Math.cos(rot) * i * (w / 5) + Math.sin(rot) * j * (d / 2 + 0.8), fz - Math.sin(rot) * i * (w / 5) + Math.cos(rot) * j * (d / 2 + 0.8), rot]);
+    const along = sp.roads[0]?.points ?? [[-30, 0], [30, 0]];
+    const mainRoad = [along[0], along[Math.min(along.length - 1, 2)]].map(([x, z]) => [x * 0.6, z * 0.6]);
+    const lampPairs = verges.length > 3 ? [[verges[0], verges[2]], [verges[1], verges[3]]].map(([a, b]) => [[a[0], a[1]], [b[0], b[1]]]) : [];
+    return {
+      kind: this.kid, free, homes, doors, corners, yards, farms, verges, square, features, lampPairs, lamps: [],
+      sweethearts: square.slice(0, 4).map(([x, z]) => [x, z]), ghosts: [[m.x, m.z], ...sp.ghosts, ...homes.filter((_, i) => i % 6 === 0).slice(0, 3).map(([x, z]) => [x, z])],
+      mainRoad, windmills: sp.windmills, docks: sp.docks, boats: sp.boats, wall: sp.wall,
+      fireworks: sp.sea != null ? [[0, 62], [-24, 60], [24, 60]] : [[m.x, m.z - 4], [m.x - 14, m.z - 10], [m.x + 14, m.z - 10]],
+      fireworksHeight: sp.sea != null ? [14, 24] : [18, 30],
+    };
   }
 
   /** Waypoints a named person walks between, chosen stably from their id. */

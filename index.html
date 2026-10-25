@@ -3,27 +3,27 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
-  <meta name="theme-color" content="#14201b" />
+  <meta name="theme-color" content="#0f1230" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>Kingdom of Nobodies | The Age of Empires & Prosperity</title>
+  <title>Kingdom of Nobodies | Seasons & Celebrations</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♜</text></svg>" />
   <style>
     /* Startup screen styles are inline so they work even if the stylesheet fails to load. */
-    html, body { margin: 0; height: 100%; background: #14201b; }
+    html, body { margin: 0; height: 100%; background: #0f1230; }
     #boot { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
-      background: radial-gradient(circle at 50% 40%, #24392c, #101a15 70%); color: #f5edd7; font-family: -apple-system, system-ui, sans-serif; text-align: center; padding: 24px; transition: opacity .5s; }
+      background: radial-gradient(circle at 50% 40%, #2a2f7a, #0b0d26 70%); color: #f5edd7; font-family: -apple-system, system-ui, sans-serif; text-align: center; padding: 24px; transition: opacity .5s; }
     #boot.done { opacity: 0; pointer-events: none; }
     #boot .crest { font-size: 54px; animation: kon-pulse 1.6s ease-in-out infinite; }
     #boot h1 { font: 700 22px/1.2 Georgia, serif; margin: 0; letter-spacing: .5px; }
-    #boot p { margin: 0; color: #c9d2c0; font-size: 14px; max-width: 320px; line-height: 1.45; }
-    #boot .bar { width: 180px; height: 4px; border-radius: 4px; background: #2c4235; overflow: hidden; }
-    #boot .bar i { display: block; height: 100%; width: 40%; background: #e6b976; animation: kon-slide 1.2s ease-in-out infinite; }
-    #boot button { display: none; margin-top: 6px; padding: 12px 20px; border-radius: 10px; border: 1px solid #738d71; background: #344e3b; color: #f5edd7; font-size: 15px; }
+    #boot p { margin: 0; color: #c9cdf2; font-size: 14px; max-width: 320px; line-height: 1.45; }
+    #boot .bar { width: 180px; height: 4px; border-radius: 4px; background: #2c347a; overflow: hidden; }
+    #boot .bar i { display: block; height: 100%; width: 40%; background: #ffc94a; animation: kon-slide 1.2s ease-in-out infinite; }
+    #boot button { display: none; margin-top: 6px; padding: 12px 20px; border-radius: 10px; border: 1px solid #7a83d8; background: #3a3fb0; color: #f5edd7; font-size: 15px; }
     #boot.failed .bar, #boot.failed .crest { animation: none; }
     #boot.failed .bar { display: none; }
     #boot.failed button { display: inline-block; }
-    #boot small { position: absolute; bottom: max(14px, env(safe-area-inset-bottom)); color: #7f8f80; font-size: 11px; }
+    #boot small { position: absolute; bottom: max(14px, env(safe-area-inset-bottom)); color: #8a90c8; font-size: 11px; }
     @keyframes kon-pulse { 50% { transform: scale(1.08); } }
     @keyframes kon-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
   </style>
@@ -80,7 +80,7 @@
     <header id="topbar">
       <div class="brand">
         <span class="crown">♜</span>
-        <div><strong id="kingdom-name">Kingdom of Nobodies</strong><span id="clock">Day 1 · 08:00</span></div>
+        <div><strong id="kingdom-name">Kingdom of Nobodies</strong><span id="clock">Day 1 · 08:00</span><span id="holiday-chip" class="holiday-chip" hidden></span></div>
       </div>
       <div id="stats" class="stats" aria-label="Kingdom statistics"></div>
       <div class="time-controls">

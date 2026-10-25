@@ -24,6 +24,9 @@ import { foreignDetail, warDetail, armyDetail } from './MilitaryPanel.js';
 import { cloudCard } from './CloudSavePanel.js';
 import { noteVisit } from '../region/ForeignCitizenManager.js';
 import { KINGDOMS } from '../region/RegionData.js';
+import { celebrationsCard, untilText } from './CelebrationsPanel.js';
+import { setHolidayEnabled, holidayNow } from '../culture/Holidays.js';
+import { HOLIDAY_BY_ID, SEASON_THEMES } from '../holidays/HolidayRegistry.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -153,6 +156,21 @@ export class HUD {
         break;
       }
       case 'tax': { const res = this.sim.council('setTax', id); this.toasts.show(res.message, { bad: !res.ok }); this.renderSheet(true); break; }
+      case 'celebrations': this.openTab('council'); setTimeout(() => $('celebrations')?.scrollIntoView({ block: 'start' }), 60); break;
+      case 'preview': this.preview(id); break;
+      case 'preview-exit': this.preview(null); break;
+      case 'preview-night': g.world?.themes.setPreviewNight(!(g.world.themes.preview?.hour >= 20)); this.renderSheet(true); break;
+      case 'preview-fireworks': g.world?.themes.replayFireworks(); break;
+      case 'holiday-toggle': setHolidayEnabled(this.sim.state, id, el.checked); g.world?.themes.check(true); this.renderSheet(true); break;
+      case 'hset': {
+        if (e.type === 'click' && el.type === 'checkbox') break; // checkboxes are handled on change
+        const key = el.dataset.key;
+        if (key === 'quality') { g.setSetting('quality', el.dataset.value); this.renderSheet(true); break; }
+        const value = el.type === 'checkbox' ? el.checked : key === 'linger' ? Number(el.dataset.value) : el.dataset.value;
+        g.setHolidaySetting(key, value);
+        this.renderSheet(true);
+        break;
+      }
       case 'labels': g.setSetting('labels', el.checked); break;
       case 'quality': g.setSetting('quality', id); this.renderSheet(true); break;
       case 'save': g.save(true); break;
@@ -168,21 +186,38 @@ export class HUD {
   visit(kid) {
     const w = this.game.world;
     if (!w) { this.toasts.show('The 3D view is not available on this device.', { bad: true }); return; }
-    if (!kid || kid === 'hearth') { w.home(); this.setBanner(null); return; }
+    if (!kid || kid === 'hearth') { w.home(); if (w.themes.preview) w.themes.stopPreview(); this.setBanner(null); return; }
     noteVisit(this.sim.state, kid);
+    if (w.themes.preview) w.themes.stopPreview();
     w.visit(kid);
     this.setBanner(`🏰 Visiting ${KINGDOMS[kid].name}`);
     this.sheet.set('peek');
   }
 
-  /** The banner over the 3D view while away from First Hearth, with a way home. */
-  setBanner(text) {
+  /**
+   * Start (or with null, end) a Holiday Preview: visual only. The banner says
+   * what is being previewed and offers the way back to the real season.
+   */
+  preview(id) {
+    const w = this.game.world;
+    if (!w) { this.toasts.show('The 3D view is not available on this device.', { bad: true }); return; }
+    if (!id) { w.themes.stopPreview(); this.setBanner(this.awayBanner ?? null); this.renderSheet(true); return; }
+    w.themes.startPreview(id);
+    const def = HOLIDAY_BY_ID[id] ?? SEASON_THEMES.find((t) => t.id === id);
+    this.setBanner(`👁 Previewing ${def.icon} ${def.name}`, { label: '✓ Exit preview', action: () => this.preview(null) });
+    this.renderSheet(true);
+  }
+
+  /** The banner over the 3D view: while away from First Hearth (with a way home) or while previewing. */
+  setBanner(text, button = null) {
     const el = $('view-banner');
     if (!el) return;
+    if (!button) this.awayBanner = text;
     el.hidden = !text;
-    if (text) el.innerHTML = `<span>${text}</span><button class="btn small" id="go-home">⌂ First Hearth</button>`;
+    const b = button ?? { label: '⌂ First Hearth', action: () => this.visit('hearth') };
+    if (text) el.innerHTML = `<span>${text}</span><button class="btn small" id="go-home">${b.label}</button>`;
     const btn = $('go-home');
-    if (btn) btn.onclick = () => this.visit('hearth');
+    if (btn) btn.onclick = b.action;
   }
 
   /** Called every animation frame; throttles DOM work. */
@@ -199,6 +234,7 @@ export class HUD {
     const name = 'Kingdom of Nobodies';
     if ($('kingdom-name').textContent !== name) $('kingdom-name').textContent = name;
     if (clockEl.textContent !== text) clockEl.textContent = text;
+    this.renderHolidayChip();
     const stats = `<span class="stat" title="Treasury">🪙 ${balance(s, 'treasury')}</span><span class="stat" title="Food in the village">🍞 ${this.sim.food}</span>` +
       `<span class="stat" title="Timber">🪵 ${this.sim.wood}</span><span class="stat" title="Population">👥 ${s.citizens.length}</span><span class="stat" title="Average happiness">♥ ${this.sim.averageMood}%</span>`;
     if (force || this.statsHtml !== stats) { $('stats').innerHTML = stats; this.statsHtml = stats; }
@@ -207,6 +243,23 @@ export class HUD {
     $('pause').classList.toggle('active', clockState.paused);
     $('pause').setAttribute('aria-label', clockState.paused ? 'Resume' : 'Pause');
     $('speed').textContent = `${clockState.speed}×`;
+  }
+
+  /** The holiday under the date: what the village shows, with the countdown to midnight on New Year's Eve. */
+  renderHolidayChip() {
+    const el = $('holiday-chip');
+    if (!el) return;
+    const st = this.game.world?.themes.status;
+    const h = st ? st.holiday : holidayNow(this.sim.state);
+    let text = '', cls = 'holiday-chip';
+    if (st?.preview) { text = `👁 Preview: ${h ? `${h.icon} ${h.name}` : SEASON_THEMES.find((t) => t.id === st.preview)?.name ?? ''}`; cls += ' preview'; }
+    else if (h) {
+      text = `${h.icon} ${h.name}${st?.source === 'real' ? ' · your calendar' : ''}`;
+      if (h.minutesToMidnight != null) { text += ` · ${untilText(h.minutesToMidnight)} to midnight`; cls += ' countdown'; }
+    }
+    if (el.textContent !== text) el.textContent = text;
+    if (el.className !== cls) el.className = cls;
+    el.hidden = !text;
   }
 
   /** Tell the renderer how much of the stage the sheet covers. */
@@ -259,7 +312,7 @@ export class HUD {
       return { title: inner.title, html: seg + inner.html };
     }
     if (tab === 'history') return historyPanel(this.sim, this.view);
-    if (tab === 'council') return councilPanel(this.sim, { settings: this.game.settings, build: this.game.build, lastSaved: this.game.lastSavedText(), source: this.game.loadSource, cloud: cloudCard(this.game) });
+    if (tab === 'council') return councilPanel(this.sim, { settings: this.game.settings, build: this.game.build, lastSaved: this.game.lastSavedText(), source: this.game.loadSource, cloud: cloudCard(this.game), celebrations: celebrationsCard(this.game) });
     const inner = citizenList(this.sim, this.view);
     return { title: inner.title, html: this.peopleSeg() + inner.html };
   }

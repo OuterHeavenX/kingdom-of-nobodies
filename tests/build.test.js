@@ -17,4 +17,9 @@ test('16. production build uses correct GitHub Pages asset paths', () => {
   assert.ok(assets.some((a) => a.endsWith('.css')), 'stylesheet asset');
   for (const a of assets) assert.ok(existsSync(join(out, a.replace('/kingdom-of-nobodies/', ''))), `${a} exists`);
   assert.match(html, /id="boot"/, 'startup screen present');
+  // Milestone 5.1: the shipped bundle carries the new version and the holiday system.
+  const js = assets.filter((a) => a.endsWith('.js')).map((a) => readFileSync(join(out, a.replace('/kingdom-of-nobodies/', '')), 'utf8')).join('\n');
+  assert.match(js, /v0\.5\.1 Seasons & Celebrations/, 'version 0.5.1 in the interface');
+  for (const marker of ['Holiday preview', 'decor-grow', 'snowNoise']) assert.ok(js.includes(marker), `${marker} is bundled`);
+  assert.match(html, /id="holiday-chip"/, 'the holiday chip is in the page');
 });

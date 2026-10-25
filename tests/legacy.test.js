@@ -1,4 +1,5 @@
 // Milestone 3 — Legacy & Generations. Numbered tests follow section 15 of the
+import { loansOf } from '../src/finance/LoanManager.js';
 // milestone brief (23–25 are covered by the e2e and build tests).
 import { validOwner } from '../src/institutions/Registry.js';
 import test from 'node:test';
@@ -112,6 +113,8 @@ test('7 & 8. death settles the estate exactly once without duplicating wealth', 
   const rich = [...s.citizens].sort((a, b) => balance(s, b.id) - balance(s, a.id))[0];
   const money = totalMoney(s);
   const coins = balance(s, rich.id);
+  // Since Milestone 5 an estate first repays what the deceased still owed a bank.
+  const owed = loansOf(s, rich.id).filter((l) => ['ACTIVE', 'DELINQUENT'].includes(l.status)).reduce((t, l) => t + l.balance, 0);
   assert.ok(coins > 0);
   die(s, rich, 'old age');
   const estates = s.estates.length;
@@ -121,7 +124,7 @@ test('7 & 8. death settles the estate exactly once without duplicating wealth', 
   assert.equal(totalMoney(s), money, 'money is conserved through inheritance');
   assert.equal(balance(s, rich.id), 0, 'nothing is left in the dead person\'s account');
   // Heirs share the estate's coins (which include cash returned by any business that closed).
-  assert.ok(again.coins >= coins);
+  assert.ok(again.coins >= coins - owed);
   assert.equal(again.heirs.reduce((t, h) => t + h.coins, 0) || again.coins, again.coins);
   assert.equal(die(s, rich, 'old age'), null, 'a person cannot die twice');
 });

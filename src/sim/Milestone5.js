@@ -21,11 +21,12 @@ import { ensureFaith, dailyFaith, consoleBereaved } from '../institutions/Religi
 import { lifecycleHooks } from '../citizens/Lifecycle.js';
 import { dailyFinance, pledgeNewLand, settleBeforeLeaving, borrowForDevelopment, bankTithe } from '../finance/BankManager.js';
 import { titheHooks } from '../council/Council.js';
+import { ensureHolidays, hourlyHolidays } from '../culture/Holidays.js';
 
 // Wires the Milestone 5 systems into the simulation's schedules and the
 // shared lifecycle hooks. Imported once by Simulation.js.
 
-milestone5Setup.push(ensureWeather, ensureFinance, ensureGuilds, ensureFaith, ensureForeign, ensureWarfare);
+milestone5Setup.push(ensureWeather, ensureFinance, ensureGuilds, ensureFaith, ensureForeign, ensureWarfare, ensureHolidays);
 leaderHooks.pick = (state, k, stance, why) => (state.foreign ? succession(state, k.id, why, { stance, apply: false }) : null);
 financing.borrow = municipalLoan;
 titheHooks.push(bankTithe);
@@ -33,6 +34,8 @@ titheHooks.push(bankTithe);
 dailyHooks.early.push(dailyFinance);
 dailyHooks.early.push(dailyWeather, dailyForeign, caravanReturns, dailyMilitary);
 hourlyHooks.push(hourlyMilitary);
+// Milestone 5.1: the holidays of the year (records only; citizens choose for themselves in DecisionUtility).
+hourlyHooks.push(hourlyHolidays);
 warHooks.between = warBetween;
 warHooks.besieged = besieged;
 casualtyHooks.die = (state, c, cause) => die(state, c, cause);
