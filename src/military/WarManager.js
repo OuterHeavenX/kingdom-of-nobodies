@@ -116,7 +116,7 @@ function mobilise(state, war, party) {
   if (war.raised[party] > 2) return null;
   const lead = war.attackers[0] === party || war.defenders[0] === party;
   const army = raiseArmy(state, party, war, war.field, { share: lead ? 1 : 0.6 });
-  if (army) record(state, 'diplomacy', `${name(party)} raised ${army.soldiers} soldiers for the ${war.name}${army.citizenIds.length ? `, calling up ${army.citizenIds.length} villagers` : ''}.`, {}, 2);
+  if (army) record(state, 'diplomacy', `${name(party)} raised ${army.soldiers} soldiers for the ${war.name}${army.citizenIds.length ? `, calling up ${army.citizenIds.length} villagers` : ''}.`, {}, army.citizenIds.length ? 2 : 1);
   return army;
 }
 

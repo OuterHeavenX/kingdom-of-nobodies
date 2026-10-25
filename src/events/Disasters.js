@@ -1,3 +1,4 @@
+import { fireWeather } from './Weather.js';
 import { lawInForce } from '../law/LegalCode.js';
 import { EVENTS, DAYS_PER_YEAR, LIFE } from '../core/Config.js';
 import { chance, nextRandom, intRange } from '../core/Random.js';
@@ -49,7 +50,7 @@ export function dailyDisasters(state) {
   const winter = seasonOf(state.day) === 'Winter';
   for (const p of state.plots) {
     if (!p.building || p.building.type === 'ruins' || p.building.type === 'well' || p.projectId || state.fires.some((f) => f.plotId === p.id)) continue;
-    let risk = EVENTS.fireDailyPerBuilding * (FLAMMABLE[p.building.type] ?? 1) * (winter ? 1.6 : 1) * (s.harshWinter ? 1.3 : 1) * (nearWell(state, p) ? 0.6 : 1) * ((p.building.condition ?? 100) < 50 ? 1.5 : 1) * (lawInForce(state, 'safety') ? 0.8 : 1);
+    let risk = EVENTS.fireDailyPerBuilding * (FLAMMABLE[p.building.type] ?? 1) * (winter ? 1.6 : 1) * (s.harshWinter ? 1.3 : 1) * (nearWell(state, p) ? 0.6 : 1) * ((p.building.condition ?? 100) < 50 ? 1.5 : 1) * (lawInForce(state, 'safety') ? 0.8 : 1) * fireWeather(state);
     if (chance(state, risk)) igniteFire(state, p);
   }
   maybeOutbreak(state);

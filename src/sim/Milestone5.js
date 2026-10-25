@@ -7,6 +7,7 @@ import { warBetween, besieged } from '../military/WarManager.js';
 import { casualtyHooks } from '../military/BattleResolver.js';
 import { warHooks } from '../diplomacy/Diplomacy.js';
 import { die } from '../citizens/Lifecycle.js';
+import { ensureWeather, dailyWeather } from '../events/Weather.js';
 import { municipalLoan } from '../finance/LoanManager.js';
 import { milestone5Setup } from './Setup.js';
 import { saleHooks } from '../property/Ownership.js';
@@ -23,13 +24,13 @@ import { titheHooks } from '../council/Council.js';
 // Wires the Milestone 5 systems into the simulation's schedules and the
 // shared lifecycle hooks. Imported once by Simulation.js.
 
-milestone5Setup.push(ensureFinance, ensureGuilds, ensureFaith, ensureForeign, ensureWarfare);
+milestone5Setup.push(ensureWeather, ensureFinance, ensureGuilds, ensureFaith, ensureForeign, ensureWarfare);
 leaderHooks.pick = (state, k, stance, why) => (state.foreign ? succession(state, k.id, why, { stance, apply: false }) : null);
 financing.borrow = municipalLoan;
 titheHooks.push(bankTithe);
 
 dailyHooks.early.push(dailyFinance);
-dailyHooks.early.push(dailyForeign, caravanReturns, dailyMilitary);
+dailyHooks.early.push(dailyWeather, dailyForeign, caravanReturns, dailyMilitary);
 hourlyHooks.push(hourlyMilitary);
 warHooks.between = warBetween;
 warHooks.besieged = besieged;

@@ -1,3 +1,4 @@
+import { roadWeather } from '../events/Weather.js';
 import { transfer, balance } from '../economy/Transactions.js';
 import { seasonIndex } from '../core/Calendar.js';
 import { chance, pick, nextRandom, intRange } from '../core/Random.js';
@@ -74,6 +75,8 @@ export function routeSpeed(state, route, load = 0) {
   if (seasonIndex(state.day) === 3) { speed *= route.terrain === 'mountain' ? 0.6 : 0.78; why.push('winter roads'); }
   for (const c of state.region.closures) if (c.routeId === route.id && c.until >= state.day && !c.closed) { speed *= c.factor; why.push(c.reason); }
   speed *= 1 - 0.25 * Math.min(1, load);
+  const w = roadWeather(state);
+  if (w < 1) { speed *= w; why.push(state.weather.today.kind === 'snow' ? 'snow on the roads' : state.weather.today.kind === 'fog' ? 'fog' : 'rain'); }
   return { speed: Math.max(0.6, speed), why };
 }
 

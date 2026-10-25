@@ -1,3 +1,4 @@
+import { farmWeather } from '../events/Weather.js';
 import { seasonIndex } from '../core/Calendar.js';
 import { ECONOMY, GOODS } from '../core/Config.js';
 import { openAccount } from './Transactions.js';
@@ -105,7 +106,7 @@ export function produce(state, b, productivity) {
   const def = BUSINESS_TYPES[b.type];
   if (!def.output) return 0;
   let perShift = def.batchesPerShift;
-  if (b.type === 'farm') perShift *= harvestMultiplier(state) * (state.discoveries?.improvedPlow ? 1.2 : 1) * FARM_SEASON[seasonIndex(state.day)];
+  if (b.type === 'farm') perShift *= harvestMultiplier(state) * (state.discoveries?.improvedPlow ? 1.2 : 1) * FARM_SEASON[seasonIndex(state.day)] * farmWeather(state);
   if (b.type === 'bakery' && state.discoveries?.watermill) perShift += 1;
   const plot = state.plots.find((p) => p.id === b.plotId);
   if ((plot?.building?.condition ?? 100) < 60) perShift *= 0.6;
