@@ -1,0 +1,17 @@
+# Copy to wrangler.toml and fill in your own D1 database id.
+# Secrets are NOT kept here: set them with `wrangler secret put` (see cloud/README.md).
+name = "kingdom-of-nobodies-cloud"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+[vars]
+# Comma-separated origins allowed to call the API and to receive sign-in redirects.
+ALLOWED_ORIGIN = "https://outerheavenx.github.io"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "kingdom-of-nobodies"
+database_id = "REPLACE-WITH-YOUR-D1-DATABASE-ID"
+
+[triggers]
+crons = ["17 3 * * *"]

@@ -9,5 +9,6 @@ function buildId() {
 export default defineConfig({
   base: '/kingdom-of-nobodies/',
   build: { outDir: 'dist', chunkSizeWarningLimit: 900 },
-  define: { __BUILD__: JSON.stringify(buildId()) },
+  // The optional cloud backup address is public configuration (no secrets); unset means local saves only.
+  define: { __BUILD__: JSON.stringify(buildId()), __CLOUD_URL__: JSON.stringify(process.env.VITE_CLOUD_SAVE_URL ?? '') },
 });
