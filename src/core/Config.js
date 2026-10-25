@@ -3,7 +3,7 @@
 
 /** Coins held by the wider world beyond the region (the 'outside' account) at the founding. */
 export const WIDER_WORLD = 250000;
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 
 export const TIME = {
   minutesPerTick: 10,

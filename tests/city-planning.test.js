@@ -138,10 +138,14 @@ test('a developer builds a cottage for sale only when buyers exist, and sale mov
   assert.ok(landDemand(s).housingShortage >= 1, 'families need homes');
   const before = totalMoney(s);
   let d = null;
-  // Wait (a day at a time) for the village's building sites to free up.
+  const known = new Set(ensureCity(s).developments.map((x) => x.id));
+  // Wait (a day at a time) for the village's building sites to free up. The
+  // simulation's own daily planning may start the development before this
+  // test's direct call does; either way it must be a real one.
   for (let i = 0; i < 60 && !d; i++) {
     for (const p of fresh) if (!p.building && !p.projectId) { p.marketStatus = 'FOR_SALE'; p.ownerId = 'council'; p.reservedBy = null; }
     if (s.day % 3 === 1) d = considerDevelopment(s, dailyHooks.developmentFunding(s));
+    d = d ?? ensureCity(s).developments.find((x) => !known.has(x.id)) ?? null;
     if (!d) sim.runDays(1);
   }
   assert.ok(d, 'a development started');

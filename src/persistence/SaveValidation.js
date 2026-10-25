@@ -6,7 +6,7 @@
 export const FORMAT = 'kingdom-of-nobodies';
 export const MAX_SAVE_BYTES = 6 * 1024 * 1024;
 export const MIN_VERSION = 2;
-export const MAX_VERSION = 6;
+export const MAX_VERSION = 7; // keep in step with SAVE_VERSION (Milestone 5.1 saves are version 7)
 
 export function checksum(text) {
   let h = 2166136261;

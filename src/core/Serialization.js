@@ -79,6 +79,17 @@ export function migrateV4(s) {
  * funded out of thin air: new institutions start empty and grow from real
  * deposits, dues and donations.
  */
+/**
+ * Milestone 5 → 5.1: the holidays of the year. The kingdom keeps every
+ * holiday unless the player turns some off; nothing else changes.
+ */
+export function migrateV6(s) {
+  addMilestone5State(s);
+  s.version = 7;
+  s.migrationNotes = [...(s.migrationNotes ?? []), { version: 7, day: s.day, note: 'Added the holiday calendar: which holidays the kingdom keeps, and a short record of each celebration. No coins, goods or dates changed.' }];
+  return s;
+}
+
 export function migrateV5(s) {
   addMilestone5State(s);
   s.version = 6;
@@ -154,6 +165,7 @@ export function migrate(s) {
     s.events = [];
     return s;
   }
+  if (s.version === 6) return migrate(migrateV6(s));
   if (s.version === 5) return migrate(migrateV5(s));
   if (s.version === 4) return migrate(migrateV4(s));
   if (s.version === 3) return migrate(migrateV3(s));

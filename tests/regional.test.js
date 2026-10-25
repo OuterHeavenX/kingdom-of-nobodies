@@ -31,7 +31,7 @@ test('39. a real Milestone 3 save (version 4) migrates into a working Milestone 
   assert.equal(old.version, 4);
   const s = deserialize(text);
   assert.equal(s.version, SAVE_VERSION);
-  assert.equal(SAVE_VERSION, 6); // Milestone 5 raised the format; a v4 save now migrates through v5 to v6
+  assert.equal(SAVE_VERSION, 7); // Milestone 5.1 raised the format again (holidays); a v4 save migrates through v5 and v6 to v7
   assert.equal(s.citizens.length, old.citizens.length, 'nobody is lost');
   for (const [acct, coins] of Object.entries(old.accounts)) if (acct !== 'outside') assert.equal(s.accounts[acct], coins, `${acct} keeps its coins`);
   const topUp = s.migrationNotes.find((n) => n.version === 5).outsideTopUp;

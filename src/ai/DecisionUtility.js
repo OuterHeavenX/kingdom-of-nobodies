@@ -1,4 +1,5 @@
 import { courtToday } from '../law/Courts.js';
+import { celebrationWish } from '../culture/Holidays.js';
 import { attendanceScore } from '../culture/Festivals.js';
 import { byId } from '../core/EntityRegistry.js';
 import { TIME, GOODS, FOOD_GOODS, BUILD, LIFE } from '../core/Config.js';
@@ -271,6 +272,11 @@ export function generateCandidates(state, c, plan) {
     const wish = attendanceScore(state, c);
     if (wish && wish.score > 32) out.push(candidate('festival', wish.score + 15, wish.factors, { seasonal: true }));
   }
+
+  // --- Holidays -----------------------------------------------------------
+  // A holiday is an invitation, not an order: it competes with work, food and sleep.
+  const wish = celebrationWish(state, c);
+  if (wish && wish.score > 30) out.push(candidate('celebrate', wish.score + 8, wish.factors, { holiday: wish.now.id, key: wish.now.key }));
 
   // --- Goals (buying property, starting construction) ---------------------
   for (const a of minor ? [] : plan.actions) {
