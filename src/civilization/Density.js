@@ -259,8 +259,8 @@ export function rentalHousing(state) {
     if (home && !['hall', 'townhall'].includes(home.building?.type)) continue;
     const fam = householdOf(state, c);
     const adults = fam.filter((m) => ageOf(state, m) >= LIFE.adultAge);
-    // Households with a wage take a private tenancy; anyone may have a council flat.
-    const earning = adults.some((m) => m.employment);
+    // Households with a wage and a day's rent in hand take a private tenancy; anyone may have a council flat.
+    const earning = adults.some((m) => m.employment) && adults.some((m) => balance(state, m.id) >= CIV.rentPerDay + 2);
     const flat = rentals.find((p) => free(p) >= fam.length && (earning || p.ownerId === 'council'));
     if (!flat) continue;
     for (const m of fam) moveHome(state, m, flat);

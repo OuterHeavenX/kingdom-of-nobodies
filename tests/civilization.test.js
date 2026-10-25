@@ -212,6 +212,48 @@ test('civ: rented flats charge real rent to the owner, and council flats never e
   assert.equal(totalMoney(s), money);
 });
 
+test('civ: an evicted household that cannot pay does not move straight back into a private flat', () => {
+  const { state: s } = makeSim(10);
+  s.civ.age = 3;
+  const plot = plotByName(s, 'Elm Cottage');
+  const dev = byName(s, 'Dain');
+  plot.ownerId = dev.id;
+  setBuilding(s, plot, 'apartment', null, { era: 3, seed: 2, floors: 5 });
+  plot.building.rental = true;
+  const tenant = byName(s, 'Elin');
+  for (const p of s.plots) p.residents = p.residents.filter((x) => x !== tenant.id);
+  const fam = s.citizens.filter((c) => c.id === tenant.id || c.id === tenant.family.spouseId);
+  for (const m of fam) { for (const p of s.plots) p.residents = p.residents.filter((x) => x !== m.id); m.homePlotId = plot.id; plot.residents.push(m.id); }
+  for (const m of fam) { const coins = balance(s, m.id); s.accounts[m.id] -= coins; s.accounts.outside += coins; m.employment = m.employment ?? { businessId: 'x' }; }
+  for (const m of fam) m.rentArrears = 99;
+  const evictions = s.civ.stats.evictions;
+  rentalHousing(s);
+  assert.equal(s.civ.stats.evictions, evictions + 1, 'the household was evicted');
+  assert.ok(fam.every((m) => !plot.residents.includes(m.id)), 'and the flat was really released');
+});
+
+test('civ: modernising a block of rented flats keeps it let', () => {
+  const { state: s } = makeSim(5);
+  s.civ.age = 3; adoptAll(s, 3);
+  const plot = plotByName(s, 'Elm Cottage');
+  const bram = byName(s, 'Bram');
+  plot.ownerId = bram.id;
+  for (const id of plot.residents) { const c = s.citizens.find((x) => x.id === id); if (c) c.homePlotId = null; }
+  plot.residents = [];
+  setBuilding(s, plot, 'apartment', null, { era: 2, seed: 2, floors: 4 });
+  plot.building.rental = true;
+  s.accounts.outside -= 2000; s.accounts[bram.id] += 2000;
+  const res = startProject(s, { plotId: plot.id, ownerId: bram.id, kind: 'rebuild', buildingType: 'apartment', stages: rebuildStages('apartment', 3), targetEra: 3, floors: 5 });
+  assert.ok(res.ok, res.reason);
+  addGoods(s.businesses.find((b) => b.type === 'lumberyard').inventory, 'timber', 200);
+  const cora = byName(s, 'Cora');
+  let shifts = 0;
+  while (projectById(s, res.project.id) && shifts < 2000) { updateProjects(s); addWork(s, res.project, cora); shifts++; }
+  assert.ok(!projectById(s, res.project.id), `finished in ${shifts} shifts`);
+  assert.equal(plot.building.era, 3);
+  assert.equal(plot.building.rental, true, 'still rented out after the rebuild');
+});
+
 test('civ: a v7 save migrates to v8 with its buildings as Age of Foundations architecture and nothing else changed', () => {
   const sim = makeSim(11);
   sim.runDays(30);

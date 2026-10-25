@@ -95,6 +95,7 @@ export class SaveManager {
       // Before an older kingdom is upgraded, its original save is kept untouched.
       const v = versionOf(best.text);
       if (v && v < SAVE_VERSION) await this.keepBackup(best.text, v);
+      else await this.findBackup();
       return { state: best.state, source: best.label, upgradedFrom: v && v < SAVE_VERSION ? v : null };
     }
     try {
@@ -106,6 +107,18 @@ export class SaveManager {
       }
     } catch (e) { console.warn('Could not migrate the Milestone 1 save:', e.message); }
     return { state: null, source: null };
+  }
+
+  /** Find a pre-upgrade copy kept by an earlier session (the newest format wins). */
+  async findBackup() {
+    const newest = (keys) => keys.map((k) => /^backup-v(\d+)$/.exec(k)).filter(Boolean).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+    let key = null;
+    try { key = newest((await idb('readonly', (store) => store.getAllKeys())) ?? []); } catch { /* IndexedDB unavailable */ }
+    if (!key) {
+      try { key = newest(Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i).replace(/^kingdom-of-nobodies-/, ''))); } catch { /* ignore */ }
+    }
+    if (key) this.backupKey = key;
+    return key;
   }
 
   /** Keep a copy of a save in an older format (once per format version). */

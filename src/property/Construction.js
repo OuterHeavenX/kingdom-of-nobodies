@@ -253,7 +253,11 @@ function complete(state, p) {
     const old = p.oldBuilding;
     const b = plot.businessId ? state.businesses.find((x) => x.id === plot.businessId) : null;
     setBuilding(state, plot, p.buildingType, b?.name ?? (old && old.type === p.buildingType ? old.name : null), { era: p.targetEra, seed: p.seed, floors: p.floors });
-    if (old && old.type === p.buildingType) plot.building.level = old.level ?? 1;
+    if (old && old.type === p.buildingType) {
+      plot.building.level = old.level ?? 1;
+      // Modernising a block of flats keeps it let.
+      if (old.rental) plot.building.rental = true;
+    }
     plot.building.rebuiltDay = state.day;
     plot.building.firstBuiltDay = old?.firstBuiltDay ?? old?.builtDay ?? null;
     for (const c of state.citizens) if (crewIds.has(c.id) && c.profession === 'Builder') { c.stats.buildingsCompleted++; bump(c, 'competence', 3); }
