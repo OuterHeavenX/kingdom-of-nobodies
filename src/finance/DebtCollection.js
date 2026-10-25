@@ -35,6 +35,8 @@ function lossFor(state, loan, amount, why) {
 /** Daily: loans that have missed enough payments are restructured or declared in default. */
 export function reviewDelinquencies(state) {
   for (const loan of ensureFinance(state).loans.filter((l) => l.status === 'DELINQUENT' && l.missed >= FINANCE.missedForDefault)) {
+    // The council's debts are never taken to its own court: it reschedules them.
+    if (loan.borrowerId === 'council') { restructure(state, loan, 4); continue; }
     const b = byId(state.citizens, loan.borrowerId);
     if (b && !loan.restructured && seasonalIncome(state, b) >= loan.payment * 0.8) { restructure(state, loan); continue; }
     declareDefault(state, loan);

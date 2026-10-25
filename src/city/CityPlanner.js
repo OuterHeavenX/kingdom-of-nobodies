@@ -1,4 +1,4 @@
-import { CITY, COUNCIL } from '../core/Config.js';
+import { CITY } from '../core/Config.js';
 import { balance, transfer } from '../economy/Transactions.js';
 import { makePlot, LAND_TYPES } from '../property/LandRegistry.js';
 import { record } from '../society/Chronicle.js';
@@ -21,6 +21,10 @@ import { bestStreet, trimStreet, STREET_KIND } from './RoadPlanner.js';
 export { FIXED_DISTRICTS };
 const NAMES = ['Ashford', 'Cobble End', 'Larkrise', 'Mill Green', 'Fernhollow', 'Stonegate', 'Wrenfield', 'Oakhurst', 'Badger Row', 'Hollins',
   'Tanners Way', 'Brightwater', 'Kestrel Hill', 'Saffron Walk', 'Thornbury', 'Elmstead', 'Goose Green', 'Harrow Lane', 'Copperfold', 'Wychwood'];
+
+const PLAN_RESERVE = 60;
+/** How the council can raise money for a plan (set by the finance system). */
+export const financing = { borrow: null };
 
 export function ensureCity(state) {
   if (state.city) return state.city;
@@ -92,10 +96,17 @@ export function reviewPlans(state) {
   const city = ensureCity(state);
   const p = city.proposals.find((x) => x.status === 'PROPOSED');
   if (!p) return null;
-  const spare = balance(state, 'treasury') - COUNCIL.reserve;
+  // Streets that open land pay for themselves through plot sales, so the council keeps a smaller reserve for them.
+  let spare = balance(state, 'treasury') - PLAN_RESERVE;
   const works = state.government?.policies?.publicWorks ?? true;
   if (!works) { decide(state, p, 'REJECTED', 'The government has ended public works.'); record(state, 'council', `The council rejected the plan for ${p.name}: public works have been ended.`, {}, 2); return p; }
   if (spare >= p.appraisal.total) return approve(state, p, `Approved: ${p.appraisal.beds} beds for ${p.appraisal.total} coins.`);
+  // Short of funds: borrow from a bank against the land the street will open.
+  if (!p.loanAsked && financing.borrow) {
+    p.loanAsked = state.day;
+    const loan = financing.borrow(state, p.appraisal.total - spare, { purpose: `to build ${p.name} Street`, security: p.appraisal.landValue });
+    if (loan) { p.loanId = loan.id; spare = balance(state, 'treasury') - PLAN_RESERVE; if (spare >= p.appraisal.total) return approve(state, p, `Approved with a bank loan of ${loan.principal} coins.`); }
+  }
   // Modify: a shorter street with fewer plots when the full plan is beyond the budget.
   if (spare >= p.appraisal.total * 0.55 && p.plots.length >= 5 && !p.modified) {
     const keep = Math.max(3, Math.floor(p.plots.length * (spare / p.appraisal.total)));

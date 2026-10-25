@@ -7,6 +7,8 @@ import { perceivedHonesty } from '../society/Reputation.js';
 import { trait } from '../ai/Personality.js';
 import { ISSUES, issueStance } from './Policies.js';
 import { wealthClass } from '../population/SocialClasses.js';
+import { guildInterests, guildOf } from '../institutions/GuildManager.js';
+import { faithInterests } from '../institutions/FaithManager.js';
 
 // What each citizen wants from government, derived from their own life:
 // wealth, work, family, business, temperament. Nobody votes as a bloc; two
@@ -29,6 +31,8 @@ export function priorities(state, c) {
   const merchant = c.profession === 'Merchant' || (state.trade?.merchants?.[c.id]?.trips ?? 0) > 0;
   p.trade = (merchant ? 1 : 0) + (exporter ? 0.4 : 0) - (competing ? 0.5 : 0) - (jobless ? 0.3 : 0) + trait(c, 'riskTaking') * 0.2 - trait(c, 'stubborn') * 0.2 + trait(c, 'curious') * 0.15;
   p.education = kids * 0.35 + trait(c, 'curious') * 0.4 + (c.profession === 'Teacher' ? 0.8 : 0) + c.education.level * 0.3;
+  // Guilds and faith communities colour, but never dictate, what members want.
+  for (const extra of [guildInterests(state, c), faithInterests(c)]) if (extra) for (const [k, v] of Object.entries(extra)) p[k] += v;
   for (const k of ISSUES) p[k] = Math.max(-1, Math.min(1.5, Math.round(p[k] * 100) / 100));
   return p;
 }
@@ -52,6 +56,8 @@ export function candidateAppeal(state, voter, cand, prio) {
   s += (perceivedHonesty(state, voter, person) - 50) / 12;
   s += (person.reputation.standing - 50) / 20 + (person.skills.leadership ?? 0) * 2;
   if (cand.endorsedBy?.includes(voter.faction)) s += 2.5;
+  const guild = guildOf(state, voter);
+  if (guild && cand.guildBacking?.includes(guild.id)) s += guild.leaderId === cand.id ? 3 : 1.8;
   if (cand.incumbent) s += ((state.government.approval ?? 50) - 50) / 10;
   return s;
 }

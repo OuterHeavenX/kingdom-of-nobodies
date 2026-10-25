@@ -1,3 +1,4 @@
+import { apprenticeBonus } from '../institutions/GuildEconomy.js';
 import { byId } from '../core/EntityRegistry.js';
 import { EDUCATION, LIFE } from '../core/Config.js';
 import { nextRandom, pick } from '../core/Random.js';
@@ -97,7 +98,7 @@ export function completeApprenticeship(state, c, master) {
   const trade = c.education.trade;
   const b = master?.employment ? state.businesses.find((x) => x.id === master.employment.businessId) : null;
   if (b && isTrading(b)) produce(state, b, 0.45 + (c.skills[trade] ?? 0) * 0.4);
-  gainSkill(c, trade, 0.012 * EDUCATION.apprenticeGainMultiplier);
+  gainSkill(c, trade, 0.012 * EDUCATION.apprenticeGainMultiplier * apprenticeBonus(state, master));
   if (master) {
     gainSkill(master, 'teaching', 0.005);
     adjustBoth(state, c.id, master.id, { friendship: 1.5, trust: 1, respect: 1.5 });

@@ -81,8 +81,9 @@ test('the council modifies a plan it cannot fully afford, and rejects it under a
   let p = null;
   for (let d = 0; d < 6 && !p; d++) { s.day++; p = planCity(s); }
   assert.ok(p);
-  // Leave the treasury with ~70% of the cost above its reserve.
-  const target = 120 + Math.floor(p.appraisal.total * 0.7);
+  // No bank will lend, and the treasury holds ~70% of the cost above the planners' reserve.
+  for (const b of s.finance.banks) b.status = 'FAILED';
+  const target = 60 + Math.floor(p.appraisal.total * 0.7);
   const t = balance(s, 'treasury');
   if (t > target) transfer(s, 'treasury', 'outside', t - target, 'expense', 'test');
   else transfer(s, 'outside', 'treasury', target - t, 'grant', 'test');

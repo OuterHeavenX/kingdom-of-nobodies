@@ -102,7 +102,8 @@ test('23. migration moves real people between settlements and keeps populations 
 });
 
 test('a married merchant who emigrates mid-run hands the caravan to someone who stays, and escrow still settles', () => {
-  const sim = fresh(1);
+  // The scenario is searched for in a running world; Milestone 5 changed seed 1's history, so seed 2 supplies it.
+  const sim = fresh(2);
   const s = sim.state;
   let cv = null;
   for (let i = 0; i < 400 * 144 && !cv; i++) {

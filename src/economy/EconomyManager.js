@@ -13,6 +13,7 @@ import { remember } from '../ai/MemorySystem.js';
 import { bump } from '../society/Reputation.js';
 import { createFact } from '../society/Gossip.js';
 import { spendable, raiseCash } from '../finance/BankAccounts.js';
+import { levyRelief } from '../institutions/GuildManager.js';
 
 // End-of-day bookkeeping: taxes, profit and loss, dividends, prices, staffing,
 // and the business life cycle OPEN → STRUGGLING → CLOSED/BANKRUPT.
@@ -23,7 +24,7 @@ export function closeDay(state) {
     if (!isTrading(b)) continue;
     const startup = state.day - b.foundedDay < 4;
     if (b.ownerId !== 'council' && !startup) {
-      const tax = Math.min(taxPerBusiness, balance(state, b.id));
+      const tax = Math.min(Math.max(0, taxPerBusiness - levyRelief(state, b)), balance(state, b.id));
       if (tax > 0 && transfer(state, b.id, 'treasury', tax, 'tax', `Daily levy on ${b.name}`)) b.today.tax += tax;
     }
     const t = b.today;
