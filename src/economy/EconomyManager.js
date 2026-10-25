@@ -1,7 +1,7 @@
 import { byId } from '../core/EntityRegistry.js';
 import { ECONOMY, GOODS } from '../core/Config.js';
 import { transfer, balance } from './Transactions.js';
-import { qty, removeGoods } from './Inventory.js';
+import { qty, removeGoods, addGoods } from './Inventory.js';
 import { BUSINESS_TYPES, isTrading, freshLedger } from './Businesses.js';
 import { adjustPrices, cashReserve, ownerAccount } from './Marketplace.js';
 import { layOff, leaveJob, updateOpenings, wageBill } from './Employment.js';
@@ -86,7 +86,7 @@ function updateLifecycle(state, b, startup) {
     b.struggleDays++;
     if (b.employees.length && cash < wageBill(state, b) * 2) layOff(state, b, 'losses');
     const councilCanCarry = b.ownerId === 'council' && balance(state, 'treasury') > 40;
-    if (b.struggleDays >= ECONOMY.closeAfterStruggleDays && !councilCanCarry) closeBusiness(state, b, cash <= 3 ? 'BANKRUPT' : 'CLOSED');
+    if (b.struggleDays >= ECONOMY.closeAfterStruggleDays && !councilCanCarry) closeBusiness(state, b, cash <= 3 ? 'BANKRUPT' : 'CLOSED', cash <= 3 ? 'bankrupt' : 'unprofitable');
   }
 }
 
@@ -97,9 +97,13 @@ const owners = (b) => (b.ownerId === 'council' ? [] : [b.ownerId]);
  * sold off to traders, remaining cash returns to the owner and the property is
  * put up for sale (the building stays standing until a new owner decides).
  */
-export function closeBusiness(state, b, status = 'CLOSED') {
+export function closeBusiness(state, b, status = 'CLOSED', why = null) {
+  // Goods set aside for a caravan go back into stock before anything is sold off.
+  for (const [g, n] of Object.entries(b.held ?? {})) if (n > 0) addGoods(b.inventory, g, n);
+  b.held = {};
   b.status = status;
   b.closedDay = state.day;
+  b.closedWhy = why ?? (status === 'BANKRUPT' ? 'bankrupt' : 'closed');
   b.openings = 0;
   for (const id of [...b.employees]) {
     const c = byId(state.citizens, id);
@@ -157,3 +161,21 @@ export function economySnapshot(state) {
 }
 
 export { BUSINESS_TYPES };
+
+/**
+ * Daily: the well-off buy things the valley cannot make (fine cloth, wine,
+ * spices from passing pedlars). Coins well above a comfortable reserve slowly
+ * leave for the wider world, so a trading village's wealth circulates rather
+ * than piling up forever.
+ */
+export function dailyLuxuries(state) {
+  for (const c of state.citizens) {
+    const excess = balance(state, c.id) - ECONOMY.luxuryReserve;
+    if (excess <= 0) continue;
+    const spend = Math.floor(excess * ECONOMY.luxuryShare);
+    if (spend > 0 && transfer(state, c.id, 'outside', spend, 'purchase', `${c.firstName} bought goods from a travelling pedlar`)) {
+      c.stats.spent += spend;
+      c.mood = Math.min(100, c.mood + 1);
+    }
+  }
+}

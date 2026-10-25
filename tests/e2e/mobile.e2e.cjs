@@ -70,7 +70,40 @@ const BASE = process.env.BASE_URL ?? 'http://localhost:4173/kingdom-of-nobodies/
   await page.waitForSelector('#sheet-body .tree-node');
   step('families, economy, politics and history tabs open; biography and family tree respond to touch');
 
-  await page.evaluate(async () => { while (kingdom.sim.state.day < 4) kingdom.sim.step(); await kingdom.save(); });
+  // Milestone 4: the region, trade, laws and caravans.
+  await page.evaluate(() => { while (kingdom.sim.state.day < 7) kingdom.sim.step(); });
+  await page.tap('#tabbar button[data-tab=region]');
+  await page.waitForSelector('#sheet-body svg.region-map');
+  const mapBox = await page.locator('#sheet-body svg.region-map').boundingBox();
+  assert.ok(mapBox.height > 150 && mapBox.width > 250, `the regional map is visible (${Math.round(mapBox.width)}×${Math.round(mapBox.height)})`);
+  await page.tap('#sheet-body svg.region-map g.town[data-act=kingdom]');
+  await page.waitForFunction(() => /Greenvale|Ironhold|Saltmere/.test(document.getElementById('sheet-title').textContent));
+  assert.match(await page.textContent('#sheet-body'), /Stores|Prices|Relations/i);
+  step('Region tab: the map renders and tapping a kingdom opens its page');
+  await page.tap('#sheet-back');
+  for (const mode of ['kingdoms', 'caravans', 'diplomacy', 'explore']) {
+    await page.tap(`#sheet-body [data-act=region-mode][data-id=${mode}]`);
+    await page.waitForFunction((m) => document.querySelector(`#sheet-body [data-act=region-mode][data-id=${m}]`)?.classList.contains('active'), mode);
+  }
+  // The sheet re-renders with live data, so taps go through selectors rather than held element handles.
+  await page.tap('#sheet-body [data-act=region-mode][data-id=caravans]');
+  const hasCaravan = await page.waitForSelector('#sheet-body [data-act=caravan]', { timeout: 5000 }).then(() => true, () => false);
+  if (hasCaravan) {
+    await page.tap('#sheet-body [data-act=caravan]');
+    await page.waitForFunction(() => /caravan/i.test(document.getElementById('sheet-title').textContent));
+    step('region modes switch; a caravan opens with its route and cargo');
+  } else step('region modes switch (no caravan on the road at this moment)');
+  await page.tap('#tabbar button[data-tab=economy]');
+  await page.tap('#sheet-body [data-act=econ-mode][data-id=trade]');
+  await page.waitForFunction(() => /market|caravan|contract/i.test(document.getElementById('sheet-body').textContent));
+  await page.tap('#tabbar button[data-tab=politics]');
+  await page.tap('#sheet-body [data-act=pol-mode][data-id=law]');
+  await page.waitForFunction(() => /Law|court/i.test(document.getElementById('sheet-body').textContent));
+  await page.tap('#sheet-body [data-act=pol-mode][data-id=foreign]');
+  await page.waitForFunction(() => /Greenvale/.test(document.getElementById('sheet-body').textContent));
+  step('trade, laws & courts and foreign relations panels open');
+
+  await page.evaluate(async () => { while (kingdom.sim.state.day < 9) kingdom.sim.step(); await kingdom.save(); });
   const saved = await page.evaluate(() => ({ day: kingdom.sim.state.day, tick: kingdom.sim.state.tick }));
   await page.reload();
   await page.waitForFunction(() => window.__konStarted === true, null, { timeout: 20000 });

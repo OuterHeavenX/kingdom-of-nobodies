@@ -1,3 +1,4 @@
+import { lawInForce } from '../law/LegalCode.js';
 import { byId } from '../core/EntityRegistry.js';
 import { STAGES, REFIT_STAGE, DEMOLITION, BUILD, GOODS, ECONOMY } from '../core/Config.js';
 import { transfer, balance } from '../economy/Transactions.js';
@@ -52,6 +53,11 @@ export function startProject(state, { plotId, ownerId, kind, buildingType = null
     stage: 'PLANNING', stageIndex: -1, work: 0, materials: 0,
     startedDay: state.day, crew: {}, waiting: null, labourPaid: 0, materialsPaid: 0,
   };
+  // Under the Building Permits Act private builders pay a permit fee to the council.
+  if (ownerId !== 'council' && (kind === 'construction' || kind === 'upgrade') && lawInForce(state, 'permits')) {
+    if (!transfer(state, ownerId, 'treasury', 4, 'tax', `Building permit for ${plot.name}`)) return { ok: false, reason: 'cannot afford the building permit' };
+    project.permit = true;
+  }
   state.projects.push(project);
   plot.projectId = project.id;
   if (state.government?.policies?.constructionGrants && ownerId !== 'council' && kind !== 'demolition' && balance(state, 'treasury') > 60) {
@@ -256,7 +262,7 @@ export function openBusiness(state, owner, plot, type) {
   const b = createBusiness(state, { type, ownerId: owner.id, plotId: plot.id, name: businessName(state, type, owner) });
   plot.businessId = b.id;
   plot.building.name = b.name;
-  if (state.government?.policies?.businessLicensing && transfer(state, owner.id, 'treasury', 6, 'tax', `Licence for ${b.name}`)) b.licensed = true;
+  if ((state.government?.policies?.businessLicensing || lawInForce(state, 'licensing')) && transfer(state, owner.id, 'treasury', 6, 'tax', `Licence for ${b.name}`)) b.licensed = true;
   const capital = Math.min(ECONOMY.startingCapital, balance(state, owner.id) - 2);
   if (capital > 0) transfer(state, owner.id, b.id, capital, 'capital', `Starting capital for ${b.name}`);
   if (owner.employment) leaveJob(state, owner, `opened ${b.name}`);

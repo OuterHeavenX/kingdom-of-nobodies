@@ -1,3 +1,4 @@
+import { noteEstateDispute } from '../law/Courts.js';
 import { byId } from '../core/EntityRegistry.js';
 import { transfer, balance } from './Transactions.js';
 import { qty, moveGoods } from './Inventory.js';
@@ -101,7 +102,7 @@ export function settleEstate(state, c) {
       if (outcome === 'trust') estate.status = 'trust';
       estate.businesses.push({ id: b.id, to: heir.id, outcome });
     } else {
-      closeBusiness(state, b, 'CLOSED');
+      closeBusiness(state, b, 'CLOSED', 'owner died');
       record(state, 'business', `${b.name} closed after ${c.firstName}'s death; ${heir ? `${heir.firstName} chose to sell rather than run it` : 'no heir could take it on'}.`, { citizens: [c.id], business: b.id }, 2);
       estate.businesses.push({ id: b.id, to: null, outcome: 'closed' });
     }
@@ -148,6 +149,12 @@ export function settleEstate(state, c) {
       estate.plots.push({ id: p.id, to: 'council' });
     }
   }
+  // Children left with nothing while one heir took several plots may go to court.
+  const landed = new Set(estate.plots.map((p) => p.to));
+  const main = estate.plots.length >= 2 && landed.size === 1 ? byId(state.citizens, [...landed][0]) : null;
+  if (main) for (const sib of children.filter((h) => h !== main && ageOf(state, h) >= LIFE.adultAge)) {
+    if (trait(sib, 'greedy') + trait(sib, 'jealous') + trait(sib, 'stubborn') > 0.6) noteEstateDispute(state, estate, sib, main);
+  }
   if (estate.heirs.length || estate.plots.length || estate.businesses.length) {
     const names = [...new Set([...estate.heirs.map((h) => h.id), ...estate.plots.map((p) => p.to), ...estate.businesses.map((b) => b.to)])]
       .filter(Boolean).map((id) => (id === 'council' ? 'the council' : byId(state.citizens, id)?.firstName)).filter(Boolean);
@@ -163,7 +170,7 @@ export function resolveTrusts(state, c) {
     b.inTrust = false;
     if (successionScore(state, c, b) >= 22) transferBusiness(state, b, c, c, 'successor', 'came of age');
     else {
-      closeBusiness(state, b, 'CLOSED');
+      closeBusiness(state, b, 'CLOSED', 'heir sold');
       record(state, 'business', `${c.firstName} came of age and chose to sell ${b.name} rather than run it.`, { citizens: [c.id], business: b.id }, 2);
     }
   }

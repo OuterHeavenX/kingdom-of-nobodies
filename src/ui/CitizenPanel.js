@@ -1,3 +1,4 @@
+import { KINGDOMS } from '../region/RegionData.js';
 import { balance } from '../economy/Transactions.js';
 import { GOODS } from '../core/Config.js';
 import { topTraits } from '../ai/Personality.js';
@@ -46,6 +47,8 @@ export function citizenList(sim, view = {}) {
 
 export function citizenDetail(sim, id) {
   const s = sim.state;
+  const trader = s.trade?.merchants?.[id] ?? null;
+  const cases = (s.law?.cases ?? []).filter((k) => [k.plaintiff.id, k.defendant.id, k.plaintiff.ownerId, k.defendant.ownerId].includes(id));
   const c = s.citizens.find((x) => x.id === id);
   if (!c) return { title: 'Citizen', html: '<p class="empty">This citizen is no longer here.</p>' };
   const money = balance(s, c.id);
@@ -120,7 +123,12 @@ export function citizenDetail(sim, id) {
       <dt>Shifts worked</dt><dd>${c.stats.shiftsWorked}</dd>
       <dt>Earned / spent</dt><dd>${c.stats.earned} / ${c.stats.spent}🪙</dd>
       ${carrying ? `<dt>Carrying</dt><dd>${carrying}</dd>` : ''}
+      ${c.origin ? `<dt>${c.returnedDay ? 'Came home from' : 'Came from'}</dt><dd>${esc(KINGDOMS[c.origin]?.name ?? c.origin)}</dd>` : ''}
+      ${c.away ? `<dt>Away</dt><dd>${esc(c.away.reason)} until ${esc(dateLabel(c.away.until))}</dd>` : ''}
+      ${trader ? `<dt>Trade</dt><dd>${trader.trips} caravan${trader.trips === 1 ? '' : 's'}, ${trader.profit}🪙 profit${trader.active ? ' · on the road' : ''}</dd>` : ''}
+      ${cases.length ? `<dt>Court</dt><dd>${cases.length} case${cases.length > 1 ? 's' : ''}</dd>` : ''}
     </dl>
+    ${cases.length ? `<div class="chips" style="margin-top:6px">${cases.slice(-3).map((k) => link('case', k.id, `⚖️ ${k.plaintiff.id === c.id ? 'v ' + k.defendant.name : k.plaintiff.name}`)).join('')}</div>` : ''}
     ${businesses.length || owned.length ? `<div class="chips" style="margin-top:9px">${businesses.map((b) => link('business', b.id, `🏪 ${b.name}`)).join('')}${owned.map((p) => link('plot', p.id, `📍 ${p.name}`)).join('')}</div>` : ''}
   </div>
 

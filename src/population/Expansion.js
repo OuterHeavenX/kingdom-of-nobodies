@@ -2,6 +2,7 @@ import { transfer, balance } from '../economy/Transactions.js';
 import { makePlot, bedsAt } from '../property/LandRegistry.js';
 import { ageOf } from '../citizens/Citizen.js';
 import { record } from '../society/Chronicle.js';
+import { addRoad } from '../navigation/RoadNetwork.js';
 import { LIFE } from '../core/Config.js';
 
 // Town growth. When land runs short the council surveys a new district: it
@@ -27,6 +28,9 @@ export const SURVEY_COST = 40;
 
 export function openedBlocks(state) { return state.districts?.opened ?? []; }
 
+/** Population the town must reach before the next district is surveyed. */
+export const districtThreshold = (state) => 10 + openedBlocks(state).length * 7;
+
 export function needsLand(state) {
   const vacant = state.plots.filter((p) => !p.building && !p.projectId && p.marketStatus === 'FOR_SALE');
   const freeHomeLand = vacant.filter((p) => p.landType === 'residential').length;
@@ -44,6 +48,10 @@ export function maybeExpand(state) {
   state.districts = state.districts ?? { opened: [] };
   const next = BLOCKS.find((b) => !state.districts.opened.includes(b.name));
   if (!next || !needsLand(state) || balance(state, 'treasury') < SURVEY_COST + 30) return null;
+  // Only real population pressure justifies a new district: enough people to
+  // fill it, or villagers already sleeping without a home.
+  const homeless = state.citizens.filter((c) => !c.homePlotId).length;
+  if (homeless < 2 && state.citizens.length < districtThreshold(state)) return null;
   const crews = state.citizens.filter((c) => ageOf(state, c) >= LIFE.adultAge && !c.retired && (!c.employment || c.profession === 'Builder')).slice(0, 4);
   if (crews.length) {
     const each = Math.floor(SURVEY_COST / crews.length);
@@ -54,6 +62,8 @@ export function maybeExpand(state) {
     makePlot(state, { name: `${next.name} ${i + 1}`, x, z, w, d, landType, district: next.name });
   }
   state.districts.opened.push(next.name);
+  const [rx, rz, rw, rd] = next.road;
+  addRoad(state, { name: `${next.name} Road`, kind: 'dirt', x: rx, z: rz, w: rw, d: rd });
   record(state, 'property', `The council surveyed ${next.name}: a new road and ${next.plots.length} plots opened for settlement${crews.length ? `, paying ${crews.map((c) => c.firstName).join(', ')} to lay the road` : ''}.`, {}, 3);
   return next;
 }

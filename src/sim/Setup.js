@@ -1,4 +1,11 @@
-import { SAVE_VERSION, POPULATION } from '../core/Config.js';
+import { ensureCulture } from '../culture/Festivals.js';
+import { ensureLaw } from '../law/LegalCode.js';
+import { foundingRoads, addRoad } from '../navigation/RoadNetwork.js';
+import { BLOCKS } from '../population/Expansion.js';
+import { ensureRegion } from '../region/RegionManager.js';
+import { ensureTrade } from '../trade/Contracts.js';
+import { ensureDiplomacy } from '../diplomacy/Diplomacy.js';
+import { SAVE_VERSION, POPULATION, WIDER_WORLD } from '../core/Config.js';
 import { familyWish } from '../citizens/Genetics.js';
 import { transfer, openAccount } from '../economy/Transactions.js';
 import { addGoods } from '../economy/Inventory.js';
@@ -94,10 +101,37 @@ export function emptyState(seed) {
   };
 }
 
+/**
+ * Everything Milestone 4 adds to a world. New kingdoms and migrated saves both
+ * go through here, so a village loaded from Milestone 3 ends up with exactly
+ * the same structures as a new one.
+ */
+export function addMilestone4State(state) {
+  state.nextId.road = state.nextId.road ?? 0;
+  if (!state.roads) {
+    state.roads = foundingRoads();
+    state.nextId.road = Math.max(state.nextId.road, state.roads.length);
+    for (const name of state.districts?.opened ?? []) {
+      const block = BLOCKS.find((b) => b.name === name);
+      if (block) { const [x, z, w, d] = block.road; addRoad(state, { name: `${name} Road`, kind: 'dirt', x, z, w, d }); }
+    }
+  }
+  state.roadProjects = state.roadProjects ?? [];
+  state.navigation = state.navigation ?? { traffic: {}, routes: 0, failures: 0, recentFailures: [] };
+  state.council.stores = state.council.stores ?? {};
+  ensureRegion(state);
+  ensureTrade(state);
+  ensureDiplomacy(state);
+  ensureLaw(state);
+  ensureCulture(state);
+  if (state.government?.policies) state.government.policies = { tariffLevel: 'normal', openDiplomacy: true, ...state.government.policies };
+  return state;
+}
+
 export function createKingdom(seed = 20251024) {
   const state = emptyState(seed);
   state.accounts.treasury = 140;
-  state.accounts.outside = 50000; // the wider world beyond the valley
+  state.accounts.outside = WIDER_WORLD; // the wider world beyond the valley
   createPlots(state);
   const hall = plotByName(state, 'Hearth Hall');
   setBuilding(state, hall, 'hall');
@@ -143,6 +177,7 @@ export function createKingdom(seed = 20251024) {
   plotHistory(state, edge, 'The council opened the Village Woodlot.');
 
   createWorks(state);
+  addMilestone4State(state);
 
   const corner = plotByName(state, 'Crossroads Corner');
   setBuilding(state, corner, 'stall', 'Old Trading Stall');

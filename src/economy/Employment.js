@@ -1,3 +1,5 @@
+import { noteUnpaidWage } from '../law/Courts.js';
+import { workOnRoad } from '../navigation/RoadConstruction.js';
 import { byId } from '../core/EntityRegistry.js';
 import { ECONOMY } from '../core/Config.js';
 import { transfer, balance } from './Transactions.js';
@@ -98,7 +100,7 @@ export function layOff(state, b, reason) {
 export function completeShift(state, c, b) {
   if (!isTrading(b)) return { ok: false, produced: 0, paid: 0 };
   const produced = produce(state, b, productivity(c, b.type));
-  if (b.type === 'works') maintain(state, c);
+  if (b.type === 'works' && !workOnRoad(state, c)) maintain(state, c);
   improveSkill(c, SKILL_FOR_BUSINESS[b.type]);
   c.stats.shiftsWorked++;
   c.shiftsToday++;
@@ -107,7 +109,9 @@ export function completeShift(state, c, b) {
   const isOwner = b.ownerId === c.id;
   if (!isOwner && c.employment?.businessId === b.id) {
     const wage = c.employment.wage;
-    if (transfer(state, b.id, c.id, wage, 'wage', `${c.firstName}'s shift at ${b.name}`)) {
+    // A civic institution (works crew, school) whose fund has run dry pays straight from the treasury.
+    const payer = BUSINESS_TYPES[b.type].civic && balance(state, b.id) < wage && balance(state, 'treasury') >= wage ? 'treasury' : b.id;
+    if (transfer(state, payer, c.id, wage, 'wage', `${c.firstName}'s shift at ${b.name}`)) {
       paid = wage;
       b.today.wages += wage;
       c.stats.earned += wage;
@@ -119,6 +123,7 @@ export function completeShift(state, c, b) {
       const owner = byId(state.citizens, b.ownerId);
       if (owner) adjust(state, c.id, owner.id, { trust: -10 });
       remember(state, c, `${b.name} could not pay my wage.`, 2, 'grievance');
+      noteUnpaidWage(state, c, b, wage);
       if (c.employment.unpaid >= 2) {
         leaveJob(state, c, 'quit after unpaid wages');
         record(state, 'business', `${c.firstName} quit ${b.name} after going unpaid.`, { citizens: [c.id], business: b.id }, 2);

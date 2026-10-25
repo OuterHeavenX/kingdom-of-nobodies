@@ -1,3 +1,4 @@
+import { lawInForce } from '../law/LegalCode.js';
 import { EVENTS, DAYS_PER_YEAR, LIFE } from '../core/Config.js';
 import { chance, nextRandom, intRange } from '../core/Random.js';
 import { seasonOf, isNewSeason, yearOf, isNewYear } from '../core/Calendar.js';
@@ -48,7 +49,7 @@ export function dailyDisasters(state) {
   const winter = seasonOf(state.day) === 'Winter';
   for (const p of state.plots) {
     if (!p.building || p.building.type === 'ruins' || p.building.type === 'well' || p.projectId || state.fires.some((f) => f.plotId === p.id)) continue;
-    let risk = EVENTS.fireDailyPerBuilding * (FLAMMABLE[p.building.type] ?? 1) * (winter ? 1.6 : 1) * (s.harshWinter ? 1.3 : 1) * (nearWell(state, p) ? 0.6 : 1) * ((p.building.condition ?? 100) < 50 ? 1.5 : 1);
+    let risk = EVENTS.fireDailyPerBuilding * (FLAMMABLE[p.building.type] ?? 1) * (winter ? 1.6 : 1) * (s.harshWinter ? 1.3 : 1) * (nearWell(state, p) ? 0.6 : 1) * ((p.building.condition ?? 100) < 50 ? 1.5 : 1) * (lawInForce(state, 'safety') ? 0.8 : 1);
     if (chance(state, risk)) igniteFire(state, p);
   }
   maybeOutbreak(state);
@@ -99,7 +100,7 @@ function destroyBuilding(state, plot, heroes) {
   const label = old.name;
   if (plot.businessId) {
     const b = state.businesses.find((x) => x.id === plot.businessId);
-    if (b) closeBusiness(state, b, 'CLOSED');
+    if (b) closeBusiness(state, b, 'CLOSED', 'building destroyed');
   }
   for (const id of plot.residents) {
     const c = state.citizens.find((x) => x.id === id);
@@ -176,7 +177,8 @@ export function noteDiseaseDeath(state) {
 }
 
 /** Hunger drains faster in a harsh winter. */
-export const hungerMultiplier = (state) => (state.season?.harshWinter && seasonOf(state.day) === 'Winter' ? 1.25 : 1);
+// People burn more food in winter, and more again in a harsh one.
+export const hungerMultiplier = (state) => (seasonOf(state.day) === 'Winter' ? (state.season?.harshWinter ? 1.25 : 1.06) : 1);
 export const harvestMultiplier = (state) => (state.season?.cropFailureYear === yearOf(state.day) ? 0.5 : 1);
 export const inRecession = (state) => (state.season?.recessionUntil ?? 0) > state.day;
 

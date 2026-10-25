@@ -2,7 +2,7 @@ import { CHRONICLE } from '../core/Config.js';
 
 // The Chronicle is the permanent history of the kingdom. Systems call record()
 // at the moment they change state, so every entry mirrors a real event.
-export const CATEGORIES = ['citizen', 'business', 'property', 'economy', 'relationships', 'construction', 'council'];
+export const CATEGORIES = ['citizen', 'business', 'property', 'economy', 'relationships', 'construction', 'council', 'region', 'trade', 'diplomacy', 'law', 'culture'];
 
 /**
  * @param {object} refs - stable entity references { citizens:[ids], business, plot }
@@ -25,13 +25,18 @@ export function record(state, category, text, refs = {}, importance = 1) {
 }
 
 function prune(state) {
-  // Drop the oldest minor entries first; milestones survive much longer.
-  const excess = state.chronicle.length - CHRONICLE.max + 40;
-  let removed = 0;
-  state.chronicle = state.chronicle.filter((e) => {
-    if (removed < excess && e.importance < 2) { removed++; return false; }
-    return true;
-  });
+  // Drop the oldest entries in tiers: minor ones first, then routine news,
+  // keeping births, deaths, law and diplomacy longer, and milestones longest.
+  let excess = state.chronicle.length - CHRONICLE.max + 40;
+  const lasting = new Set(['citizen', 'law', 'diplomacy']);
+  const tiers = [(e) => e.importance < 2, (e) => e.importance === 2 && !lasting.has(e.category), (e) => e.importance < 3];
+  for (const drop of tiers) {
+    if (excess <= 0) break;
+    state.chronicle = state.chronicle.filter((e) => {
+      if (excess > 0 && drop(e)) { excess--; return false; }
+      return true;
+    });
+  }
   if (state.chronicle.length > CHRONICLE.max) state.chronicle.splice(0, state.chronicle.length - CHRONICLE.max);
 }
 

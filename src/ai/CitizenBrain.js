@@ -1,3 +1,4 @@
+import { enjoyFestival } from '../culture/Festivals.js';
 import { byId } from '../core/EntityRegistry.js';
 import { NEEDS, MOVE, GOODS, FOOD_GOODS, ECONOMY } from '../core/Config.js';
 import { range, chance } from '../core/Random.js';
@@ -23,6 +24,11 @@ import { hungerMultiplier, maybeSpread } from '../events/Disasters.js';
 import { gainSkill } from '../education/Skills.js';
 import { ageOf } from '../citizens/Citizen.js';
 import { schoolOpen, completeLesson, completeApprenticeship, completeMentoring } from '../education/Education.js';
+import { findPath, segmentClear } from '../navigation/Pathfinding.js';
+import { navGrid, costAt, cellOf, nearestOpen, cellX, cellZ, walkable } from '../navigation/NavigationGrid.js';
+import { roadWorkSpot } from '../navigation/RoadConstruction.js';
+import { noteTheft } from '../law/Courts.js';
+import { recordTrip, crowdFactor, ensureNavigation } from '../navigation/Traffic.js';
 
 // Each citizen is always either performing an activity or choosing one.
 // Activities have two phases: travel to a location, then perform for a duration.
@@ -32,7 +38,7 @@ import { schoolOpen, completeLesson, completeApprenticeship, completeMentoring }
 const clamp = (v) => Math.max(0, Math.min(100, v));
 
 const LABELS = {
-  eat_own: 'Eating', eat_stock: 'Eating from stock', buy_food: 'Buying food', sleep: 'Sleeping', work: 'Working', build: 'Building',
+  eat_own: 'Eating', steal: 'Stealing food', court: 'At court', see_caravan: 'Overseeing a caravan', eat_stock: 'Eating from stock', buy_food: 'Buying food', sleep: 'Sleeping', work: 'Working', build: 'Building',
   seek_job: 'Looking for work', forage: 'Foraging in the forest', sell_goods: 'Selling goods', socialize: 'Socialising',
   tavern: 'At the tavern', help: 'Helping a neighbour', festival: 'Enjoying the festival', buy_plot: 'Buying property',
   start_project: 'Starting a building project', explore: 'Wandering', idle: 'Taking a moment',
@@ -49,6 +55,11 @@ const square = (state) => ({ x: range(state, -3.5, 3.5), z: range(state, -3.5, 3
 const forestSpot = (state) => ({ x: range(state, 13, 32), z: range(state, -30, -21) });
 
 export function updateCitizen(state, c) {
+  // Someone away from the valley (scouting) is provisioned and off the map.
+  if (c.away) {
+    if (c.activity?.kind !== 'away') c.activity = { kind: 'away', label: c.away.reason === 'scouting' ? 'Away scouting' : 'Away', x: c.x, z: c.z, duration: 1, elapsed: 0, phase: 'perform' };
+    return;
+  }
   tickNeeds(state, c);
   const a = c.activity;
   if (a && shouldInterrupt(state, c, a)) abandon(state, c, a);
@@ -58,15 +69,13 @@ export function updateCitizen(state, c) {
     // Visitors follow the person they are going to see.
     if ((act.kind === 'socialize' || act.kind === 'mentor') && act.citizenId && state.tick % 3 === 0) {
       const t = byId(state.citizens, act.citizenId);
-      if (t) { act.x = t.x + 0.8; act.z = t.z + 0.6; }
+      if (t) {
+        act.x = t.x + 0.8; act.z = t.z + 0.6;
+        const end = act.path?.[act.path.length - 1];
+        if (end && Math.hypot(end[0] - act.x, end[1] - act.z) > 4) act.path = null;
+      }
     }
-    const dx = act.x - c.x, dz = act.z - c.z, d = Math.hypot(dx, dz);
-    if (d <= MOVE.arriveDistance) act.phase = 'perform';
-    else {
-      const step = Math.min(MOVE.unitsPerTick, d);
-      c.x += (dx / d) * step;
-      c.z += (dz / d) * step;
-    }
+    travel(state, c, act);
     return;
   }
   act.elapsed++;
@@ -77,6 +86,59 @@ export function updateCitizen(state, c) {
     return;
   }
   if (act.elapsed >= act.duration) finish(state, c);
+}
+
+const r2 = (v) => Math.round(v * 100) / 100;
+
+/**
+ * Walk the planned route: plan it on first use (A* around buildings, preferring
+ * roads), re-plan if the town changed under it, and move at a speed set by the
+ * ground underfoot and how crowded it is. Unreachable places fail with a reason
+ * instead of leaving anyone frozen.
+ */
+function travel(state, c, act) {
+  const grid = navGrid(state);
+  if (act.path && act.navV !== grid.version) {
+    // The town changed: keep the route only if every remaining leg is still clear.
+    const rest = [[c.x, c.z], ...act.path.slice(act.wp ?? 0)];
+    const clear = rest.every((p, i) => i === 0 || segmentClear(state, rest[i - 1][0], rest[i - 1][1], p[0], p[1]));
+    if (clear) act.navV = grid.version;
+    else act.path = null;
+  }
+  if (!act.path) {
+    // Someone standing where a wall now is steps out first.
+    const here = cellOf(c.x, c.z);
+    if (here >= 0 && !walkable(grid, here)) {
+      const open = nearestOpen(grid, here);
+      if (open >= 0) { c.x = cellX(open); c.z = cellZ(open); }
+    }
+    const route = findPath(state, c, act);
+    if (route.failed) return routeFailed(state, c, act, route.failed);
+    act.path = route.points.map(([x, z]) => [r2(x), r2(z)]);
+    act.wp = 0;
+    act.navV = route.version;
+    recordTrip(state, route.cells);
+  }
+  let budget = MOVE.unitsPerTick * crowdFactor(state, c.x, c.z);
+  while (budget > 1e-6 && act.wp < act.path.length) {
+    const [tx, tz] = act.path[act.wp];
+    const dx = tx - c.x, dz = tz - c.z, d = Math.hypot(dx, dz);
+    const speed = 1 / Math.max(0.45, Math.min(4, costAt(state, c.x, c.z)));
+    const step = Math.min(d, budget * speed);
+    if (d > 1e-6) { c.x += (dx / d) * step; c.z += (dz / d) * step; }
+    budget -= step / speed;
+    if (step >= d - 1e-6) act.wp++;
+  }
+  if (act.wp >= act.path.length) { act.phase = 'perform'; act.path = null; }
+}
+
+function routeFailed(state, c, act, reason) {
+  const nav = ensureNavigation(state);
+  nav.failures++;
+  nav.recentFailures.push({ day: state.day, who: c.id, label: act.label, reason });
+  if (nav.recentFailures.length > 20) nav.recentFailures.shift();
+  remember(state, c, `Could not find a way there (${reason}) and gave up on ${act.label.toLowerCase()}.`, 1, 'routine');
+  abandon(state, c, act);
 }
 
 function tickNeeds(state, c) {
@@ -164,11 +226,21 @@ function begin(state, c, k) {
       const b = businessById(state, k.businessId);
       return activity('buy_food', `Buying ${GOODS[k.good].label.toLowerCase()} at ${b.name}`, businessLocation(state, b), 2, { businessId: b.id, good: k.good, payer: k.payer });
     }
+    case 'court': {
+      const court = state.plots.find((p) => p.building?.type === 'courthouse') ?? state.plots.find((p) => p.building?.type === 'townhall' || p.building?.type === 'hall');
+      return activity('court', state.law?.judgeId === c.id ? 'Hearing cases' : 'At court', frontOf(court, range(state, -1.6, 1.6), range(state, 0.2, 1)), 8, { caseId: k.caseId });
+    }
+    case 'see_caravan': return activity('see_caravan', 'Overseeing the caravan', { x: 9 + range(state, -1, 1), z: 4.5 + range(state, -0.5, 0.5) }, 6, { caravanId: k.caravanId });
+    case 'steal': {
+      const b = businessById(state, k.businessId);
+      return b ? activity('steal', `Hanging about ${b.name}`, businessLocation(state, b), 2, { businessId: b.id, good: k.good }) : null;
+    }
     case 'sleep': return activity('sleep', plotById(state, c.homePlotId)?.ownerId === c.id ? 'Sleeping at home' : 'Sleeping at the hall', homeOf(state, c), 80);
     case 'work': {
       const b = businessById(state, k.businessId);
       const plot = plotById(state, b.plotId);
-      const loc = b.type === 'farm' ? { x: plot.x + range(state, -4, 3), z: plot.z + range(state, -3, 1) } : frontOf(plot, range(state, -2.2, 2.2), range(state, 0.1, 1.2));
+      const road = b.type === 'works' ? roadWorkSpot(state, () => range(state, 0, 1)) : null;
+      const loc = road ?? (b.type === 'farm' ? { x: plot.x + range(state, -4, 3), z: plot.z + range(state, -3, 1) } : frontOf(plot, range(state, -2.2, 2.2), range(state, 0.1, 1.2)));
       return activity('work', c.employment.role === 'owner' ? `Running ${b.name}` : `Working at ${b.name}`, loc, 24, { businessId: b.id });
     }
     case 'build': {
@@ -200,7 +272,7 @@ function begin(state, c, k) {
       const t = byId(state.citizens, k.citizenId);
       return activity('help', `Helping ${t.firstName}`, { x: t.x, z: t.z }, 2, { citizenId: t.id });
     }
-    case 'festival': return activity('festival', 'Celebrating at the festival', square(state), 10);
+    case 'festival': return activity('festival', k.seasonal ? `At the ${state.culture?.current?.name ?? 'festival'}` : 'Celebrating at the festival', square(state), 10, { seasonal: !!k.seasonal });
     case 'buy_plot': {
       if (!reservePlot(state, k.plotId, c.id)) return null;
       return activity('buy_plot', `Buying ${plotById(state, k.plotId).name}`, hallDoor(state), 3, { plotId: k.plotId, home: !!k.home });
@@ -281,6 +353,25 @@ function finish(state, c) {
       if (res.ok) eatFrom(c, a.good);
       break;
     }
+    case 'steal': {
+      const b = businessById(state, a.businessId);
+      const n = b ? Math.min(2, qty(b.inventory, a.good)) : 0;
+      if (n <= 0) break;
+      removeGoods(b.inventory, a.good, n);
+      addGoods(c.inventory, a.good, n);
+      eatFrom(c, a.good);
+      const witnesses = state.citizens.filter((o) => o !== c && !o.away && o.activity?.kind !== 'sleep' && Math.hypot(o.x - c.x, o.z - c.z) < 10).slice(0, 3);
+      if (witnesses.length) {
+        noteTheft(state, c, b.id, a.good, n, retailPrice(b, a.good) * n, witnesses);
+        bump(c, 'honesty', -12);
+        for (const w of witnesses) { adjust(state, w.id, c.id, { trust: -15, respect: -8 }); remember(state, w, `Saw ${c.firstName} steal ${a.good} from ${b.name}.`, 2, 'gossip'); }
+        record(state, 'citizen', `${c.firstName} ${c.lastName}, starving and penniless, was seen stealing ${a.good} from ${b.name}.`, { citizens: [c.id, ...witnesses.map((w) => w.id)], business: b.id }, 2);
+      }
+      remember(state, c, `Took ${a.good} from ${b.name} because I was starving.`, 3, 'grievance');
+      state.stats.thefts = (state.stats.thefts ?? 0) + 1;
+      c.lastTheftDay = state.day;
+      break;
+    }
     case 'sleep': if (plotById(state, c.homePlotId)?.ownerId === c.id) c.mood = clamp(c.mood + 2); break;
     case 'work': {
       const b = businessById(state, a.businessId);
@@ -346,7 +437,7 @@ function finish(state, c) {
       }
       break;
     }
-    case 'festival': chat(state, c, nearby(state, c, 7).slice(0, 3), 1.4); c.needs.social = clamp(c.needs.social + 30); c.mood = clamp(c.mood + 5); break;
+    case 'festival': chat(state, c, nearby(state, c, 7).slice(0, 3), 1.4); c.needs.social = clamp(c.needs.social + 30); c.mood = clamp(c.mood + 5); if (a.seasonal) enjoyFestival(state, c); break;
     case 'buy_plot': {
       const res = buyPlot(state, a.plotId, c.id);
       if (res.ok) {

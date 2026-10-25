@@ -8,7 +8,7 @@ export const LAND_TYPES = {
   commercial: { label: 'Commercial', base: 38, allows: ['bakery', 'general_store', 'tavern', 'blacksmith'] },
   workshop: { label: 'Workshop land', base: 34, allows: ['lumberyard', 'blacksmith', 'general_store'] },
   residential: { label: 'Residential', base: 22, allows: ['cottage'] },
-  civic: { label: 'Civic', base: 50, allows: ['hall', 'market', 'school', 'granary', 'well', 'townhall', 'memorial'] },
+  civic: { label: 'Civic', base: 50, allows: ['hall', 'market', 'school', 'granary', 'well', 'townhall', 'memorial', 'courthouse'] },
 };
 
 export const BUILDING_INFO = {
@@ -27,6 +27,7 @@ export const BUILDING_INFO = {
   well: { label: 'Well', class: 'civic', value: 14 },
   townhall: { label: 'Town Hall', class: 'civic', value: 90 },
   ruins: { label: 'Ruins', class: 'ruins', value: 0 },
+  courthouse: { label: 'Courthouse', class: 'civic', value: 80 },
 };
 
 // Hand-placed village layout around the crossroads at (0, 0).

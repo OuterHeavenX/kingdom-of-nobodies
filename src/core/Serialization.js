@@ -1,5 +1,5 @@
-import { SAVE_VERSION } from './Config.js';
-import { createKingdom, createWorks } from '../sim/Setup.js';
+import { SAVE_VERSION, WIDER_WORLD } from './Config.js';
+import { createKingdom, createWorks, addMilestone4State } from '../sim/Setup.js';
 import { adjustBoth } from '../citizens/Relationships.js';
 import { addGoods } from '../economy/Inventory.js';
 import { transfer } from '../economy/Transactions.js';
@@ -49,6 +49,25 @@ export function migrateV3(s) {
   if (!s.businesses.some((b) => b.type === 'works')) createWorks(s);
   s.version = 4;
   s.migratedFrom = s.migratedFrom ?? 'milestone-2';
+  return s;
+}
+
+/**
+ * Milestone 3 (v4) → Milestone 4 (v5). Nothing is reset: the village keeps its
+ * people, families and history, and gains its roads (including any districts
+ * already opened), navigation records, the region beyond the valley, trade,
+ * law and festival calendars.
+ */
+export function migrateV4(s) {
+  // Milestone 4 opens the valley to trade with the wider world, which is far
+  // larger than the purse a Milestone 3 village knew about. This one-time top-up
+  // is recorded so the money supply stays explainable.
+  const topUp = Math.max(0, WIDER_WORLD - (s.accounts.outside ?? 0));
+  s.accounts.outside = (s.accounts.outside ?? 0) + topUp;
+  s.migrationNotes = [...(s.migrationNotes ?? []), { version: 5, outsideTopUp: topUp }];
+  addMilestone4State(s);
+  s.version = 5;
+  s.migratedFrom = s.migratedFrom ?? 'milestone-3';
   return s;
 }
 
@@ -119,6 +138,7 @@ export function migrate(s) {
     s.events = [];
     return s;
   }
+  if (s.version === 4) return migrate(migrateV4(s));
   if (s.version === 3) return migrate(migrateV3(s));
   if (s.version === 2 && Array.isArray(s.people)) return migrateMilestone1(s);
   throw new Error(`Unsupported save version ${s.version}.`);

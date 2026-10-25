@@ -1,5 +1,5 @@
 import { byId } from '../core/EntityRegistry.js';
-import { LIFE, DAYS_PER_YEAR, TIME } from '../core/Config.js';
+import { LIFE, DAYS_PER_YEAR, TIME, FOOD_GOODS } from '../core/Config.js';
 import { ageOn, stageForAge, isBirthday, seasonOf, yearOf } from '../core/Calendar.js';
 import { chance } from '../core/Random.js';
 import { balance } from '../economy/Transactions.js';
@@ -46,6 +46,20 @@ function causeOf(state, c) {
   return age >= 60 ? 'old age' : 'a sudden illness';
 }
 
+/** Why a villager starved: the archive keeps this so famines can be told apart from poverty. */
+export function hungerCause(state, c) {
+  if (c.away) return 'stranded away from home';
+  const forSale = state.businesses.some((b) => isTrading(b) && FOOD_GOODS.some((g) => (b.inventory[g] ?? 0) > 0));
+  if (!forSale) return 'no food to be had in the village';
+  if (ageOf(state, c) < LIFE.adultAge) {
+    const g = byId(state.citizens, c.family.guardianId);
+    if (!g) return 'an orphan the council could not feed';
+    return balance(state, g.id) < 2 ? `a child of a family too poor to buy food${g.employment ? '' : ' (no work)'}` : 'a child left unfed at home';
+  }
+  if (balance(state, c.id) < 2) return c.employment ? 'wages too low to buy food' : 'out of work and penniless';
+  return 'too ill or frail to fetch food';
+}
+
 /** Runs once at the start of each day. */
 export function dailyLifecycle(state) {
   const deaths = [];
@@ -56,7 +70,11 @@ export function dailyLifecycle(state) {
     if (chance(state, dailyMortality(state, c))) deaths.push([c, causeOf(state, c)]);
     else if (age >= LIFE.retireAge && !c.retired && c.employment) considerRetirement(state, c, age);
   }
-  for (const [c, cause] of deaths) die(state, c, cause);
+  for (const [c, cause] of deaths) {
+    const why = cause === 'hunger' ? hungerCause(state, c) : null;
+    const entry = die(state, c, cause);
+    if (entry && why) entry.hungerCause = why;
+  }
 }
 
 function onBirthday(state, c, age) {

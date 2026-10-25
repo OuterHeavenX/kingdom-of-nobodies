@@ -25,9 +25,11 @@ export const POLICIES = {
   businessLicensing: { label: 'Business licensing', issue: 'trust', default: false },
   publicSchooling: { label: 'Public schooling', issue: 'education', default: false },
   apprenticeshipGrants: { label: 'Apprenticeship grants', issue: 'education', default: false },
+  tariffLevel: { label: 'Import tariffs', issue: 'trade', options: ['low', 'normal', 'high'], default: 'normal', describe: (v) => `${v} (${{ low: 3, normal: 6, high: 12 }[v]}% on imports)` },
+  openDiplomacy: { label: 'Seek treaties abroad', issue: 'trade', default: true },
 };
 
-export const ISSUES = ['taxes', 'welfare', 'works', 'business', 'trust', 'education'];
+export const ISSUES = ['taxes', 'welfare', 'works', 'business', 'trust', 'education', 'trade'];
 
 export function defaultPolicies(taxLevel = 'normal') {
   const p = Object.fromEntries(Object.entries(POLICIES).map(([k, d]) => [k, d.default]));
@@ -47,6 +49,7 @@ export function issueStance(policies) {
   s.business = (Number(!!policies.reducedFees) + Number(!!policies.constructionGrants)) - 1;
   s.trust = policies.businessLicensing ? 1 : -0.3;
   s.education = (Number(!!policies.publicSchooling) + Number(!!policies.apprenticeshipGrants)) - 1;
+  s.trade = ((policies.tariffLevel ?? 'normal') === 'low' ? 0.6 : (policies.tariffLevel ?? 'normal') === 'high' ? -0.6 : 0) + ((policies.openDiplomacy ?? true) ? 0.4 : -0.4);
   return s;
 }
 
@@ -63,6 +66,8 @@ export function platformFor(priorities, current) {
   p.businessLicensing = priorities.trust > 0.35;
   p.publicSchooling = priorities.education > 0.3;
   p.apprenticeshipGrants = priorities.education > 0.6;
+  p.tariffLevel = (priorities.trade ?? 0) > 0.5 ? 'low' : (priorities.trade ?? 0) < -0.3 ? 'high' : 'normal';
+  p.openDiplomacy = (priorities.trade ?? 0) > -0.45;
   return p;
 }
 
@@ -72,6 +77,7 @@ export function platformPromises(platform, current) {
   for (const [k, def] of Object.entries(POLICIES)) {
     if (platform[k] === current[k]) continue;
     if (k === 'taxLevel') out.push(platform.taxLevel === 'low' ? 'lower taxes' : platform.taxLevel === 'high' ? 'raise taxes' : 'restore moderate taxes');
+    else if (k === 'tariffLevel') out.push(platform.tariffLevel === 'low' ? 'cut import tariffs' : platform.tariffLevel === 'high' ? 'protect local trades with high tariffs' : 'restore moderate tariffs');
     else out.push(`${platform[k] ? 'introduce' : 'end'} ${def.label.toLowerCase()}`);
   }
   return out.length ? out : ['keep things as they are'];

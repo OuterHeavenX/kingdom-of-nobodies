@@ -86,7 +86,7 @@ export function makeVillager(c, stage = 'adult') {
 }
 
 const WORKING = new Set(['work', 'build', 'forage']);
-const SOCIAL = new Set(['socialize', 'tavern', 'festival', 'help']);
+const SOCIAL = new Set(['socialize', 'tavern', 'festival', 'help', 'court', 'see_caravan']);
 
 export class Villagers {
   constructor(scene) {
@@ -129,7 +129,7 @@ export class Villagers {
       if (!node) continue;
       const u = node.userData;
       const a = c.activity;
-      const asleep = (a?.kind === 'sleep' || a?.kind === 'cradle') && a.phase === 'perform';
+      const asleep = ((a?.kind === 'sleep' || a?.kind === 'cradle') && a.phase === 'perform') || a?.kind === 'away';
       const d2 = target ? (c.x - target.x) ** 2 + (c.z - target.z) ** 2 : 0;
       node.visible = !asleep && (d2 < far || c.id === selectedId);
       if (!node.visible) { node.position.set(c.x, 0, c.z); continue; }

@@ -34,6 +34,8 @@ export function buyPlot(state, plotId, buyerId) {
   if (!transfer(state, buyerAcct, ownerAccount(sellerId), p.price, 'property', `${p.name} sold`)) return { ok: false, reason: 'payment failed' };
   const price = p.price;
   p.ownerId = buyerId;
+  p.acquiredDay = state.day;
+  p.boughtFor = price;
   p.marketStatus = 'NOT_FOR_SALE';
   p.reservedBy = null;
   p.reservedUntil = 0;

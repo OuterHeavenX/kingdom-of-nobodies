@@ -14,12 +14,17 @@ import { linkParent } from '../citizens/FamilyTree.js';
 import { reassignWards } from '../citizens/Lifecycle.js';
 import { householdOf } from './Housing.js';
 import { onCitizenGone } from '../politics/Government.js';
+import { onMerchantGone } from '../trade/TradeManager.js';
 import { publicBeds } from './Expansion.js';
 import { assignHomes } from '../citizens/CitizenManager.js';
 import { archiveCitizen } from '../history/Archive.js';
 import { villageFood } from '../economy/Marketplace.js';
 import { record } from '../society/Chronicle.js';
 import { remember } from '../ai/MemorySystem.js';
+import { invalidateIds } from '../core/EntityRegistry.js';
+import { ageOn } from '../core/Calendar.js';
+import { KINGDOMS, HEARTH } from '../region/RegionData.js';
+import { relationScore, noteMigration } from '../diplomacy/Diplomacy.js';
 
 // People arrive and leave for reasons. Newcomers weigh beds, work, food,
 // happiness and recent troubles before settling; residents who are miserable,
@@ -43,7 +48,7 @@ export function attractiveness(state) {
   const foodPerHead = villageFood(state) / Math.max(1, pop);
   const mood = state.citizens.reduce((s, c) => s + c.mood, 0) / Math.max(1, pop);
   const troubled = (state.season?.troubledUntil ?? 0) > state.day;
-  let score = 0.4 + Math.min(0.5, free * 0.05) + openings * 0.2 + Math.min(0.3, foodPerHead * 0.05) + (mood - 50) / 100 - jobless / Math.max(4, adults.length) - (troubled ? 0.4 : 0);
+  let score = 0.4 + Math.min(0.5, free * 0.05) + openings * (jobless > 2 ? 0.05 : 0.2) + Math.min(0.3, foodPerHead * 0.05) + (mood - 50) / 100 - 1.6 * jobless / Math.max(4, adults.length) - (troubled ? 0.4 : 0);
   if (pop < 12) score += 0.3; // a tiny hamlet needs hands
   return { score: Math.max(0, score), free };
 }
@@ -101,46 +106,163 @@ export function maybeImmigrate(state) {
     for (let i = 2; i < size; i++) members.push(newPerson(state, { sex: nextRandom(state) < 0.5 ? 'F' : 'M', age: intRange(state, 1, Math.min(14, ageOf(state, members[0]) - 18)), lastName, parents: [members[0], other] }));
   }
   const savings = intRange(state, POPULATION.immigrantMinCoins, POPULATION.immigrantMaxCoins) * (size > 1 ? 2 : 1);
-  transfer(state, 'outside', members[0].id, Math.min(savings, balance(state, 'outside')), 'immigration', `${members[0].firstName}'s savings`);
+  // Newcomers come from somewhere: most often a kingdom that is struggling.
+  const source = sourceKingdom(state);
+  const from = source && balance(state, KINGDOMS[source].account) > savings + 300 ? KINGDOMS[source].account : 'outside';
+  transfer(state, from, members[0].id, Math.min(savings, balance(state, from)), 'immigration', `${members[0].firstName}'s savings`);
+  if (source) {
+    const k = state.region.settlements[source];
+    k.population = Math.max(40, k.population - members.length);
+    noteMigration(state, source, HEARTH, members.length);
+    for (const m of members) m.origin = source;
+  }
   assignHomes(state);
   state.stats.immigrants += members.length;
   for (const m of members) remember(state, m, 'Arrived in the village to start a new life.', 2, 'milestone');
   const who = size === 1 ? `${members[0].firstName} ${lastName}, a ${members[0].profession.toLowerCase()},` : `The ${lastName} family (${members.map((m) => m.firstName).join(', ')})`;
-  record(state, 'citizen', `${who} arrived hoping to ${members[0].dream.text.toLowerCase()}.`, { citizens: members.map((m) => m.id) }, 2);
+  record(state, 'citizen', `${who} arrived${source ? ` from ${KINGDOMS[source].name}` : ''} hoping to ${members[0].dream.text.toLowerCase()}.`, { citizens: members.map((m) => m.id) }, 2);
   return members;
 }
 
-/** Daily: track unhappiness; a household whose head has suffered long enough may leave. */
-export function maybeEmigrate(state) {
-  for (const c of state.citizens) {
-    const age = ageOf(state, c);
-    if (age < LIFE.adultAge) continue;
-    const struggling = c.mood < 32 && (!c.employment || !c.homePlotId || balance(state, c.id) < 3);
-    c.unhappyDays = struggling ? (c.unhappyDays ?? 0) + 1 : 0;
-  }
-  const leaver = state.citizens.find((c) => c.unhappyDays >= 6 && !c.founder && chance(state, 0.15));
-  if (leaver) emigrate(state, leaver);
+/** Kingdoms people come from: hungry, poor or badly governed places send more. */
+function sourceKingdom(state) {
+  if (!state.region) return null;
+  const weights = Object.entries(state.region.settlements).filter(([, k]) => k.population > 60)
+    .map(([id, k]) => [id, 0.3 + k.hunger * 3 + Math.max(0, 1.15 - k.prosperity) + (k.leader.approval < 40 ? 0.4 : 0)]);
+  const total = weights.reduce((t, [, w]) => t + w, 0);
+  if (!total) return null;
+  let r = nextRandom(state) * total;
+  for (const [id, w] of weights) { r -= w; if (r <= 0) return id; }
+  return weights[weights.length - 1][0];
 }
 
-export function emigrate(state, c) {
+const kinAbroad = (state, c) => [...c.family.parentIds, ...c.family.childIds, ...c.family.formerSpouseIds].map((id) => state.archive[id]).filter((p) => p?.status === 'emigrated' && p.destination);
+
+/** Where a citizen would go, and how strongly they are drawn there. */
+export function bestDestination(state, c) {
+  if (!state.region) return null;
+  let best = null;
+  for (const [id, k] of Object.entries(state.region.settlements)) {
+    const relation = relationScore(state, HEARTH, id);
+    if (relation < -40) continue;
+    const kin = kinAbroad(state, c).filter((p) => p.destination === id).length;
+    const pull = (k.prosperity - 1) * 1.2 + (1 - k.hunger) * 0.3 - k.hunger * 1.5 + relation / 200 + kin * 0.45 + (k.leader.approval - 50) / 200 - (k.population >= KINGDOMS[id].capacity ? 0.4 : 0);
+    if (!best || pull > best.pull) best = { id, pull, kin };
+  }
+  return best;
+}
+
+/** Daily: hardship pushes people out; better prospects abroad pull them. */
+export function maybeEmigrate(state) {
+  let leaver = null;
+  for (const c of state.citizens) {
+    const age = ageOf(state, c);
+    if (age < LIFE.adultAge || c.away) continue;
+    const struggling = c.mood < 32 && (!c.employment || !c.homePlotId || balance(state, c.id) < 3);
+    c.unhappyDays = struggling ? (c.unhappyDays ?? 0) + 1 : 0;
+    c.joblessDays = !c.employment && !c.retired ? (c.joblessDays ?? 0) + 1 : 0;
+    if (leaver || c.founder || state.government?.leaderId === c.id) continue;
+    if (c.unhappyDays >= 6 && chance(state, 0.15)) { leaver = { c, why: 'hard times' }; continue; }
+    let push = (c.joblessDays > 5 ? 0.35 : 0) + (!c.homePlotId ? 0.3 : 0) + (c.mood < 45 ? 0.2 : 0) + ((state.government?.approval ?? 60) < 30 ? 0.15 : 0) + (age < 35 ? 0.1 : 0);
+    if (push < 0.3) continue;
+    // A household with a thriving business or savings has a stake here and
+    // does not leave for vague prospects abroad.
+    const household = householdOf(state, c);
+    if (household.some((m) => state.businesses.some((b) => b.ownerId === m.id && b.status === 'OPEN'))) continue;
+    if (household.reduce((t, m) => t + balance(state, m.id), 0) > 90) push -= 0.2;
+    if (push < 0.3) continue;
+    const dest = bestDestination(state, c);
+    if (!dest || dest.pull + push < 0.55) continue;
+    if (chance(state, Math.min(0.02, (dest.pull + push) * 0.006))) {
+      const why = dest.kin ? 'to be near family' : c.joblessDays > 5 ? 'in search of steady work' : !c.homePlotId ? 'hoping for a home of their own' : 'for a better life';
+      leaver = { c, why, dest: dest.id };
+    }
+  }
+  if (leaver) emigrate(state, leaver.c, { why: leaver.why, destination: leaver.dest });
+}
+
+/** Seasonal: some who left come home, especially when things have gone badly abroad. */
+export function maybeReturn(state) {
+  if (!state.region) return null;
+  const candidates = Object.values(state.archive).filter((p) => p.status === 'emigrated' && p.destination && !p.diedAbroad && ageOn(p.birthDay, state.day) < 65 && state.day - p.leftDay >= 6);
+  for (const p of candidates) {
+    const k = state.region.settlements[p.destination];
+    const kinHome = [...p.family.parentIds, ...p.family.childIds].some((id) => state.citizens.some((c) => c.id === id));
+    const odds = 0.02 + (k.hunger > 0.1 ? 0.12 : 0) + (k.prosperity < 0.85 ? 0.08 : 0) + (kinHome ? 0.05 : 0);
+    if (attractiveness(state).score < 0.3 || !chance(state, odds)) continue;
+    const group = candidates.filter((x) => x.destination === p.destination && x.leftDay === p.leftDay);
+    return returnHome(state, group, k);
+  }
+  return null;
+}
+
+function returnHome(state, records, k) {
+  const back = [];
+  for (const rec of records) {
+    const c = createCitizen(state, {
+      firstName: rec.firstName, lastName: rec.lastName, sex: rec.sex, birthDay: rec.birthDay, generation: rec.generation,
+      color: rec.color, appearance: rec.appearance, profession: ageOn(rec.birthDay, state.day) < LIFE.adultAge ? 'Child' : rec.profession === 'Child' ? 'Laborer' : rec.profession,
+      traits: { ...rec.traits }, dream: { type: 'homestead', text: 'Make a home again where I grew up' }, skills: { ...rec.skills }, founder: rec.founder, legacyTrait: rec.legacyTrait,
+      educationLevel: rec.education?.level ?? 0.3, x: -90, z: 0,
+    });
+    c.id = rec.id; // the same person, the same identity
+    c.family = { ...c.family, ...rec.family, parentIds: [...rec.family.parentIds], childIds: [...rec.family.childIds], formerSpouseIds: [...rec.family.formerSpouseIds] };
+    c.achievements = [...(rec.achievements ?? [])];
+    c.employmentHistory = [...(rec.employmentHistory ?? [])];
+    c.bornHere = rec.bornHere;
+    c.returnedDay = state.day;
+    c.origin = rec.destination;
+    delete state.accounts['c' + state.nextId.citizen];
+    state.accounts[c.id] = state.accounts[c.id] ?? 0;
+    delete state.archive[rec.id];
+    back.push(c);
+  }
+  invalidateIds(state.citizens);
+  // Marriages must still be mutual: a spouse who moved on, or did not come back, is a former spouse.
+  for (const c of back) {
+    const sp = c.family.spouseId;
+    const spouse = sp && state.citizens.find((x) => x.id === sp);
+    if (sp && (!spouse || spouse.family.spouseId !== c.id)) { c.family.formerSpouseIds.push(sp); c.family.spouseId = null; c.family.partnerId = null; }
+    c.romance.partnerId = c.family.spouseId;
+  }
+  const savings = Math.min(25 * back.length, Math.max(0, balance(state, KINGDOMS[k.id].account) - 300));
+  if (savings > 0) transfer(state, KINGDOMS[k.id].account, back[0].id, savings, 'immigration', `${back[0].firstName}'s savings from ${k.name}`);
+  k.population = Math.max(40, k.population - back.length);
+  noteMigration(state, k.id, HEARTH, back.length);
+  state.stats.returned = (state.stats.returned ?? 0) + back.length;
+  state.stats.immigrants += back.length;
+  assignHomes(state);
+  for (const c of back) remember(state, c, `Came home to First Hearth from ${k.name}.`, 3, 'milestone');
+  const names = back.map((c) => c.firstName);
+  record(state, 'citizen', `${names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0]} ${back[0].lastName} came home from ${k.name}${k.hunger > 0.1 ? ', where food had grown scarce' : ''}.`, { citizens: back.map((c) => c.id) }, 2);
+  return back;
+}
+
+export function emigrate(state, c, { why = 'hard times', destination = null } = {}) {
+  destination = destination ?? bestDestination(state, c)?.id ?? null;
   const household = householdOf(state, c);
   for (const m of household) {
     if (m.employment) leaveJob(state, m, 'left the village');
-    for (const b of state.businesses.filter((x) => x.ownerId === m.id && isTrading(x))) closeBusiness(state, b, 'CLOSED');
+    for (const b of state.businesses.filter((x) => x.ownerId === m.id && isTrading(x))) closeBusiness(state, b, 'CLOSED', 'owner emigrated');
     // Their land is sold to the council if it can pay; otherwise it is left for sale.
     for (const p of state.plots.filter((x) => x.ownerId === m.id)) {
       const price = Math.min(p.price, balance(state, 'treasury') - 20);
-      if (price > 0 && transfer(state, 'treasury', m.id, price, 'property', `Council bought ${p.name} from ${m.firstName}`)) p.ownerId = 'council';
+      if (price > 0) transfer(state, 'treasury', m.id, price, 'property', `Council bought ${p.name} from ${m.firstName}`);
+      // Land is never left with someone who no longer lives here: unpaid, it is forfeited to the council.
+      p.ownerId = 'council';
+      p.reservedBy = null;
       listForSale(state, p.id);
     }
     const coins = balance(state, m.id);
-    if (coins > 0) transfer(state, m.id, 'outside', coins, 'emigration', `${m.firstName} took their savings away`);
+    const to = destination ? KINGDOMS[destination].account : 'outside';
+    if (coins > 0) transfer(state, m.id, to, coins, 'emigration', `${m.firstName} took their savings away`);
     const home = plotById(state, m.homePlotId);
     if (home) home.residents = home.residents.filter((id) => id !== m.id);
     for (const key of Object.keys(state.relationships)) if (key.startsWith(m.id + '|') || key.endsWith('|' + m.id)) delete state.relationships[key];
-    archiveCitizen(state, m, 'emigrated', 'hard times');
+    const rec = archiveCitizen(state, m, 'emigrated', why);
+    rec.destination = destination;
   }
-  for (const m of household) onCitizenGone(state, m);
+  for (const m of household) { onCitizenGone(state, m); onMerchantGone(state, m, household.map((x) => x.id)); }
   const ids = new Set(household.map((m) => m.id));
   state.citizens = state.citizens.filter((x) => !ids.has(x.id));
   for (const m of household) { reassignWards(state, m); delete state.accounts[m.id]; }
@@ -150,7 +272,13 @@ export function emigrate(state, c) {
     if (ids.has(o.education.masterId)) o.education.masterId = null;
   }
   state.stats.emigrants += household.length;
-  record(state, 'citizen', `${household.length > 1 ? `The ${c.lastName} household (${household.map((m) => m.firstName).join(', ')})` : `${c.firstName} ${c.lastName}`} left the village after hard times.`, { citizens: [...ids] }, 2);
+  if (destination) {
+    const k = state.region.settlements[destination];
+    k.population += household.length;
+    noteMigration(state, HEARTH, destination, household.length);
+  }
+  const where = destination ? ` for ${KINGDOMS[destination].name}` : '';
+  record(state, 'citizen', `${household.length > 1 ? `The ${c.lastName} household (${household.map((m) => m.firstName).join(', ')})` : `${c.firstName} ${c.lastName}`} left the village${where}, ${why === 'hard times' ? 'after hard times' : why}.`, { citizens: [...ids] }, 2);
   return household;
 }
 

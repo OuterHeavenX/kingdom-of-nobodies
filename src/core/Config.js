@@ -1,7 +1,9 @@
 // Central tuning constants. Every economic and behavioural number lives here so
 // the simulation can be balanced without hunting through system code.
 
-export const SAVE_VERSION = 4;
+/** Coins held by the wider world beyond the region (the 'outside' account) at the founding. */
+export const WIDER_WORLD = 250000;
+export const SAVE_VERSION = 5;
 
 export const TIME = {
   minutesPerTick: 10,
@@ -48,6 +50,7 @@ export const GOODS = {
   timber: { label: 'Timber', icon: '🪵', base: 3 },
   ore: { label: 'Ore', icon: '🪨', base: 2 },
   tools: { label: 'Tools', icon: '🔨', base: 9 },
+  stone: { label: 'Stone', icon: '🧱', base: 2 },
 };
 
 export const FOOD_GOODS = ['meal', 'bread', 'grain', 'berries'];
@@ -72,6 +75,8 @@ export const ECONOMY = {
   startingCapital: 14,
   struggleDays: 3,
   closeAfterStruggleDays: 7,
+  luxuryReserve: 1500, // savings above this are slowly spent on goods from beyond the valley
+  luxuryShare: 0.01, // share of the excess spent each day
   maxOpenPerType: 3,
   maxActiveProjects: 3,
   minWage: 4,
@@ -117,7 +122,7 @@ export const SOCIAL = {
   cheatNoticeChance: 0.5,
 };
 
-export const CHRONICLE = { max: 420, keepImportant: 160 };
+export const CHRONICLE = { max: 640, keepImportant: 200 };
 export const LEDGER = { max: 260 };
 
 export const COUNCIL = {

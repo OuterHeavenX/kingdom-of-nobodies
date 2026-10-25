@@ -7,7 +7,7 @@ import { Simulation } from '../src/sim/Simulation.js';
 import { createKingdom } from '../src/sim/Setup.js';
 import { GameClock } from '../src/core/GameClock.js';
 import { serialize, deserialize } from '../src/core/Serialization.js';
-import { DAYS_PER_YEAR, POLITICS, LIFE, TIME } from '../src/core/Config.js';
+import { DAYS_PER_YEAR, POLITICS, LIFE, TIME, SAVE_VERSION, ECONOMY } from '../src/core/Config.js';
 import { ageOn, stageForAge } from '../src/core/Calendar.js';
 import { ageOf, stageOf } from '../src/citizens/Citizen.js';
 import { ancestorIds, linkParent, person } from '../src/citizens/FamilyTree.js';
@@ -119,7 +119,9 @@ test('7 & 8. death settles the estate exactly once without duplicating wealth', 
   assert.equal(again.id, rich.estateId);
   assert.equal(totalMoney(s), money, 'money is conserved through inheritance');
   assert.equal(balance(s, rich.id), 0, 'nothing is left in the dead person\'s account');
-  assert.equal(again.heirs.reduce((t, h) => t + h.coins, 0) || coins, coins);
+  // Heirs share the estate's coins (which include cash returned by any business that closed).
+  assert.ok(again.coins >= coins);
+  assert.equal(again.heirs.reduce((t, h) => t + h.coins, 0) || again.coins, again.coins);
   assert.equal(die(s, rich, 'old age'), null, 'a person cannot die twice');
 });
 
@@ -227,8 +229,12 @@ test('18. building expansion respects costs and time', () => {
   assert.ok(owner);
   const plot = s.plots.find((p) => p.ownerId === owner.id && p.building && !p.projectId && (p.building.level ?? 1) < 3 && !p.businessId);
   const level = plot.building.level ?? 1;
+  transfer(s, 'outside', owner.id, 60, 'test', 'funds for the permit and timber');
+  const limit = ECONOMY.maxActiveProjects;
+  ECONOMY.maxActiveProjects = 99; // other villagers' building sites are not under test
   const r = startProject(s, { plotId: plot.id, ownerId: owner.id, kind: 'upgrade' });
-  assert.ok(r && !r.error, 'upgrade starts');
+  ECONOMY.maxActiveProjects = limit;
+  assert.ok(r?.ok, `upgrade starts (${r?.reason ?? ''})`);
   updateProjects(s);
   assert.equal(plot.building.level ?? 1, level, 'no instant expansion');
   const p = s.projects.find((x) => x.plotId === plot.id);
@@ -298,7 +304,7 @@ test('a real Milestone 2 save (version 3) migrates into a working Milestone 3 wo
   const old = JSON.parse(JSON.parse(text).data);
   assert.equal(old.version, 3);
   const s = deserialize(text);
-  assert.equal(s.version, 4);
+  assert.equal(s.version, SAVE_VERSION);
   assert.equal(s.citizens.length, old.citizens.length, 'nobody is lost');
   for (const c of s.citizens) {
     const before = old.citizens.find((x) => x.id === c.id);
@@ -327,13 +333,17 @@ test('a guardian\'s death re-homes minors only, never grown children', () => {
 test('an expansion under way on an inherited business continues under the heir', () => {
   const s = cloneSim(grown()).state;
   const b = s.businesses.find((x) => isTrading(x) && s.citizens.some((c) => c.id === x.ownerId) && !s.plots.find((p) => p.id === x.plotId)?.projectId);
+  assert.ok(b, 'a privately owned business with no work under way');
   const owner = s.citizens.find((c) => c.id === b.ownerId);
   const plot = s.plots.find((p) => p.id === b.plotId);
   plot.building.level = 1;
   transfer(s, 'outside', owner.id, 200, 'test', 'funds for the expansion');
   s.council.timber = (s.council.timber ?? 0) + 10;
+  const limit = ECONOMY.maxActiveProjects;
+  ECONOMY.maxActiveProjects = 99;
   const r = startProject(s, { plotId: plot.id, ownerId: owner.id, kind: 'upgrade' });
-  assert.ok(r && !r.error, `upgrade started (${r?.error})`);
+  ECONOMY.maxActiveProjects = limit;
+  assert.ok(r?.ok, `upgrade started (${r?.reason})`);
   const project = s.projects.find((p) => p.id === plot.projectId);
   const heir = s.citizens.find((c) => c !== owner && ageOf(s, c) >= LIFE.adultAge);
   transferBusiness(s, b, owner, heir, 'successor', 'test');

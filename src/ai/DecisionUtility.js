@@ -1,3 +1,5 @@
+import { courtToday } from '../law/Courts.js';
+import { attendanceScore } from '../culture/Festivals.js';
 import { byId } from '../core/EntityRegistry.js';
 import { TIME, GOODS, FOOD_GOODS, BUILD, LIFE } from '../core/Config.js';
 import { ageOf } from '../citizens/Citizen.js';
@@ -7,7 +9,7 @@ import { schoolOpen } from '../education/Education.js';
 import { isCandidate, electionToday, currentLeader } from '../politics/Government.js';
 import { balance } from '../economy/Transactions.js';
 import { qty } from '../economy/Inventory.js';
-import { businessById, retailPrice } from '../economy/Businesses.js';
+import { businessById, retailPrice, isTrading } from '../economy/Businesses.js';
 import { bestFoodOffer, ownStockFood, isOpenNow, businessLocation, rankSellers } from '../economy/Marketplace.js';
 import { openPositions } from '../economy/Employment.js';
 import { needsLabour, canPayBuilder, projectById } from '../property/Construction.js';
@@ -84,6 +86,14 @@ export function generateCandidates(state, c, plan) {
           ...(thrift > 2 ? [[`I'm careful with money`, -thrift]] : [])], { businessId: offer.business.id, good: offer.good, price: offer.price, payer }));
       } else if (hunger < 50 && age >= 8 && state.commons.berries > 2 && h > 5 && h < 20) {
         out.push(candidate('forage', urgency * 0.95, [[`I'm hungry but ${money < 2 ? 'have no money' : 'nobody is selling food'}`, urgency], ['wild berries grow in the forest', 0]], { hungry: true }));
+      }
+      // Desperation: with no money, no relief and nothing to forage, some will steal.
+      const shop = !offer && age >= 13 && (hunger < 8 || (hunger < 22 && trait(c, 'dishonest') > 0.3)) && state.day - (c.lastTheftDay ?? -9) > 2
+        ? state.businesses.find((b) => isTrading(b) && b.ownerId !== c.id && FOOD_GOODS.some((g) => qty(b.inventory, g) > 0)) : null;
+      if (shop) {
+        const good = FOOD_GOODS.find((g) => qty(shop.inventory, g) > 0);
+        out.push(candidate('steal', urgency * (0.5 + trait(c, 'dishonest') * 0.6) - trait(c, 'honest') * 40, [[`I'm starving (fullness ${Math.round(hunger)}%) and have nothing`, urgency * 0.5],
+          [`${shop.name} has ${GOODS[good].label.toLowerCase()} lying about`, 0], ...(trait(c, 'honest') > 0.2 ? [['but stealing is wrong', -trait(c, 'honest') * 40]] : [])], { businessId: shop.id, good }));
       }
     }
   }
@@ -244,9 +254,22 @@ export function generateCandidates(state, c, plan) {
     }
   }
 
+  // --- Court and caravans ----------------------------------------------------
+  const hearing = !minor && h >= 8 && h < 11 ? courtToday(state, c) : null;
+  if (hearing && c.activity?.kind !== 'court') {
+    const role = state.law.judgeId === c.id ? 'I sit as judge today' : `my case against ${hearing.plaintiff.id === c.id || hearing.plaintiff.ownerId === c.id ? hearing.defendant.name : hearing.plaintiff.name} is heard today`;
+    out.push(candidate('court', 88, [[role, 88]], { caseId: hearing.id }));
+  }
+  const loading = !minor && (state.trade?.caravans ?? []).find((cv) => cv.ownerId === c.id && cv.at === 'hearth' && (cv.status === 'LOADING' || cv.status === 'UNLOADING'));
+  if (loading) out.push(candidate('see_caravan', 55 + trait(c, 'hardworking') * 10, [[`my caravan is ${loading.status === 'LOADING' ? 'loading' : 'unloading'} in the square`, 55]], { caravanId: loading.id }));
+
   // --- Festival ------------------------------------------------------------
   if (state.council.festivalUntil > state.tick && !isNight(state)) {
     out.push(candidate('festival', 72 + trait(c, 'friendly') * 10, [['the council is hosting a festival in the square', 72]]));
+  } else if (age >= 3) {
+    // Seasonal festivals: each villager weighs company, mood, work and the walk.
+    const wish = attendanceScore(state, c);
+    if (wish && wish.score > 32) out.push(candidate('festival', wish.score + 15, wish.factors, { seasonal: true }));
   }
 
   // --- Goals (buying property, starting construction) ---------------------
