@@ -177,3 +177,23 @@ test('no credentials are shipped with the game', () => {
   }
   assert.ok(!existsSync(new URL('../cloud/worker/wrangler.toml', import.meta.url).pathname), 'no deployed configuration is committed');
 });
+
+test('v0.5.2: a game still on an older save format cannot overwrite a kingdom saved in the newer one', async () => {
+  const e = env();
+  const t = await signIn(e);
+  const now = serialize(createKingdom(5));
+  const first = await call(e, 'PUT', '/api/saves/main', t, { envelope: now, baseRevision: 0 });
+  assert.equal(first.status, 200);
+  const rev = (await first.json()).meta.revision;
+  // The same world written by a v0.5.1 build (format 7).
+  const old = JSON.parse(serialize(createKingdom(5)));
+  const data = JSON.parse(old.data); data.version = 7; delete data.civ;
+  old.data = JSON.stringify(data); old.version = 7;
+  const { checksum } = await import('../src/persistence/SaveValidation.js');
+  old.checksum = checksum(old.data);
+  const res = await call(e, 'PUT', '/api/saves/main', t, { envelope: JSON.stringify(old), baseRevision: rev });
+  assert.equal(res.status, 409);
+  assert.match((await res.json()).error, /format 8/);
+  // And an old format downloaded by this build is upgraded, not refused.
+  assert.equal(deserialize(JSON.stringify(old)).version, 8);
+});

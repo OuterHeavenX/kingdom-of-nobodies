@@ -15,6 +15,23 @@ const BASE = process.env.BASE_URL ?? 'http://localhost:4173/kingdom-of-nobodies/
 
   await page.goto(BASE);
   await page.waitForFunction(() => window.__konStarted === true, null, { timeout: 20000 });
+  // v0.5.2: a title screen with the icon, real loading progress, Start and Enable sound.
+  await page.waitForSelector('#boot.ready #boot-go');
+  assert.match(await page.textContent('#boot-go'), /Start|Continue/);
+  assert.equal(await page.evaluate(() => kingdom.audio.ctx), null, 'no audio before the player taps');
+  assert.equal(await page.evaluate(() => kingdom.clock && kingdom.started), false, 'the kingdom waits on the title screen');
+  const iconOk = await page.evaluate(async () => { const r = await fetch('icons/apple-touch-icon.png'); const m = await fetch('manifest.webmanifest').then((x) => x.json()); return r.ok && r.headers.get('content-type').includes('png') && m.display === 'standalone'; });
+  assert.ok(iconOk, 'the icon and manifest are served');
+  step('title screen: icon, manifest, Start button, and nothing playing yet');
+  await page.tap('#boot-sound');
+  await page.tap('#boot-go');
+  await page.waitForFunction(() => window.__konEntered === true);
+  await page.waitForTimeout(2500);
+  const audio = await page.evaluate(() => kingdom.audio.stats());
+  assert.equal(audio.state, 'running', 'the tap unlocked audio');
+  assert.ok(audio.notes > 0 && audio.music, `music is playing (${audio.music}, ${audio.notes} notes)`);
+  assert.ok(audio.level > 0.0005, `real signal at the output (rms ${audio.level.toFixed(4)})`);
+  step('Start with sound: original music plays through the mixer');
   assert.equal(await page.isVisible('#app'), true);
   assert.equal(await page.evaluate(() => !!document.querySelector('#world canvas')), true, 'WebGL canvas present');
   step('boots past the loading screen with compiled assets');
@@ -127,7 +144,8 @@ const BASE = process.env.BASE_URL ?? 'http://localhost:4173/kingdom-of-nobodies/
   const frozen = await page.evaluate(() => JSON.stringify(kingdom.sim.state));
   await page.tap('#tabbar button[data-tab=council]');
   await page.waitForSelector('#celebrations');
-  assert.match(await page.textContent('#sheet-body'), /v0\.5\.1/, 'version 0.5.1 shown');
+  assert.match(await page.textContent('#sheet-body'), /v0\.5\.2/, 'version 0.5.2 shown');
+  assert.ok(await page.isVisible('#sound-settings'), 'sound & music settings');
   await page.evaluate(() => document.getElementById('celebrations').scrollIntoView());
   await page.tap('#sheet-body [data-act=preview][data-id=valentine]');
   await page.waitForSelector('#view-banner:not([hidden])');
@@ -154,16 +172,75 @@ const BASE = process.env.BASE_URL ?? 'http://localhost:4173/kingdom-of-nobodies/
   await page.evaluate(() => kingdom.clock.togglePause());
   step('holiday and graphics settings respond to touch; a tap dismisses a notice');
 
+  // v0.5.2: Era & technology, City evolution, and Then & Now (which changes nothing).
+  await page.evaluate(() => { if (!kingdom.clock.paused) kingdom.clock.togglePause(); });
+  await page.tap('#era-chip');
+  await page.waitForFunction(() => /Age of Foundations/.test(document.getElementById('sheet-body').textContent) && /Technology/.test(document.getElementById('sheet-body').textContent));
+  await page.tap('#sheet-body [data-act=world-mode][data-id=evolution]');
+  await page.waitForFunction(() => /City evolution/.test(document.getElementById('sheet-body').textContent));
+  step('the era chip opens Era & technology; City evolution shows the buildings by era');
+  const untouched = await page.evaluate(() => JSON.stringify(kingdom.sim.state));
+  await page.evaluate(() => kingdom.hud.openDetail('plot', kingdom.sim.state.plots.find((p) => p.name === 'Timber Edge').id));
+  await page.waitForSelector('#sheet-body [data-act=thennow]');
+  await page.tap('#sheet-body [data-act=thennow]');
+  await page.waitForFunction(() => !!kingdom.world.thenNow && /Then & Now/.test(document.getElementById('sheet-title').textContent));
+  await page.evaluate(() => { const r = document.querySelector('#sheet-body input[data-act=then-split]'); r.value = '20'; r.dispatchEvent(new Event('input', { bubbles: true })); });
+  assert.equal(await page.evaluate(() => kingdom.world.thenNow.split), 0.2);
+  await page.tap('#sheet-body [data-act=then-exit]');
+  await page.waitForFunction(() => !kingdom.world.thenNow);
+  assert.equal(await page.evaluate(() => JSON.stringify(kingdom.sim.state)), untouched, 'Then & Now changed nothing in the kingdom');
+  await page.evaluate(() => kingdom.clock.togglePause());
+  step('Then & Now opens a property\'s history in 3D with a before/after divider and returns to the present');
+
+  // Orientation: landscape and back, the renderer follows.
+  await page.setViewportSize({ width: 844, height: 390 });
+  await page.waitForTimeout(600);
+  const land = await page.evaluate(() => ({ w: kingdom.world.renderer.domElement.clientWidth, h: kingdom.world.renderer.domElement.clientHeight }));
+  assert.ok(land.w > land.h, `landscape canvas ${land.w}×${land.h}`);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(600);
+  const port = await page.evaluate(() => ({ w: kingdom.world.renderer.domElement.clientWidth, h: kingdom.world.renderer.domElement.clientHeight }));
+  assert.ok(port.h > port.w, `portrait canvas ${port.w}×${port.h}`);
+  step('the 3D view survives orientation changes');
+
+  // Hidden and back: sound suspends and waits for a tap.
+  await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => true }); document.dispatchEvent(new Event('visibilitychange')); });
+  await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(() => kingdom.audio.ctx.state), 'suspended');
+  await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => false }); document.dispatchEvent(new Event('visibilitychange')); });
+  await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(() => kingdom.audio.ctx.state), 'suspended', 'no autoplay on return');
+  await page.tap('#pause'); await page.tap('#pause');
+  await page.waitForFunction(() => kingdom.audio.ctx.state === 'running');
+  step('sound suspends while hidden and resumes only on the next tap');
+
   await page.evaluate(async () => { while (kingdom.sim.state.day < 9) kingdom.sim.step(); await kingdom.save(); });
   const saved = await page.evaluate(() => ({ day: kingdom.sim.state.day, tick: kingdom.sim.state.tick }));
   await page.reload();
   await page.waitForFunction(() => window.__konStarted === true, null, { timeout: 20000 });
+  assert.match(await page.textContent('#boot-go'), /Continue/);
+  assert.equal(await page.evaluate(() => document.getElementById('boot-sound').checked), true, 'the sound choice is remembered');
+  assert.equal(await page.evaluate(() => kingdom.audio.ctx), null, 'but nothing plays until Continue is tapped');
+  await page.tap('#boot-go');
+  await page.waitForFunction(() => window.__konEntered === true);
   const loaded = await page.evaluate(() => ({ day: kingdom.sim.state.day, tick: kingdom.sim.state.tick }));
   assert.equal(loaded.day, saved.day);
   assert.ok(loaded.tick >= saved.tick);
   assert.equal(await page.evaluate(() => kingdom.settings.holidays.density), 'low', 'display settings kept on this device');
   assert.equal(await page.evaluate(() => kingdom.sim.state.holidays.enabled.halloween), false, 'holiday choices kept with the kingdom');
   step('the world survives a page reload, with its holiday choices and settings');
+
+  // Offline: the service worker serves the game from its versioned cache.
+  const sw = await page.evaluate(async () => { if (!('serviceWorker' in navigator)) return null; const reg = await navigator.serviceWorker.ready; return { scope: reg.scope, caches: await caches.keys() }; });
+  if (sw) {
+    assert.ok(sw.caches.some((k) => k.startsWith('kon-')), `versioned cache (${sw.caches.join(', ')})`);
+    await page.waitForTimeout(1500);
+    await ctx.setOffline(true);
+    await page.reload();
+    await page.waitForFunction(() => window.__konStarted === true, null, { timeout: 20000 });
+    await ctx.setOffline(false);
+    step('offline: the installed game starts from the service worker cache');
+  }
 
   assert.deepEqual(errors, [], 'no page errors');
   await browser.close();

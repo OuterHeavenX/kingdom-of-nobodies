@@ -2,7 +2,7 @@ import { CIV, POPULATION } from '../core/Config.js';
 import { isNewYear, isNewSeason, yearOf } from '../core/Calendar.js';
 import { balance } from '../economy/Transactions.js';
 import { record } from '../society/Chronicle.js';
-import { dailyHooks } from '../sim/Hooks.js';
+import { dailyHooks, hourlyHooks } from '../sim/Hooks.js';
 import { milestone5Setup } from '../sim/Setup.js';
 import { productionHooks } from '../economy/Businesses.js';
 import { buildingHooks, plotById, allows } from '../property/LandRegistry.js';
@@ -89,6 +89,9 @@ function dailyCivilization(state) {
   recordPropertyChanges(state);
 }
 
+/** Hourly, after building work and fires: Then & Now records every change within the hour it happens. */
+function hourlyCivilization(state) { if (state.civ) recordPropertyChanges(state); }
+
 /** Buildings record how well their district's utilities serve them (beds and output depend on it). */
 function serviceFactors(state) {
   if (state.day % 3 !== 0) return;
@@ -124,6 +127,7 @@ function supplier(state) {
 
 milestone5Setup.push(ensureCivilization);
 dailyHooks.late.push(dailyCivilization);
+hourlyHooks.push(hourlyCivilization);
 buildingHooks.stamp = (state, plot, b, arch) => { if (state.civ) stampBuilding(state, plot, b, arch); };
 buildingHooks.landFactor = (plot) => plot.landMult ?? 1; // refreshed each new year from the age and the plot's centrality
 productionHooks.push((state, b, plot) => (state.civ ? premisesProductivity(state, b, plot) : 1));
