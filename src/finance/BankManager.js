@@ -81,7 +81,7 @@ function considerFounding(state) {
   if (!founder) return null;
   const merchant = founder.profession === 'Merchant' || balance(state, founder.id) > 350 || open.some((b) => b.kind === 'moneylender');
   const kind = merchant ? 'merchant_bank' : 'moneylender';
-  const capital = Math.max(FINANCE.bankFoundingCapital, Math.floor(balance(state, founder.id) * 0.45));
+  const capital = Math.min(320, Math.max(FINANCE.bankFoundingCapital, Math.floor(balance(state, founder.id) * 0.3)));
   const name = merchant ? `${founder.lastName} & Company` : `${founder.firstName} ${founder.lastName}, Moneylender`;
   const bank = createBank(state, { kind, ownerId: founder.id, name, capital });
   if (!bank) return null;
@@ -211,16 +211,9 @@ function personalBanking(state) {
       if (bank) deposit(state, bank, c.id, cash - FINANCE.cashCushion);
     }
   }
-  // Businesses park idle cash above what they need to trade.
-  for (const b of state.businesses) {
-    if (!isTrading(b) || BUSINESS_TYPES[b.type].civic) continue;
-    const cash = balance(state, b.id);
-    const reserve = cashReserve(state, b) + 60;
-    const owner = byId(state.citizens, b.ownerId);
-    const bank = owner ? preferredBank(state, owner) : null;
-    if (cash > reserve + 80 && bank) deposit(state, bank, b.id, cash - reserve);
-    else if (cash < cashReserve(state, b) && depositOf(state, b.id) > 0) raiseCash(state, b.id, cashReserve(state, b) + 20);
-  }
+  // Businesses keep their cash in the till: they hire, restock and pay wages from it,
+  // and pay surplus out to their owners as dividends, who may bank it.
+  for (const b of state.businesses) if (depositOf(state, b.id) > 0) raiseCash(state, b.id, balance(state, b.id) + depositOf(state, b.id));
 }
 
 /**
@@ -341,6 +334,18 @@ export function dailyFinance(state) {
   if (f.loans.length > 160) f.loans = f.loans.filter((l) => isLive(l) || l.status === 'DEFAULTED' || l.status === 'COLLECTING').concat(f.loans.filter((l) => !(isLive(l) || l.status === 'DEFAULTED' || l.status === 'COLLECTING')).slice(-60));
   for (const b of f.banks) for (const k of Object.keys(b.statements)) if (!(k in state.accounts)) delete b.statements[k];
   if (f.history.length > 40) f.history.splice(0, f.history.length - 40);
+}
+
+/** Banks pay the village tithe on their equity (what the bank owns outright), from cash they can spare. */
+export function bankTithe(state, rate) {
+  let total = 0;
+  for (const bank of openBanks(state)) {
+    const sheet = balanceSheet(state, bank);
+    const spare = sheet.cash - Math.ceil(sheet.deposits * FINANCE.reserveRatio);
+    const due = Math.min(spare, Math.floor((sheet.equity - ECONOMY.titheFloor) * rate));
+    if (due > 0 && transfer(state, bank.id, 'treasury', due, 'tax', `${bank.name}'s tithe`)) total += due;
+  }
+  return total;
 }
 
 /** Totals for the panels and the stress test. */

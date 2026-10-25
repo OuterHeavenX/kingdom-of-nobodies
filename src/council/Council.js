@@ -145,6 +145,9 @@ export const COUNCIL_ACTIONS = {
  *  - feed citizens who are starving and penniless,
  *  - reinvest a large surplus in public housing.
  */
+/** Extra tithe payers, registered by other systems: (state, rate) => coins paid. */
+export const titheHooks = [];
+
 /** The tithe: a small daily levy on personal savings above a floor, scaled by tax policy. */
 export function collectTithe(state) {
   const rate = ECONOMY.tithe[state.council.taxLevel] ?? ECONOMY.tithe.normal;
@@ -156,6 +159,8 @@ export function collectTithe(state) {
     if (due > balance(state, c.id)) raiseCash(state, c.id, due);
     if (due > 0 && transfer(state, c.id, 'treasury', due, 'tax', `${c.firstName}'s tithe`)) total += due;
   }
+  // Other legal persons that hold wealth (banks) pay the same tithe on what they own outright.
+  for (const fn of titheHooks) total += fn(state, rate) ?? 0;
   return total;
 }
 

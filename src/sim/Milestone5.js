@@ -17,7 +17,8 @@ import { guildEconomy } from '../institutions/GuildEconomy.js';
 import { evolveBeliefs } from '../institutions/FaithManager.js';
 import { ensureFaith, dailyFaith, consoleBereaved } from '../institutions/ReligiousInstitutions.js';
 import { lifecycleHooks } from '../citizens/Lifecycle.js';
-import { dailyFinance, pledgeNewLand, settleBeforeLeaving, borrowForDevelopment } from '../finance/BankManager.js';
+import { dailyFinance, pledgeNewLand, settleBeforeLeaving, borrowForDevelopment, bankTithe } from '../finance/BankManager.js';
+import { titheHooks } from '../council/Council.js';
 
 // Wires the Milestone 5 systems into the simulation's schedules and the
 // shared lifecycle hooks. Imported once by Simulation.js.
@@ -25,6 +26,7 @@ import { dailyFinance, pledgeNewLand, settleBeforeLeaving, borrowForDevelopment 
 milestone5Setup.push(ensureFinance, ensureGuilds, ensureFaith, ensureForeign, ensureWarfare);
 leaderHooks.pick = (state, k, stance, why) => (state.foreign ? succession(state, k.id, why, { stance, apply: false }) : null);
 financing.borrow = municipalLoan;
+titheHooks.push(bankTithe);
 
 dailyHooks.early.push(dailyFinance);
 dailyHooks.early.push(dailyForeign, caravanReturns, dailyMilitary);
