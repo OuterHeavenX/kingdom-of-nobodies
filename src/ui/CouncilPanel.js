@@ -61,6 +61,7 @@ export function councilPanel(sim, ctx) {
     </div>
     <p class="muted" style="font-size:12px;margin-top:8px">Autosaves every minute and when you leave the page; a recovery snapshot is kept once per game year. ${ctx.lastSaved ? `Last saved ${ctx.lastSaved}.` : ''} ${ctx.source ? `Loaded from: ${esc(ctx.source)}.` : ''}</p>
   </div>
-  <p class="version">Kingdom of Nobodies · v0.4.0 Beyond the Hearth · build ${esc(ctx.build)}</p>`;
+  ${ctx.cloud ?? ''}
+  <p class="version">Kingdom of Nobodies · v0.5.0 The Age of Empires & Prosperity · build ${esc(ctx.build)}</p>`;
   return { title: 'The Council', html };
 }

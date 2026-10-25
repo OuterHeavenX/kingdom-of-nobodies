@@ -9,7 +9,7 @@ export const litWindow = new THREE.MeshStandardMaterial({ color: '#ffe2a8', emis
 export const forgeGlow = new THREE.MeshStandardMaterial({ color: '#ff8a3d', emissive: '#ff5a1f', emissiveIntensity: 1.2, flatShading: true });
 const hash = (s) => [...String(s)].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 7);
 
-function house(g, { w, d, h, wall = P.plaster, roof = P.roofRed, roofH = 1.8, stone = false, frame = true, windowsLit = true, door = true, chimney = 'side', y = 0 }) {
+function house(g, { w, d, h, wall = P.plaster, roof = P.roofRed, roofH = 1.8, stone = false, frame = true, windowsLit = true, door = true, chimney = 'side', y = 0, shutters = null }) {
   const wallMat = mat(stone ? P.stone : wall);
   part(g, G.box(), mat(P.stoneDark), [w + 0.15, 0.35, d + 0.15], [0, y + 0.17, 0]);
   part(g, G.box(), wallMat, [w, h, d], [0, y + h / 2 + 0.3, 0]);
@@ -26,7 +26,22 @@ function house(g, { w, d, h, wall = P.plaster, roof = P.roofRed, roofH = 1.8, st
   if (door) part(g, G.box(), mat(P.door), [0.9, 1.5, 0.14], [0, y + 1.05, d / 2 + 0.05]);
   for (const sx of door ? [-1, 1] : [-1, 0, 1]) part(g, G.box(), win, [0.62, 0.6, 0.12], [sx * w * 0.33, wy, d / 2 + 0.06]);
   for (const sx of [-1, 1]) part(g, G.box(), win, [0.12, 0.6, 0.62], [sx * (w / 2 + 0.06), wy, 0]);
-  if (chimney) part(g, G.box(), mat(P.stoneDark), [0.55, roofH + 0.8, 0.55], [chimney === 'side' ? w * 0.3 : 0, y + h + roofH * 0.55 + 0.3, -d * 0.2]);
+  if (chimney) {
+    const cx = chimney === 'side' ? w * 0.3 : 0;
+    part(g, G.box(), mat(P.stoneDark), [0.55, roofH + 0.8, 0.55], [cx, y + h + roofH * 0.55 + 0.3, -d * 0.2]);
+    part(g, G.box(), mat(P.stone), [0.7, 0.14, 0.7], [cx, y + h + roofH * 1.05 + 0.32, -d * 0.2], null, false);
+  }
+  // Trim: a ridge beam, a door frame and step, window sills and shutters.
+  const trim = mat(P.timberDark);
+  part(g, G.box(), trim, [0.16, 0.14, d + 0.7], [0, y + h + roofH + 0.28, 0], null, false);
+  if (door) {
+    part(g, G.box(), trim, [1.1, 0.14, 0.18], [0, y + 1.86, d / 2 + 0.07], null, false);
+    part(g, G.box(), mat(P.stone), [1.2, 0.14, 0.5], [0, y + 0.3, d / 2 + 0.3], null, false);
+  }
+  for (const sx of door ? [-1, 1] : [-1, 0, 1]) {
+    part(g, G.box(), trim, [0.78, 0.08, 0.2], [sx * w * 0.33, wy - 0.34, d / 2 + 0.1], null, false);
+    if (shutters) for (const side of [-1, 1]) part(g, G.box(), mat(shutters), [0.16, 0.6, 0.05], [sx * w * 0.33 + side * 0.42, wy, d / 2 + 0.09], null, false);
+  }
 }
 
 function fence(g, w, d, gap = 1.6) {
@@ -69,7 +84,7 @@ const BUILDERS = {
   },
   cottage(g, o) {
     const v = hash(o.id) % 3;
-    house(g, { w: 3.6, d: 3.2, h: 2.3, roof: [P.roofRed, P.thatch, P.roofSlate][v], wall: v === 1 ? P.plasterWarm : P.plaster, roofH: 1.7 });
+    house(g, { w: 3.6, d: 3.2, h: 2.3, roof: [P.roofRed, P.thatch, P.roofSlate][v], wall: v === 1 ? P.plasterWarm : P.plaster, roofH: 1.7, shutters: ['#4f7a5a', '#6a4a8a', '#3f6fa3'][hash(o.id + 's') % 3] });
     part(g, G.box(), mat('#d16a84'), [1.1, 0.25, 0.3], [-1.2, 1.0, 1.75], null, false);
     fence(g, 6, 5.6);
   },
@@ -199,6 +214,8 @@ const BUILDERS = {
 };
 
 /** Build a finished building. opts: { id, w, d, open (bool|undefined), level, condition } */
+export { BUILDERS, house, fence, sign, crate, barrel, logPile };
+
 export function buildingModel(type, opts) {
   const g = new THREE.Group();
   (BUILDERS[type] ?? BUILDERS.cottage)(g, opts);
@@ -332,3 +349,78 @@ export function forSaleSign(color = '#e2b04a') {
   part(g, G.box(), mat(color), [0.9, 0.55, 0.08], [0, 1.25, 0.05], null, false);
   return g;
 }
+
+// --- Milestone 5 buildings ------------------------------------------------------------
+
+const GOLD = () => mat('#c9a442', { metalness: 0.5, roughness: 0.4 });
+
+function banner(g, color, x, y, z, h = 2.6) {
+  part(g, G.box(), mat(P.timberDark), [0.08, h, 0.08], [x, y + h / 2, z], null, false);
+  part(g, G.box(), mat(color), [0.6, 0.9, 0.04], [x + 0.32, y + h - 0.5, z], null, false);
+}
+
+Object.assign(BUILDERS, {
+  // A stone counting house with a columned porch and a coin sign.
+  bank(g) {
+    part(g, G.box(), mat(P.stoneDark), [5, 0.45, 4.2], [0, 0.22, 0]);
+    part(g, G.box(), mat('#d8cfbd'), [4.6, 3, 3.8], [0, 1.95, 0]);
+    part(g, G.prism(), mat(P.roofSlate), [5.2, 1.4, 4.4], [0, 3.45, 0]);
+    for (const x of [-1.6, -0.55, 0.55, 1.6]) part(g, G.cyl(8), mat('#efe8d8'), [0.32, 2.6, 0.32], [x, 1.75, 2.15]);
+    part(g, G.box(), mat('#efe8d8'), [4.2, 0.26, 0.8], [0, 3.15, 2.15]);
+    part(g, G.box(), mat(P.door), [1, 1.9, 0.12], [0, 1.4, 1.92]);
+    for (const x of [-1.2, 1.2]) part(g, G.box(), mat(P.window), [0.5, 0.9, 0.08], [x, 2.1, 1.92], null, false);
+    part(g, G.cyl(12), GOLD(), [0.8, 0.12, 0.8], [0, 3.85, 2.2], [Math.PI / 2, 0, 0], false);
+  },
+  // A long timber hall with a bell turret and the guild's banners.
+  guildhall(g, o) {
+    house(g, { w: 6, d: 4.4, h: 3, wall: P.plasterWarm, roof: P.roofBrown, roofH: 2.2, chimney: 'side', shutters: '#7a3b2c' });
+    part(g, G.box(), mat(P.timber), [1, 1.4, 1], [0, 5.9, 0]);
+    part(g, G.cone(4), mat(P.roofSlate), [1.4, 1.1, 1.4], [0, 7.1, 0], [0, Math.PI / 4, 0]);
+    part(g, G.cyl(8), GOLD(), [0.36, 0.4, 0.36], [0, 5.9, 0.52], null, false);
+    const colors = ['#b8443a', '#3f6fa3', '#d39a3a', '#4f7a5a'];
+    const c = colors[hash(o.id) % colors.length];
+    banner(g, c, -2.4, 0, 2.9); banner(g, c, 2.4, 0, 2.9);
+    part(g, G.box(), mat(P.plank), [2.6, 0.2, 0.6], [0, 0.5, 3.1]);
+  },
+  // A wayside shrine: a small roofed niche with a lamp.
+  shrine(g) {
+    part(g, G.box(), mat(P.stoneDark), [2, 0.3, 1.8], [0, 0.15, 0]);
+    part(g, G.box(), mat(P.stone), [1.4, 1.5, 1.1], [0, 1, -0.2]);
+    part(g, G.box(), mat('#3a2f28'), [0.8, 0.9, 0.1], [0, 1.1, 0.36], null, false);
+    part(g, G.prism(), mat(P.roofRed), [1.8, 0.8, 1.6], [0, 1.75, -0.2]);
+    part(g, G.sphere(8), litWindow, [0.22, 0.22, 0.22], [0, 1.05, 0.42], null, false);
+    for (const x of [-0.7, 0.7]) part(g, G.cyl(6), mat('#efe6d0'), [0.1, 0.3, 0.1], [x, 0.45, 0.6], null, false);
+  },
+  // A chapel: a nave with a bell tower and a round window.
+  chapel(g) {
+    part(g, G.box(), mat(P.stoneDark), [4.3, 0.35, 5.5], [0, 0.17, 0]);
+    part(g, G.box(), mat('#ddd5c4'), [3.8, 2.8, 5], [0, 1.75, 0]);
+    part(g, G.prism(), mat(P.roofSlate), [4.4, 2, 5.4], [0, 3.15, 0]);
+    part(g, G.box(), mat('#ddd5c4'), [1.6, 4.6, 1.6], [0, 2.3, -2.6]);
+    part(g, G.cone(4), mat(P.roofSlate), [2.2, 2.2, 2.2], [0, 5.7, -2.6], [0, Math.PI / 4, 0]);
+    part(g, G.cyl(12), litWindow, [0.9, 0.9, 0.08], [0, 3.1, 2.52], [Math.PI / 2, 0, 0], false);
+    part(g, G.box(), mat(P.door), [1, 1.8, 0.12], [0, 1.25, 2.52]);
+    for (const z of [-1.2, 0.4]) for (const sx of [-1, 1]) part(g, G.box(), litWindow, [0.08, 1.1, 0.5], [sx * 1.92, 2, z], null, false);
+  },
+  // A temple: stepped stone base, columns all round, a broad roof and a lantern.
+  temple(g) {
+    part(g, G.box(), mat(P.stoneDark), [6, 0.35, 6], [0, 0.17, 0]);
+    part(g, G.box(), mat(P.stone), [5.4, 0.35, 5.4], [0, 0.52, 0]);
+    part(g, G.box(), mat('#e3dccb'), [4, 3, 4], [0, 2.2, 0]);
+    for (const a of [-2.2, -0.75, 0.75, 2.2]) for (const b of [-2.2, 2.2]) {
+      part(g, G.cyl(8), mat('#efe8d8'), [0.34, 3, 0.34], [a, 2.2, b]);
+      part(g, G.cyl(8), mat('#efe8d8'), [0.34, 3, 0.34], [b, 2.2, a]);
+    }
+    part(g, G.box(), mat('#efe8d8'), [5.2, 0.3, 5.2], [0, 3.85, 0]);
+    part(g, G.cone(4), mat(P.roofRed), [6.6, 1.8, 6.6], [0, 4.9, 0], [0, Math.PI / 4, 0]);
+    part(g, G.cyl(8), GOLD(), [0.5, 0.8, 0.5], [0, 6.2, 0], null, false);
+    part(g, G.box(), mat(P.door), [1.2, 2, 0.12], [0, 1.7, 2.02]);
+  },
+  // Barracks: a long low hall behind a palisade, with a flag.
+  barracks(g) {
+    house(g, { w: 6.4, d: 4, h: 2.4, stone: true, roof: P.roofSlate, roofH: 1.4, chimney: 'side' });
+    for (let x = -3.6; x <= 3.6; x += 0.45) part(g, G.cyl(5), mat(P.trunk), [0.22, 1.4, 0.22], [x, 0.7, 3.2], null, false);
+    banner(g, '#b8443a', 3.6, 0, 3.2, 3.4);
+    for (const x of [-2, 0, 2]) part(g, G.box(), mat('#8a6a48'), [0.5, 0.9, 0.08], [x, 0.6, 2.4], [0.2, 0, 0], false);
+  },
+});

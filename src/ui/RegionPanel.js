@@ -8,12 +8,14 @@ import { caravanPosition, cargoUnits, hoursToNextStop } from '../trade/Caravans.
 import { contractById } from '../trade/Contracts.js';
 import { relationScore, activeTreaties, embargoBetween, TREATY_KINDS, PARTIES, partyName, tariffRate } from '../diplomacy/Diplomacy.js';
 import { esc, meter, capital } from './util.js';
+import { rulerCard, peopleCard, alliancesView, warsView } from './MilitaryPanel.js';
+import { armyPosition } from '../military/Army.js';
 
 // The Region tab: an SVG map drawn from the simulation (fog, roads, closures,
 // caravans where they really are, the scouts' trail), the kingdoms, the
 // caravans on the road, foreign relations and exploration.
 
-const MODES = [['map', 'Map'], ['kingdoms', 'Kingdoms'], ['caravans', 'Caravans'], ['diplomacy', 'Diplomacy'], ['explore', 'Explore']];
+const MODES = [['map', 'Map'], ['kingdoms', 'Kingdoms'], ['alliances', 'Alliances'], ['wars', 'Wars'], ['diplomacy', 'Diplomacy'], ['caravans', 'Caravans'], ['explore', 'Explore']];
 const STATUS_ICON = { PLANNING: '📝', LOADING: '📦', TRAVELING: '🐂', ARRIVED: '🏁', UNLOADING: '📦', RETURNING: '↩️', COMPLETED: '✅', DELAYED: '⏳', CANCELLED: '✖️' };
 
 function modeChips(mode) {
@@ -43,6 +45,11 @@ export function regionMap(state, { selected = null } = {}) {
     const p = caravanPosition(c);
     return `<g class="caravan${c.status === 'DELAYED' ? ' delayed' : ''}" data-act="caravan" data-id="${c.id}"><rect x="${p.x - 1.3}" y="${p.y - 1}" width="2.6" height="2" rx=".5" fill="${ownerColor(c)}"/></g>`;
   }).join('');
+  const armies = (state.military?.armies ?? []).filter((a) => a.status !== 'DISBANDED' && a.status !== 'MUSTERING').map((a) => {
+    const p = armyPosition(state, a);
+    const col = a.owner === HEARTH ? '#e8c06a' : KINGDOMS[a.owner].color;
+    return `<g class="army" data-act="army" data-id="${a.id}"><polygon points="${p.x},${p.y - 2.4} ${p.x + 2},${p.y + 1.2} ${p.x - 2},${p.y + 1.2}" fill="${col}" stroke="#2a1a14" stroke-width=".4"/><text x="${p.x}" y="${p.y + 0.9}" class="army-x">⚔</text></g>`;
+  }).join('');
   const out = r.expeditions.find((e) => e.status === 'OUT');
   const scout = out ? `<polyline points="${SETTLEMENT_POS[HEARTH].x},${SETTLEMENT_POS[HEARTH].y} ${out.target.x},${out.target.y}" class="scout-trail"/><text x="${out.target.x}" y="${out.target.y}" class="scout">🧭</text>` : '';
   return `<svg class="region-map" viewBox="0 0 100 100" role="img" aria-label="Map of the region">
@@ -52,7 +59,7 @@ export function regionMap(state, { selected = null } = {}) {
     ${SCENERY.mountains.map(([x, y]) => `<polygon points="${x - 3},${y + 2.5} ${x},${y - 3} ${x + 3},${y + 2.5}" class="mountain"/>`).join('')}
     <polyline points="${pts(SCENERY.river)}" class="river"/>
     ${fog.join('')}
-    ${routes}${marks}${scout}${towns}${caravans}
+    ${routes}${marks}${scout}${towns}${caravans}${armies}
   </svg>
   <div class="map-legend"><span><i class="lg stone"></i>stone</span><span><i class="lg dirt"></i>road</span><span><i class="lg track"></i>track</span><span><i class="lg closed"></i>closed</span><span><i class="lg cv"></i>caravan</span></div>`;
 }
@@ -80,7 +87,7 @@ function kingdomsView(sim) {
       <span class="main"><strong>${esc(k.name)}</strong><small>${esc(KINGDOMS[id].identity)} · ${k.population} people · ${esc(k.leader.title)} ${esc(k.leader.name)}</small>
       <small>${k.shortages.food ? '⚠️ food shortage · ' : ''}relations ${rel > 0 ? '+' : ''}${Math.round(rel)}${activeTreaties(s, HEARTH, id).length ? ` · ${activeTreaties(s, HEARTH, id).length} treaty` : ''}${embargoBetween(s, HEARTH, id) ? ' · embargo' : ''}</small></span>
       <span class="side">${balance(s, KINGDOMS[id].account)}🪙</span></button>`;
-  }).join('');
+  }).join('') + `<div class="card"><h3>Visit in 3D</h3><p class="muted" style="font-size:12px">Walk among a kingdom's named people, see its market and any caravans or armies there. Time keeps running everywhere.</p><div class="grid2">${Object.keys(KINGDOMS).map((id) => `<button class="btn" data-act="visit" data-id="${id}">🏰 ${esc(KINGDOMS[id].name)}</button>`).join('')}</div></div>`;
 }
 
 export function kingdomDetail(sim, id) {
@@ -114,8 +121,10 @@ export function kingdomDetail(sim, id) {
     </dl>
     <p class="muted" style="font-size:12px">${esc(def.politics)} ${esc(def.vulnerability)}</p>
   </div>
+  ${rulerCard(sim, id)}
   <div class="card"><h3>Market</h3><table class="mkt"><thead><tr><th>Good</th><th>Stock</th><th>Price</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
   <div class="card"><h3>Relations</h3>${relations}${treaties ? `<h3 style="margin-top:10px">Treaties</h3>${treaties}` : ''}</div>
+  ${peopleCard(sim, id)}
   <div class="card"><h3>History</h3>${k.history.slice(-8).reverse().map((h) => `<div class="belief">${esc(dateLabel(h.day))}: ${esc(h.text)}</div>`).join('') || '<p class="muted">Nothing of note yet.</p>'}</div>`;
   return { title: k.name, html };
 }
@@ -200,8 +209,8 @@ function exploreView(sim) {
 
 export function regionPanel(sim, view) {
   const mode = view.regionMode ?? 'map';
-  const body = mode === 'kingdoms' ? kingdomsView(sim) : mode === 'caravans' ? caravansView(sim) : mode === 'diplomacy' ? diplomacyView(sim) : mode === 'explore' ? exploreView(sim) : mapView(sim);
-  return { title: `Region · ${MODES.find(([k]) => k === mode)[1]}`, html: modeChips(mode) + body };
+  const body = mode === 'kingdoms' ? kingdomsView(sim) : mode === 'alliances' ? alliancesView(sim) : mode === 'wars' ? warsView(sim) : mode === 'caravans' ? caravansView(sim) : mode === 'diplomacy' ? diplomacyView(sim) : mode === 'explore' ? exploreView(sim) : mapView(sim);
+  return { title: `Kingdoms · ${MODES.find(([k]) => k === mode)[1]}`, html: modeChips(mode) + body };
 }
 
 export function landmarkDetail(sim, id) {

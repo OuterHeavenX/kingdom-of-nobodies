@@ -5,12 +5,26 @@ import { biography } from '../history/Biography.js';
 import { lifespanLabel } from '../history/Archive.js';
 import { person } from '../citizens/FamilyTree.js';
 import { esc, clock, capital } from './util.js';
+import { warsView } from './MilitaryPanel.js';
+import { KINGDOMS } from '../region/RegionData.js';
+
+/** The neighbouring kingdoms' own histories and their remembered people. */
+function kingdomHistories(sim) {
+  const s = sim.state;
+  const html = Object.entries(KINGDOMS).map(([kid, k]) => {
+    const st = s.region.settlements[kid];
+    const dead = (s.foreign?.departed ?? []).filter((d) => d.kingdom === kid && ['ruler', 'notable', 'merchant', 'guild', 'faith'].includes(d.role)).slice(-5).reverse();
+    return `<div class="card"><h3>${esc(k.name)}</h3>${st.history.slice(-6).reverse().map((h) => `<div class="belief">${esc(dateLabel(h.day))}: ${esc(h.text)}</div>`).join('')}
+      ${dead.length ? `<p class="muted" style="font-size:12px;margin:6px 0 2px">Remembered</p>${dead.map((d) => `<button class="chip" data-act="foreign" data-id="${d.id}">${esc(d.name)} · ${esc(d.occupation)}</button>`).join(' ')}` : ''}</div>`;
+  }).join('');
+  return { title: 'History · Kingdoms', html: modeChips('kingdoms') + html };
+}
 
 const ICONS = { citizen: '👤', business: '🏪', property: '📍', economy: '🪙', relationships: '💞', construction: '🔨', council: '⚖️', region: '🗺️', trade: '🐂', diplomacy: '🤝', law: '📜', culture: '🎉' };
-const MODES = [['eras', 'Eras'], ['timeline', 'Timeline'], ['people', 'Departed'], ['culture', 'Culture']];
+const MODES = [['eras', 'Eras'], ['timeline', 'Timeline'], ['people', 'Departed'], ['wars', 'Wars'], ['kingdoms', 'Kingdoms'], ['culture', 'Culture']];
 
 function modeChips(mode) {
-  return `<div class="segmented" style="margin-bottom:4px">${MODES.map(([k, l]) => `<button class="${k === mode ? 'active' : ''}" data-act="hist-mode" data-id="${k}">${l}</button>`).join('')}</div>`;
+  return `<div class="segmented scroll-seg" style="margin-bottom:4px">${MODES.map(([k, l]) => `<button class="${k === mode ? 'active' : ''}" data-act="hist-mode" data-id="${k}">${l}</button>`).join('')}</div>`;
 }
 
 export function historyPanel(sim, view) {
@@ -18,6 +32,8 @@ export function historyPanel(sim, view) {
   if (mode === 'timeline') return timeline(sim, view);
   if (mode === 'people') return departed(sim, view);
   if (mode === 'culture') return culture(sim);
+  if (mode === 'wars') return { title: 'History · Wars', html: modeChips('wars') + warsView(sim) };
+  if (mode === 'kingdoms') return kingdomHistories(sim);
   return eras(sim);
 }
 

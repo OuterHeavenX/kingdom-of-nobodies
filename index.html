@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#14201b" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>Kingdom of Nobodies | Beyond the Hearth</title>
+  <title>Kingdom of Nobodies | The Age of Empires & Prosperity</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♜</text></svg>" />
   <style>
     /* Startup screen styles are inline so they work even if the stylesheet fails to load. */
@@ -91,6 +91,7 @@
     <main id="stage">
       <div id="world" aria-label="3D village. Drag to orbit, pinch to zoom, tap a villager or building."></div>
       <div id="world-fallback" hidden></div>
+      <div id="view-banner" class="view-banner" hidden></div>
       <div id="toasts" role="status" aria-live="polite"></div>
     </main>
     <section id="sheet" class="sheet" data-state="closed" aria-label="Details">
@@ -104,10 +105,10 @@
       <div id="sheet-body" class="sheet-body"></div>
     </section>
     <nav id="tabbar" aria-label="Main">
+      <button data-tab="world"><span>🏘️</span>World</button>
       <button data-tab="citizens"><span>👥</span>People</button>
-      <button data-tab="families"><span>🌳</span>Families</button>
+      <button data-tab="region"><span>🗺️</span>Kingdoms</button>
       <button data-tab="economy"><span>🪙</span>Economy</button>
-      <button data-tab="region"><span>🗺️</span>Region</button>
       <button data-tab="politics"><span>🏛️</span>Politics</button>
       <button data-tab="history"><span>📜</span>History</button>
       <button data-tab="council"><span>⚖️</span>Council</button>

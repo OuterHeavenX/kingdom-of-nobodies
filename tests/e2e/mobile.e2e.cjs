@@ -60,15 +60,20 @@ const BASE = process.env.BASE_URL ?? 'http://localhost:4173/kingdom-of-nobodies/
   assert.ok(after <= before, 'food aid is paid for');
   step('council action runs from the panel');
 
-  for (const tab of ['families', 'economy', 'politics', 'history']) {
+  const openTab = async (tab) => {
     await page.tap(`#tabbar button[data-tab=${tab}]`);
     await page.waitForFunction((t) => document.querySelector(`#tabbar button[data-tab=${t}]`).classList.contains('active') && document.getElementById('sheet-body').textContent.trim().length > 20, tab);
-  }
+  };
+  for (const tab of ['world', 'economy', 'politics', 'citizens']) await openTab(tab);
+  // Families live inside the People tab in Milestone 5.
+  await page.tap('#sheet-body [data-act=people-mode][data-id=families]');
+  await page.waitForSelector('#sheet-body [data-act=house], #sheet-body .item');
+  await openTab('history');
   await page.tap('#sheet-body [data-act=bio]');
   await page.waitForFunction(() => document.getElementById('sheet-body').textContent.includes('Family tree'));
   await page.tap('#sheet-body [data-act=tree]');
   await page.waitForSelector('#sheet-body .tree-node');
-  step('families, economy, politics and history tabs open; biography and family tree respond to touch');
+  step('world, economy, politics, history and families open; biography and family tree respond to touch');
 
   // Milestone 4: the region, trade, laws and caravans.
   await page.evaluate(() => { while (kingdom.sim.state.day < 7) kingdom.sim.step(); });
@@ -81,7 +86,7 @@ const BASE = process.env.BASE_URL ?? 'http://localhost:4173/kingdom-of-nobodies/
   assert.match(await page.textContent('#sheet-body'), /Stores|Prices|Relations/i);
   step('Region tab: the map renders and tapping a kingdom opens its page');
   await page.tap('#sheet-back');
-  for (const mode of ['kingdoms', 'caravans', 'diplomacy', 'explore']) {
+  for (const mode of ['kingdoms', 'alliances', 'wars', 'caravans', 'diplomacy', 'explore']) {
     await page.tap(`#sheet-body [data-act=region-mode][data-id=${mode}]`);
     await page.waitForFunction((m) => document.querySelector(`#sheet-body [data-act=region-mode][data-id=${m}]`)?.classList.contains('active'), mode);
   }
@@ -93,7 +98,21 @@ const BASE = process.env.BASE_URL ?? 'http://localhost:4173/kingdom-of-nobodies/
     await page.waitForFunction(() => /caravan/i.test(document.getElementById('sheet-title').textContent));
     step('region modes switch; a caravan opens with its route and cargo');
   } else step('region modes switch (no caravan on the road at this moment)');
+  // Milestone 5: visit a neighbouring kingdom in 3D and come home; banks and guilds panels.
+  await page.tap('#sheet-body [data-act=region-mode][data-id=kingdoms]');
+  await page.tap('#sheet-body [data-act=visit][data-id=ironhold]');
+  await page.waitForSelector('#view-banner:not([hidden])');
+  assert.equal(await page.evaluate(() => kingdom.world.mode), 'kingdom');
+  await page.waitForTimeout(800);
+  await page.tap('#go-home');
+  await page.waitForSelector('#view-banner[hidden]', { state: 'attached' });
+  assert.equal(await page.evaluate(() => kingdom.world.mode), 'village');
+  step('a kingdom can be visited in 3D and left again');
   await page.tap('#tabbar button[data-tab=economy]');
+  for (const mode of ['banks', 'guilds']) {
+    await page.tap(`#sheet-body [data-act=econ-mode][data-id=${mode}]`);
+    await page.waitForFunction((m) => document.querySelector(`#sheet-body [data-act=econ-mode][data-id=${m}]`)?.classList.contains('active'), mode);
+  }
   await page.tap('#sheet-body [data-act=econ-mode][data-id=trade]');
   await page.waitForFunction(() => /market|caravan|contract/i.test(document.getElementById('sheet-body').textContent));
   await page.tap('#tabbar button[data-tab=politics]');

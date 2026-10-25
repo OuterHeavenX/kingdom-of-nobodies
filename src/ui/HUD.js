@@ -16,6 +16,14 @@ import { settlementStage } from '../population/Expansion.js';
 import { councilPanel } from './CouncilPanel.js';
 import { clock } from './util.js';
 import { plotById } from '../property/LandRegistry.js';
+import { worldPanel } from './CityPlanningPanel.js';
+import { financePanel, bankDetail } from './FinancePanel.js';
+import { guildPanel, guildDetail } from './GuildPanel.js';
+import { religionPanel, faithDetail } from './ReligionPanel.js';
+import { foreignDetail, warDetail, armyDetail } from './MilitaryPanel.js';
+import { cloudCard } from './CloudSavePanel.js';
+import { noteVisit } from '../region/ForeignCitizenManager.js';
+import { KINGDOMS } from '../region/RegionData.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -30,7 +38,7 @@ export class HUD {
     this.toasts = new Notifications($('toasts'));
     this.sheet = new BottomSheet($('sheet'), { onClose: () => { this.view.detail = null; this.stack = []; } });
     this.sheet.onChange = () => setTimeout(() => this.renderTabs(), 300);
-    this.view = { tab: 'citizens', detail: null, plotFilter: 'all', chronicle: {}, econMode: 'business', historyMode: 'eras', historyYear: null, historyQuery: '', citizenQuery: '', regionMode: 'map', polMode: 'government' };
+    this.view = { tab: 'citizens', worldMode: 'overview', peopleMode: 'people', detail: null, plotFilter: 'all', chronicle: {}, econMode: 'business', historyMode: 'eras', historyYear: null, historyQuery: '', citizenQuery: '', regionMode: 'map', polMode: 'government' };
     this.stack = [];
     this.lastTop = 0;
     this.lastBody = 0;
@@ -104,7 +112,23 @@ export class HUD {
     const { act, id } = el.dataset;
     const g = this.game;
     switch (act) {
-      case 'citizen': case 'business': case 'plot': case 'house': case 'tree': case 'bio': case 'kingdom': case 'caravan': case 'case': case 'landmark': this.openDetail(act, id); break;
+      case 'citizen': case 'business': case 'plot': case 'house': case 'tree': case 'bio': case 'kingdom': case 'caravan': case 'case': case 'landmark':
+      case 'foreign': case 'war': case 'army': case 'bank': case 'guild': case 'faith': this.openDetail(act, id); break;
+      case 'world-mode': this.view.worldMode = id; this.renderSheet(true); break;
+      case 'people-mode': this.view.peopleMode = id; this.renderSheet(true); $('sheet-body').scrollTop = 0; break;
+      case 'overview': g.world?.overview(); this.sheet.set('peek'); break;
+      case 'visit': this.visit(id); break;
+      case 'home': this.visit('hearth'); break;
+      case 'replay-battle': {
+        const b = (this.sim.state.military?.battles ?? []).find((x) => x.id === id);
+        if (b && g.world) { g.world.showBattle(b); this.setBanner(`⚔ ${b.name} · ${b.place}`); this.sheet.set('peek'); }
+        break;
+      }
+      case 'cloud-signin': g.cloudSignIn(); break;
+      case 'cloud-sync': g.cloudSync(); break;
+      case 'cloud-keep': g.cloudResolve(id); break;
+      case 'cloud-signout': g.cloud?.client.signOut().then(() => this.renderSheet(true)); break;
+      case 'cloud-auto': g.cloud?.setAuto(el.checked); break;
       case 'region-mode': this.view.regionMode = id; this.view.detail = null; this.stack = []; this.renderSheet(true); $('sheet-body').scrollTop = 0; break;
       case 'region-tab': this.view.regionMode = id; this.openTab('region'); break;
       case 'pol-mode': this.view.polMode = id; this.renderSheet(true); $('sheet-body').scrollTop = 0; break;
@@ -138,6 +162,27 @@ export class HUD {
       case 'new': if (confirm('Start a new kingdom? Your current village will be replaced. (Export it first if you want to keep it.)')) g.newKingdom(); break;
       default: break;
     }
+  }
+
+  /** Switch the 3D view to another kingdom (or back home). The simulation is unaffected. */
+  visit(kid) {
+    const w = this.game.world;
+    if (!w) { this.toasts.show('The 3D view is not available on this device.', { bad: true }); return; }
+    if (!kid || kid === 'hearth') { w.home(); this.setBanner(null); return; }
+    noteVisit(this.sim.state, kid);
+    w.visit(kid);
+    this.setBanner(`🏰 Visiting ${KINGDOMS[kid].name}`);
+    this.sheet.set('peek');
+  }
+
+  /** The banner over the 3D view while away from First Hearth, with a way home. */
+  setBanner(text) {
+    const el = $('view-banner');
+    if (!el) return;
+    el.hidden = !text;
+    if (text) el.innerHTML = `<span>${text}</span><button class="btn small" id="go-home">⌂ First Hearth</button>`;
+    const btn = $('go-home');
+    if (btn) btn.onclick = () => this.visit('hearth');
   }
 
   /** Called every animation frame; throttles DOM work. */
@@ -189,22 +234,39 @@ export class HUD {
     if (detail?.kind === 'caravan') return caravanDetail(this.sim, detail.id);
     if (detail?.kind === 'case') return caseDetail(this.sim, detail.id);
     if (detail?.kind === 'landmark') return landmarkDetail(this.sim, detail.id);
+    if (detail?.kind === 'foreign') return foreignDetail(this.sim, detail.id);
+    if (detail?.kind === 'war') return warDetail(this.sim, detail.id);
+    if (detail?.kind === 'army') return armyDetail(this.sim, detail.id);
+    if (detail?.kind === 'bank') return bankDetail(this.sim, detail.id);
+    if (detail?.kind === 'guild') return guildDetail(this.sim, detail.id);
+    if (detail?.kind === 'faith') return faithDetail(this.sim, detail.id);
+    if (tab === 'world') return worldPanel(this.sim, this.view);
     if (tab === 'region') return regionPanel(this.sim, this.view);
     if (tab === 'economy') {
-      const seg = `<div class="segmented">${[['business', 'Businesses'], ['trade', 'Trade'], ['land', 'Land']].map(([k, l]) => `<button class="${this.view.econMode === k ? 'active' : ''}" data-act="econ-mode" data-id="${k}">${l}</button>`).join('')}</div>`;
-      const inner = this.view.econMode === 'land' ? buildingsList(this.sim, this.view.plotFilter) : this.view.econMode === 'trade' ? tradePanel(this.sim) : economyOverview(this.sim);
+      const seg = `<div class="segmented scroll-seg">${[['business', 'Businesses'], ['trade', 'Trade'], ['banks', 'Banks'], ['guilds', 'Guilds'], ['land', 'Land']].map(([k, l]) => `<button class="${this.view.econMode === k ? 'active' : ''}" data-act="econ-mode" data-id="${k}">${l}</button>`).join('')}</div>`;
+      const m = this.view.econMode;
+      const inner = m === 'land' ? buildingsList(this.sim, this.view.plotFilter) : m === 'trade' ? tradePanel(this.sim) : m === 'banks' ? financePanel(this.sim) : m === 'guilds' ? guildPanel(this.sim) : economyOverview(this.sim);
       return { title: inner.title, html: seg + inner.html };
     }
-    if (tab === 'families') return familiesList(this.sim);
+    if (tab === 'families' || (tab === 'citizens' && this.view.peopleMode === 'families')) {
+      const inner = familiesList(this.sim);
+      return { title: inner.title, html: this.peopleSeg() + inner.html };
+    }
     if (tab === 'politics') {
       const mode = this.view.polMode;
-      const seg = `<div class="segmented">${[['government', 'Government'], ['law', 'Laws & courts'], ['foreign', 'Foreign']].map(([k, l]) => `<button class="${mode === k ? 'active' : ''}" data-act="pol-mode" data-id="${k}">${l}</button>`).join('')}</div>`;
-      const inner = mode === 'law' ? lawPanel(this.sim) : mode === 'foreign' ? foreignPanel(this.sim) : politicsPanel(this.sim);
+      const seg = `<div class="segmented scroll-seg">${[['government', 'Government'], ['law', 'Laws & courts'], ['faith', 'Faith'], ['foreign', 'Foreign']].map(([k, l]) => `<button class="${mode === k ? 'active' : ''}" data-act="pol-mode" data-id="${k}">${l}</button>`).join('')}</div>`;
+      const inner = mode === 'law' ? lawPanel(this.sim) : mode === 'foreign' ? foreignPanel(this.sim) : mode === 'faith' ? religionPanel(this.sim) : politicsPanel(this.sim);
       return { title: inner.title, html: seg + inner.html };
     }
     if (tab === 'history') return historyPanel(this.sim, this.view);
-    if (tab === 'council') return councilPanel(this.sim, { settings: this.game.settings, build: this.game.build, lastSaved: this.game.lastSavedText(), source: this.game.loadSource });
-    return citizenList(this.sim, this.view);
+    if (tab === 'council') return councilPanel(this.sim, { settings: this.game.settings, build: this.game.build, lastSaved: this.game.lastSavedText(), source: this.game.loadSource, cloud: cloudCard(this.game) });
+    const inner = citizenList(this.sim, this.view);
+    return { title: inner.title, html: this.peopleSeg() + inner.html };
+  }
+
+  peopleSeg() {
+    const mode = this.view.peopleMode ?? 'people';
+    return `<div class="segmented">${[['people', 'People'], ['families', 'Families']].map(([k, l]) => `<button class="${mode === k ? 'active' : ''}" data-act="people-mode" data-id="${k}">${l}</button>`).join('')}</div>`;
   }
 
   renderSheet(force = false) {

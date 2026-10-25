@@ -4,6 +4,8 @@ import { GameClock } from './GameClock.js';
 import { SaveManager } from './SaveManager.js';
 import { World, WebGLUnavailableError } from '../world/World.js';
 import { HUD } from '../ui/HUD.js';
+import { CloudSaveClient } from '../persistence/CloudSaveClient.js';
+import { CloudSync } from '../persistence/CloudSync.js';
 
 /* global __BUILD__ */
 const BUILD = typeof __BUILD__ === 'string' ? __BUILD__ : 'dev';
@@ -29,6 +31,7 @@ export class Game {
     this.hud = new HUD(this);
     if (this.world) this.world.onPick = (kind, id) => (kind === 'memorial' ? this.hud.showMemorial() : this.hud.openDetail(kind, id, { push: false }));
     this.lastChronicle = this.sim.state.nextId.chronicle;
+    this.startCloud();
     this.last = performance.now();
     requestAnimationFrame((t) => this.frame(t));
     setInterval(() => this.save(), AUTOSAVE_MS);
@@ -36,6 +39,32 @@ export class Game {
     window.addEventListener('pagehide', () => this.saves.saveNow(this.sim.state));
     if (source) this.hud.toasts.show(source.includes('Milestone 1') ? 'Your First Hearth village has been brought into the Living Society.' : `Welcome back. Day ${this.sim.state.day} continues.`);
     if (!state) this.save();
+  }
+
+  /** Optional cloud backup: inert unless a service address was configured at build time. */
+  startCloud() {
+    const client = new CloudSaveClient();
+    this.cloud = new CloudSync({ client, build: this.build, getState: () => this.sim.state, setState: (st) => this.replaceState(st), exportBackup: (st) => this.saves.exportFile(st) });
+    if (!client.configured) return;
+    if (client.captureSession()) this.hud.toasts.show('Signed in for cloud backup. Use Council → Sync to back up or restore.');
+    setInterval(() => { if (this.cloud.auto && client.signedIn) this.cloud.syncNow({ allowDownload: false }); }, 5 * 60000);
+  }
+
+  cloudSignIn() { if (this.cloud?.client.configured) location.href = this.cloud.client.signInUrl(location.href.split('#')[0]); }
+
+  async cloudSync() {
+    await this.save();
+    const r = await this.cloud.syncNow();
+    const msg = { uploaded: 'Backed up to the cloud.', downloaded: 'Restored the kingdom from the cloud.', 'in-sync': 'Already in step with the cloud.', conflict: 'This device and the cloud hold different kingdoms: choose which to keep in Council.', error: `Cloud sync failed: ${r.error}. Your local save is unchanged.` }[r.action] ?? 'Nothing to sync.';
+    this.hud.toasts.show(msg, { bad: r.action === 'error' || r.action === 'conflict', ms: 6000 });
+    this.hud.renderSheet(true);
+  }
+
+  async cloudResolve(keep) {
+    const r = await this.cloud.resolve(keep);
+    this.hud.toasts.show(r.action === 'error' ? `Could not complete: ${r.error}` : `Kept ${keep === 'local' ? "this device's" : "the cloud's"} kingdom; ${r.replaced ?? ''}.`, { bad: r.action === 'error', ms: 6000 });
+    if (r.action === 'downloaded') await this.save();
+    this.hud.renderSheet(true);
   }
 
   startWorld() {
@@ -139,7 +168,8 @@ export class Game {
     state.events = [];
     this.sim.selected = { kind: 'citizen', id: state.citizens[0]?.id ?? null };
     this.lastChronicle = state.nextId.chronicle;
-    if (this.world) this.world.syncPlots(true);
+    if (this.world) { this.world.home(); this.world.syncPlots(true); }
+    this.hud.setBanner(null);
     this.hud.openTab('citizens');
   }
 }
