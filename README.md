@@ -601,7 +601,11 @@ npm ci
 npm run dev                  # development server
 npm test                     # all node:test suites, including Milestone 5: city-planning, travel, finance,
                              # institutions, warfare and cloud-saves
-npm run test:longevity -- 200 1,2,3,4 # headless 200-year stress test across seeds
+npm run test:longevity:quick     # 25 years x 4 seeds in parallel (~20 s): routine development
+npm run test:longevity:century   # 100 years x 4 seeds (~3.5 min): covers the first age transition; runs in CI
+npm run test:longevity:full      # 500 years x 4 seeds (release check), saves age-start checkpoints to .longevity/
+npm run test:longevity:ages      # resumes each saved checkpoint for 25 years: quick checks on late ages
+npm run bench -- --seed 1 --years 25  # ms per tick and a hash of the final state (optimisations must keep it)
 npm run build && npm run preview      # production build on http://localhost:4173/kingdom-of-nobodies/
 npm run test:e2e             # touch end-to-end test (needs Playwright + Chromium and the preview running)
 ```

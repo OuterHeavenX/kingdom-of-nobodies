@@ -1,0 +1,41 @@
+name: Release longevity (500 years)
+
+# The full release check: 500 in-game years (all five civilization ages) for four
+# seeds, every invariant checked each decade and a save/reload as each age opens.
+# Runs on demand, on version tags, and on pull requests labelled "release".
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+  pull_request:
+    types: [labeled, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  longevity-500:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'release')
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: 500-year headless stress test
+        run: node tests/longevity.mjs 500 ${{ matrix.seed }} --checkpoints checkpoints
+      - name: Keep the age checkpoints (for reproducing late-age problems)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: longevity-checkpoints-seed-${{ matrix.seed }}
+          path: checkpoints/
+          retention-days: 14

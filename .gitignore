@@ -5,3 +5,4 @@ dist/
 !.env.example
 cloud/worker/wrangler.toml
 cloud/worker/.wrangler/
+.longevity/

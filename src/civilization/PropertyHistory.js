@@ -29,18 +29,27 @@ const personName = (state, id) => {
 /** The current, comparable state of a plot. */
 function current(state, plot) {
   const b = plot.building;
-  const biz = plot.businessId ? state.businesses.find((x) => x.id === plot.businessId) : null;
+  const biz = plot.businessId ? byId(state.businesses, plot.businessId) : null;
   return {
     t: b?.type ?? null, e: b?.era ?? 1, s: b?.seed ?? 0, f: b?.floors ?? 1, l: b?.level ?? 1,
     o: plot.ownerId, bz: biz?.name ?? null, n: b ? (biz?.name ?? b.name) : null,
   };
 }
 
-/** The last known state of a plot reconstructed from its records (or null if never recorded). */
+/**
+ * The last known state of a plot reconstructed from its records (or null if
+ * never recorded). The replay is cached per list and reused until a record is
+ * added (every change pushes a new last record, so the cache can never be stale).
+ */
+const replayed = new WeakMap();
 function lastKnown(list) {
   if (!list?.length) return null;
+  const last = list[list.length - 1];
+  const hit = replayed.get(list);
+  if (hit && hit.last === last && hit.length === list.length) return hit.st;
   const st = { t: null, e: 1, s: 0, f: 1, l: 1, o: null, bz: null, n: null };
   for (const r of list) applyRecord(st, r);
+  replayed.set(list, { last, length: list.length, st });
   return st;
 }
 

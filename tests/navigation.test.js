@@ -158,3 +158,21 @@ test('a building raised across a later leg of a route makes the walker replan, n
   for (let i = 0; i < 60 && c.activity?.kind === 'explore' && c.activity.phase === 'travel'; i++) { sim.step(); trail.push([c.x, c.z]); }
   assert.equal(wallHit(s, { x: plot.x - 12, z: plot.z }, trail), null, 'never stepped inside the building');
 });
+
+test('performance: the optimised A* finds exactly the same routes as the reference search', async () => {
+  const { astarFast, astarReference } = await import('../src/navigation/Pathfinding.js');
+  const { navGrid, walkable, SIZE } = await import('../src/navigation/NavigationGrid.js');
+  const { makeSim } = await import('./helpers.js');
+  const sim = makeSim(5);
+  sim.runDays(36);
+  const grid = navGrid(sim.state);
+  let seed = 12345;
+  const rand = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  let compared = 0;
+  while (compared < 300) {
+    const a = Math.floor(rand() * SIZE * SIZE), b = Math.floor(rand() * SIZE * SIZE);
+    if (!walkable(grid, a) || !walkable(grid, b)) continue;
+    assert.deepEqual(astarFast(grid.cost, a, b), astarReference(grid.cost, a, b));
+    compared++;
+  }
+});
