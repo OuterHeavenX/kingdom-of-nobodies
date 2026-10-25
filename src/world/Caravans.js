@@ -4,6 +4,7 @@ import { routeById } from '../region/RegionManager.js';
 import { GATES } from '../navigation/RoadNetwork.js';
 import { findPath } from '../navigation/Pathfinding.js';
 import { HEARTH, KINGDOMS } from '../region/RegionData.js';
+import { freightModel } from './Vehicles.js';
 
 // Caravans in the village. While a caravan's current leg starts or ends at
 // First Hearth and it is within the last (or first) few kilometres, its cart
@@ -102,8 +103,13 @@ export class CaravanLayer {
       if (!place) continue;
       seen.add(cv.id);
       let node = this.nodes.get(cv.id);
+      const mode = cv.mode ?? 'cart';
+      if (node && node.userData.mode !== mode) { this.root.remove(node); node = null; }
       if (!node) {
-        node = cartModel(cv.home === HEARTH ? '#d4a64a' : KINGDOMS[cv.home]?.color ?? '#c9b48e');
+        const color = cv.home === HEARTH ? '#d4a64a' : KINGDOMS[cv.home]?.color ?? '#c9b48e';
+        // Each caravan is drawn as what it travels in: an ox cart, a steam wagon, a lorry or a cargo pod.
+        node = mode === 'cart' ? cartModel(color) : freightModel(mode, color);
+        node.userData.mode = mode;
         node.position.set(place.x, 0, place.z);
         node.traverse((o) => { o.userData.caravanId = cv.id; });
         this.root.add(node);
@@ -126,7 +132,7 @@ export class CaravanLayer {
       else { node.position.x += dx * Math.min(1, dt * 3); node.position.z += dz * Math.min(1, dt * 3); }
       node.rotation.y += (((t.heading - node.rotation.y + Math.PI * 3) % (Math.PI * 2)) - Math.PI) * Math.min(1, dt * 4);
       const swing = t.moving ? Math.sin(time * 6) * 0.35 : 0;
-      node.userData.legs.forEach((l, i) => { l.rotation.x = i % 2 ? swing : -swing; });
+      node.userData.legs?.forEach((l, i) => { l.rotation.x = i % 2 ? swing : -swing; });
       if (t.moving) for (const w of node.userData.wheels) w.rotation.x += dt * 2.5;
     }
   }

@@ -184,7 +184,7 @@ test('14. holiday choices and records survive save and load; a version 6 save mi
   assert.equal(raw.version, 6);
   const m = m5Fixture();
   assert.equal(m.version, SAVE_VERSION);
-  assert.equal(SAVE_VERSION, 7);
+  assert.equal(SAVE_VERSION, 8); // v0.5.2 raised it again (civilization ages); v6 still migrates forward
   assert.ok(HOLIDAYS.every((d) => m.holidays.enabled[d.id] === true), 'every holiday is kept after migrating');
   assert.equal(m.citizens.length, raw.citizens.length);
   assert.equal(totalMoney(m), totalMoney(raw));

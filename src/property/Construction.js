@@ -16,6 +16,7 @@ import { adjustBoth } from '../citizens/Relationships.js';
 import { leaveJob } from '../economy/Employment.js';
 import { achieve } from '../citizens/Citizen.js';
 import { validOwner, institutionName, isInstitutionId } from '../institutions/Registry.js';
+import { seedOf, floorsFor } from '../civilization/ArchitectureData.js';
 
 // Systems that commission buildings for their own purposes (banks, guild halls,
 // shrines) register what happens when one is finished.
@@ -26,7 +27,11 @@ export const completionHooks = {};
 
 export const projectById = (state, id) => state.projects.find((p) => p.id === id) ?? null;
 
-export function stagesFor(kind) {
+/** Systems that veto work on a plot (heritage protection) or raise the site cap (later ages) register here. */
+export const projectRules = { veto: null, privateCap: null };
+
+export function stagesFor(kind, p = null) {
+  if (p?.stages) return p.stages;
   if (kind === 'construction') return STAGES;
   if (kind === 'refit') return [REFIT_STAGE];
   if (kind === 'upgrade') return [{ name: 'EXPANSION', work: 10, timber: 4 }];
@@ -37,19 +42,22 @@ export function stagesFor(kind) {
 export function canStart(state, plot, ownerId, kind, buildingType) {
   if (!plot || plot.ownerId !== ownerId) return 'not the owner';
   if (plot.projectId) return 'work already under way';
-  if (state.projects.filter((p) => p.ownerId !== 'council' && !isInstitutionId(p.ownerId)).length >= ECONOMY.maxActiveProjects && ownerId !== 'council' && !isInstitutionId(ownerId)) return 'too many building sites in the village';
+  if (state.projects.filter((p) => p.ownerId !== 'council' && !isInstitutionId(p.ownerId)).length >= ECONOMY.maxActiveProjects + (projectRules.privateCap?.(state) ?? 0) && ownerId !== 'council' && !isInstitutionId(ownerId)) return 'too many building sites in the village';
+  const veto = projectRules.veto?.(state, plot, kind, buildingType);
+  if (veto) return veto;
   if (kind === 'construction' && (plot.building || !allows(plot, buildingType))) return 'plot cannot take that building';
   if (kind === 'refit' && (!plot.building || buildingClass(plot.building.type) !== buildingClass(buildingType) || plot.businessId)) return 'building cannot be refitted';
   if (kind === 'demolition' && (!plot.building || plot.businessId)) return 'nothing to demolish';
   if (kind === 'upgrade' && (!plot.building || (plot.building.level ?? 1) >= 3)) return 'cannot be expanded further';
   if (kind === 'repair' && (!plot.building || (plot.building.condition ?? 100) >= 90)) return 'needs no repair';
+  if (kind === 'rebuild' && (!plot.building || plot.building.type === 'ruins' || (plot.businessId && buildingType !== plot.building.type) || !allows(plot, buildingType) && buildingType !== plot.building.type)) return 'building cannot be rebuilt as that';
   return null;
 }
 
 /**
  * @param purpose 'business' (opens businessType on completion), 'home', or 'civic'
  */
-export function startProject(state, { plotId, ownerId, kind, buildingType = null, purpose = null, businessType = null }) {
+export function startProject(state, { plotId, ownerId, kind, buildingType = null, purpose = null, businessType = null, stages = null, targetEra = null, contractors = false, note = null }) {
   const plot = plotById(state, plotId);
   const why = canStart(state, plot, ownerId, kind, buildingType);
   if (why) return { ok: false, reason: why };
@@ -59,8 +67,13 @@ export function startProject(state, { plotId, ownerId, kind, buildingType = null
     stage: 'PLANNING', stageIndex: -1, work: 0, materials: 0,
     startedDay: state.day, crew: {}, waiting: null, labourPaid: 0, materialsPaid: 0,
   };
+  if (stages) {
+    // The new building's look is fixed when it is designed, so the site shows what will stand there.
+    const seed = seedOf(`${plot.id}:${buildingType}:${state.day}:${project.id}`);
+    Object.assign(project, { stages, targetEra, contractors, suppliesPaid: [], oldBuilding: plot.building ? { ...plot.building } : null, seed, floors: floorsFor(buildingType, targetEra ?? 1, seed, plot) });
+  }
   // Under the Building Permits Act private builders pay a permit fee to the council.
-  if (ownerId !== 'council' && (kind === 'construction' || kind === 'upgrade') && lawInForce(state, 'permits')) {
+  if (ownerId !== 'council' && (kind === 'construction' || kind === 'upgrade' || kind === 'rebuild') && lawInForce(state, 'permits')) {
     if (!transfer(state, ownerId, 'treasury', 4, 'tax', `Building permit for ${plot.name}`)) return { ok: false, reason: 'cannot afford the building permit' };
     project.permit = true;
   }
@@ -71,9 +84,10 @@ export function startProject(state, { plotId, ownerId, kind, buildingType = null
   }
   plot.marketStatus = 'NOT_FOR_SALE';
   plot.constructionStatus = kind === 'demolition' ? 'DEMOLISHING' : kind === 'upgrade' || kind === 'repair' ? 'COMPLETE' : 'PLANNING';
+  if (kind === 'rebuild') plot.constructionStatus = 'PLANNING';
   const owner = byId(state.citizens, ownerId);
   const who = owner ? owner.firstName : institutionName(state, ownerId) ?? 'The council';
-  const what = kind === 'upgrade' ? `expanding the ${BUILDING_INFO[plot.building.type].label.toLowerCase()}` : kind === 'repair' ? `repairing the ${BUILDING_INFO[plot.building.type].label.toLowerCase()}` : kind === 'demolition' ? `demolition of the old ${BUILDING_INFO[plot.building.type].label.toLowerCase()}` :
+  const what = kind === 'rebuild' ? note ?? `rebuilding the ${BUILDING_INFO[plot.building.type].label.toLowerCase()} as a ${BUILDING_INFO[buildingType].label.toLowerCase()}` : kind === 'upgrade' ? `expanding the ${BUILDING_INFO[plot.building.type].label.toLowerCase()}` : kind === 'repair' ? `repairing the ${BUILDING_INFO[plot.building.type].label.toLowerCase()}` : kind === 'demolition' ? `demolition of the old ${BUILDING_INFO[plot.building.type].label.toLowerCase()}` :
     kind === 'refit' ? `refitting the ${BUILDING_INFO[plot.building.type].label.toLowerCase()} as a ${BUILDING_INFO[buildingType].label.toLowerCase()}` :
       `a ${BUILDING_INFO[buildingType].label.toLowerCase()}`;
   plotHistory(state, plot, `${who} began ${what}.`);
@@ -82,14 +96,26 @@ export function startProject(state, { plotId, ownerId, kind, buildingType = null
   return { ok: true, project };
 }
 
-const currentStage = (p) => stagesFor(p.kind)[p.stageIndex] ?? null;
+const currentStage = (p) => stagesFor(p.kind, p)[p.stageIndex] ?? null;
+
+/** Systems that sell modern building supplies (brick, steel, glass) register a seller here. */
+export const supplyHooks = { seller: null };
 
 /** Owner buys timber for the next stage from the cheapest seller (or outside traders as a last resort). */
 function procure(state, p) {
   const nextIndex = p.stageIndex < 0 ? 0 : p.stageIndex;
-  const stage = stagesFor(p.kind)[nextIndex];
+  const stage = stagesFor(p.kind, p)[nextIndex];
   let need = stage.timber - p.materials;
   const acct = ownerAccount(p.ownerId);
+  // Modern materials (brick, concrete, steel, glass) are bought once per stage.
+  if (stage.supplies && !p.suppliesPaid?.[nextIndex]) {
+    const seller = supplyHooks.seller?.(state) ?? null;
+    const to = seller?.id ?? 'outside';
+    if (balance(state, acct) < stage.supplies || !transfer(state, acct, to, stage.supplies, 'construction', `${stage.label ?? 'Materials'} for ${plotById(state, p.plotId).name}`)) { p.waiting = 'Waiting for money for materials'; return false; }
+    if (seller) { seller.today.revenue += stage.supplies; seller.totals.revenue += stage.supplies; }
+    p.suppliesPaid[nextIndex] = stage.supplies;
+    p.materialsPaid += stage.supplies;
+  }
   const sellers = state.businesses.filter((b) => isTrading(b) && qty(b.inventory, 'timber') > 0 && BUSINESS_TYPES[b.type].sells.includes('timber'))
     .sort((a, b) => wholesalePrice(a, 'timber') - wholesalePrice(b, 'timber'));
   for (const s of sellers) {
@@ -143,15 +169,23 @@ export function updateProjects(state) {
 }
 
 function advanceStage(state, p) {
-  const stages = stagesFor(p.kind);
+  const stages = stagesFor(p.kind, p);
   if (p.stageIndex >= 0) p.materials = Math.max(0, p.materials - stages[p.stageIndex].timber);
+  const plot = plotById(state, p.plotId);
+  if (p.kind === 'rebuild' && stages[p.stageIndex]?.name === 'DEMOLISHING' && plot.building) {
+    // The old building comes down: the land is cleared, salvage goes to the owner, the record keeps its memory.
+    const old = BUILDING_INFO[plot.building.type].label.toLowerCase();
+    plot.building = null;
+    const owner = byId(state.citizens, p.ownerId);
+    if (owner) addGoods(owner.inventory, 'timber', DEMOLITION.salvageTimber);
+    plotHistory(state, plot, `The old ${old} was taken down to make way for the new building.`);
+  }
   p.stageIndex++;
   p.work = 0;
-  const plot = plotById(state, p.plotId);
   if (p.stageIndex >= stages.length) return complete(state, p);
   p.stage = stages[p.stageIndex].name;
   plot.constructionStatus = p.stage;
-  if (p.kind === 'construction' && p.stageIndex > 0) plotHistory(state, plot, `Construction reached the ${p.stage.toLowerCase()} stage.`);
+  if ((p.kind === 'construction' || p.kind === 'rebuild') && p.stageIndex > 0 && p.stage !== 'DEMOLISHING') plotHistory(state, plot, `Construction reached the ${p.stage.toLowerCase()} stage.`);
   procure(state, p);
 }
 
@@ -196,12 +230,37 @@ export function addWork(state, p, c) {
   return { ok: true, units, paid };
 }
 
+/** Called when a rebuild finishes, with (state, plot, project). */
+export const rebuildHooks = [];
+
+/** Work done by a contracted crew from outside the village (paid separately by the owner). */
+export function addContractWork(state, p, units) {
+  const stage = currentStage(p);
+  if (!stage || p.materials < stage.timber || !state.projects.includes(p)) return false;
+  p.work += units;
+  p.lastProgress = state.day;
+  if (p.work >= stage.work) advanceStage(state, p);
+  return true;
+}
+
 function complete(state, p) {
   const plot = plotById(state, p.plotId);
   const owner = byId(state.citizens, p.ownerId);
   state.projects = state.projects.filter((x) => x !== p);
   plot.projectId = null;
   const crewIds = new Set(p.crewHistory ?? []);
+  if (p.kind === 'rebuild') {
+    const old = p.oldBuilding;
+    const b = plot.businessId ? state.businesses.find((x) => x.id === plot.businessId) : null;
+    setBuilding(state, plot, p.buildingType, b?.name ?? (old && old.type === p.buildingType ? old.name : null), { era: p.targetEra, seed: p.seed, floors: p.floors });
+    if (old && old.type === p.buildingType) plot.building.level = old.level ?? 1;
+    plot.building.rebuiltDay = state.day;
+    plot.building.firstBuiltDay = old?.firstBuiltDay ?? old?.builtDay ?? null;
+    for (const c of state.citizens) if (crewIds.has(c.id) && c.profession === 'Builder') { c.stats.buildingsCompleted++; bump(c, 'competence', 3); }
+    for (const fn of rebuildHooks) fn(state, plot, p);
+    if (completionHooks[p.purpose]) completionHooks[p.purpose](state, plot, p);
+    return;
+  }
   if (p.kind === 'upgrade' || p.kind === 'repair') {
     if (p.kind === 'upgrade') plot.building.level = (plot.building.level ?? 1) + 1;
     else plot.building.condition = 100;
@@ -222,7 +281,7 @@ function complete(state, p) {
     record(state, 'construction', `The old ${old} on ${plot.name} has been demolished.`, { citizens: owner ? [owner.id] : [], plot: plot.id }, 2);
     return;
   }
-  setBuilding(state, plot, p.buildingType);
+  setBuilding(state, plot, p.buildingType, null, p.targetEra ? { era: p.targetEra, seed: p.seed, floors: p.floors } : null);
   plotHistory(state, plot, `${BUILDING_INFO[p.buildingType].label} completed after ${state.day - p.startedDay} days.`);
   for (const c of state.citizens) if (crewIds.has(c.id) && c.profession === 'Builder') { c.stats.buildingsCompleted++; bump(c, 'competence', 3); }
   if (p.purpose === 'business' && owner) {
@@ -294,7 +353,7 @@ export function joinCrew(p, c, tick) {
 }
 
 export function projectProgress(p) {
-  const stages = stagesFor(p.kind);
+  const stages = stagesFor(p.kind, p);
   if (p.stageIndex < 0) return 0;
   const done = stages.slice(0, p.stageIndex).reduce((s, x) => s + x.work, 0) + Math.min(p.work, stages[p.stageIndex]?.work ?? 0);
   return done / stages.reduce((s, x) => s + x.work, 0);

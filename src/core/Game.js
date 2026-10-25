@@ -8,6 +8,8 @@ import { CloudSaveClient } from '../persistence/CloudSaveClient.js';
 import { CloudSync } from '../persistence/CloudSync.js';
 import { normalizeSettings } from '../holidays/HolidaySettings.js';
 import { ringBells, unlockAudio } from '../ui/Bells.js';
+import { AudioManager } from '../audio/AudioManager.js';
+import { fireworkHooks } from '../effects/Fireworks.js';
 
 /* global __BUILD__ */
 const BUILD = typeof __BUILD__ === 'string' ? __BUILD__ : 'dev';
@@ -23,16 +25,39 @@ export class Game {
     this.settings = { labels: true, quality: null, ...readSettings() };
     this.settings.holidays = normalizeSettings(this.settings.holidays);
     this.frameTimes = [];
+    this.started = false;
+    this.dev = (typeof import.meta !== 'undefined' && import.meta.env?.DEV) || /[?&]dev\b/.test(globalThis.location?.search ?? '');
+    this.audio = new AudioManager({
+      getState: () => this.sim?.state ?? null,
+      getWorld: () => this.world,
+      isMenu: () => !this.started,
+      onNeedsGesture: () => this.hud?.toasts.show('🔈 Tap anywhere to resume sound.', { ms: 5000 }),
+    });
+    fireworkHooks.burst = (x, y, z, delay) => this.audio.firework(x, y, z, delay);
   }
 
-  async start() {
-    const { state, source } = await this.saves.load();
+  /** The title screen's Start / Continue: a tap, so sound may begin if the player wants it. */
+  begin({ sound = this.audio.enabled } = {}) {
+    if (sound) this.audio.enable();
+    this.started = true;
+    this.last = performance.now();
+  }
+
+  async start(progress = () => {}) {
+    progress('Reading your saved kingdom…', 0.45);
+    const { state, source, upgradedFrom } = await this.saves.load();
     this.loadSource = source;
+    this.upgradedFrom = upgradedFrom ?? null;
+    progress(source ? 'Bringing the centuries back to life…' : 'Founding a new kingdom…', 0.65);
     this.sim = new Simulation(state ?? createKingdom(Math.floor(Math.random() * 1e9)));
     this.clock = new GameClock(() => this.sim.step());
+    progress('Raising the buildings…', 0.8);
+    await new Promise((r) => setTimeout(r, 0));
     this.startWorld();
+    progress('Opening the council chamber…', 0.95);
     this.hud = new HUD(this);
-    if (this.world) this.world.themes.hooks = { announce: (text) => this.hud.toasts.show(text, { ms: 10000, holiday: true }), bell: () => ringBells() };
+    if (this.world) this.world.themes.hooks = { announce: (text) => this.hud.toasts.show(text, { ms: 10000, holiday: true }), bell: () => (this.audio.running ? this.audio.bells() : ringBells()) };
+    if (this.world) this.world.setSeeThrough(this.settings.seeThrough);
     if (this.world) this.world.onPick = (kind, id) => (kind === 'memorial' ? this.hud.showMemorial() : this.hud.openDetail(kind, id, { push: false }));
     this.lastChronicle = this.sim.state.nextId.chronicle;
     this.startCloud();
@@ -41,7 +66,7 @@ export class Game {
     setInterval(() => this.save(), AUTOSAVE_MS);
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.saves.saveNow(this.sim.state); });
     window.addEventListener('pagehide', () => this.saves.saveNow(this.sim.state));
-    if (source) this.hud.toasts.show(source.includes('Milestone 1') ? 'Your First Hearth village has been brought into the Living Society.' : `Welcome back. Day ${this.sim.state.day} continues.`);
+    if (source) this.hud.toasts.show(source.includes('Milestone 1') ? 'Your First Hearth village has been brought into the Living Society.' : upgradedFrom ? `Your kingdom joins the Evolution of Civilization: the ${this.sim.state.civ?.age >= 2 ? 'ages its calendar has reached are open' : 'Age of Foundations'}. A copy from before the upgrade is kept on this device.` : `Welcome back. Day ${this.sim.state.day} continues.`, { ms: 10000 });
     if (!state) this.save();
   }
 
@@ -91,11 +116,13 @@ export class Game {
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
     try {
-      this.clock.advance(dt);
+      // The kingdom waits on the title screen until the player starts.
+      if (this.started) this.clock.advance(dt);
       this.announce();
       if (this.world) {
         this.world.render(dt, now / 1000);
         this.autoQuality(dt);
+        this.adaptResolution(dt);
       }
       this.hud.update(now);
     } catch (e) {
@@ -109,7 +136,11 @@ export class Game {
   announce() {
     const s = this.sim.state;
     if (s.nextId.chronicle === this.lastChronicle) return;
-    for (const e of s.chronicle) if (e.id > this.lastChronicle && e.importance >= 3) this.hud.toasts.show(e.text);
+    for (const e of s.chronicle) {
+      if (e.id <= this.lastChronicle) continue;
+      if (e.importance >= 3) this.hud.toasts.show(e.text);
+      if (e.importance >= 2) { const p = e.refs?.plot ? s.plots.find((x) => x.id === e.refs.plot) : null; this.audio.onChronicle(e, p ? { x: p.x, z: p.z } : null); }
+    }
     this.lastChronicle = s.nextId.chronicle;
   }
 
@@ -123,11 +154,29 @@ export class Game {
     if (avg > 1 / 38) { this.world.setQuality('low'); this.hud.toasts.show('Switched to battery-saver graphics for smoother play.'); }
   }
 
+  /**
+   * Adaptive resolution: every two seconds, if frames are slow, render a
+   * little fewer pixels; when there is headroom, step back up.
+   */
+  adaptResolution(dt) {
+    this.adapt = this.adapt ?? { t: 0, n: 0 };
+    this.adapt.t += dt; this.adapt.n++;
+    if (this.adapt.t < 2) return;
+    const fps = this.adapt.n / this.adapt.t;
+    this.fps = Math.round(fps);
+    this.adapt = { t: 0, n: 0 };
+    if (this.settings.adaptive === false || document.hidden) { this.world.setResolutionScale(1); return; }
+    const scale = this.world.resolutionScale ?? 1;
+    if (fps < 28 && scale > 0.6) this.world.setResolutionScale(scale - 0.1);
+    else if (fps > 55 && scale < 1) this.world.setResolutionScale(scale + 0.1);
+  }
+
   setSetting(key, value) {
     this.settings[key] = value;
     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings)); } catch { /* ignore */ }
     if (key === 'labels') this.world?.setLabels(value);
     if (key === 'quality') this.world?.setQuality(value);
+    if (key === 'seeThrough') this.world?.setSeeThrough(value);
   }
 
   /** One of the seasons & celebrations display settings (kept on this device). */
@@ -181,6 +230,7 @@ export class Game {
     this.sim.selected = { kind: 'citizen', id: state.citizens[0]?.id ?? null };
     this.lastChronicle = state.nextId.chronicle;
     if (this.world) { this.world.home(); this.world.syncPlots(true); this.world.themes.resetFireworks(); this.world.themes.check(true); }
+    this.world?.exitThenNow(false);
     this.hud.setBanner(null);
     this.hud.openTab('citizens');
   }

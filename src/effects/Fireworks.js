@@ -51,6 +51,9 @@ void main() {
   gl_FragColor = vec4(vColor, a);
 }`;
 
+/** The audio engine listens for shells: (x, y, z, seconds until the burst). */
+export const fireworkHooks = { burst: null };
+
 export class Fireworks {
   constructor(budget, { reducedMotion = false, seed = 7 } = {}) {
     this.shells = Math.max(3, Math.floor(budget / SHELL));
@@ -99,6 +102,7 @@ export class Fireworks {
   }
 
   burst(b) {
+    fireworkHooks.burst?.(b.x, b.y, b.z, Math.max(0, b.at + this.uniforms.uRise.value - this.time));
     const start = this.next * SHELL;
     this.next = (this.next + 1) % this.shells;
     const [main, light] = PALETTES[Math.floor(this.rand() * PALETTES.length)];

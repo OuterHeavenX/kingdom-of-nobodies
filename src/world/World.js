@@ -19,6 +19,19 @@ import { BattleView } from './BattleView.js';
 import { WeatherLayer } from './WeatherLayer.js';
 import { HEARTH, KINGDOMS } from '../region/RegionData.js';
 import { HolidayThemeManager } from '../holidays/HolidayThemeManager.js';
+import { buildingDims } from '../property/Footprints.js';
+import { eraForType } from '../civilization/Architecture.js';
+import { serviceIn } from '../civilization/Infrastructure.js';
+import { propertyOn } from '../civilization/PropertyHistory.js';
+import { bakeGroup, disposeBaked } from './Bake.js';
+import { massingModel } from './ProceduralArchitecture.js';
+import { setFacadeGlow, setGlassEnvironment } from './Facades.js';
+import { VehicleLayer } from './Vehicles.js';
+
+/** Buildings taller than this get a distant stand-in (level of detail) and may fade when they hide a villager. */
+const TALL = 18;
+/** Plot models rebuilt per sync at most (a redevelopment wave is spread over several frames). */
+const REBUILDS_PER_SYNC = 8;
 
 // Seasons, holidays, snow and their effects are drawn by the HolidayThemeManager
 // (src/holidays) and the SeasonalEnvironment it drives (src/rendering).
@@ -81,6 +94,12 @@ export class World {
     this.plotNodes = new Map();
     this.market = null;
     this.villagers = new Villagers(this.village);
+    this.vehicles = new VehicleLayer(this.village);
+    this.cranes = [];
+    this.skyline = 0;
+    this.ghosts = new Map();
+    this.thenNow = null;
+    this.renderer.localClippingEnabled = false;
     this.fires = new Map();
     this.caravans = new CaravanLayer(this.village);
     this.weather = new WeatherLayer(this.scene);
@@ -118,6 +137,7 @@ export class World {
     this.themes = new HolidayThemeManager(this, holidays);
     this.setQuality(quality);
     this.syncPlots(true);
+    this.refreshSkyline();
     this.resize();
   }
 
@@ -125,7 +145,10 @@ export class World {
     this.quality = q;
     const dpr = window.devicePixelRatio || 1;
     // Three levels: high (full resolution, soft 2048 shadows), medium (lighter shadows), low (battery saver: no shadows).
-    this.renderer.setPixelRatio(Math.min(dpr, q === 'high' ? 2 : q === 'medium' ? 1.5 : 1.25));
+    this.renderer.setPixelRatio(Math.min(dpr, q === 'high' ? 2 : q === 'medium' ? 1.5 : 1.25) * (this.resolutionScale ?? 1));
+    // Glass reflects a small pre-filtered sky except in battery-saver mode.
+    if (q === 'low') setGlassEnvironment(null);
+    else setGlassEnvironment(this.glassSky ??= skyEnvironment(this.renderer));
     this.renderer.shadowMap.enabled = q !== 'low';
     const map = q === 'high' ? 2048 : 1024;
     this.sun.shadow.mapSize.set(map, map);
@@ -225,6 +248,17 @@ export class World {
     this.renderer.setSize(w, h, false);
   }
 
+  /** Adaptive resolution: a fraction of the quality preset's pixel ratio (0.6..1). */
+  setResolutionScale(v) {
+    const next = Math.max(0.6, Math.min(1, Math.round(v * 10) / 10));
+    if (next === (this.resolutionScale ?? 1)) return;
+    this.resolutionScale = next;
+    const dpr = window.devicePixelRatio || 1;
+    const q = this.quality;
+    this.renderer.setPixelRatio(Math.min(dpr, q === 'high' ? 2 : q === 'medium' ? 1.5 : 1.25) * next);
+    this.resize();
+  }
+
   setBottomInset(px) {
     if (Math.abs((this.bottomInset ?? 0) - px) < 2) return;
     this.bottomInset = px;
@@ -236,6 +270,8 @@ export class World {
     const s = this.sim.state;
     const season = seasonIndex(s.day);
     const burning = new Set((s.fires ?? []).map((f) => f.plotId));
+    let budget = force ? Infinity : REBUILDS_PER_SYNC;
+    let cranesChanged = false;
     for (const plot of s.plots) {
       const project = plot.projectId ? s.projects.find((p) => p.id === plot.projectId) : null;
       const business = plot.businessId ? s.businesses.find((b) => b.id === plot.businessId) : null;
@@ -243,19 +279,190 @@ export class World {
       const open = business ? isTrading(business) : plot.building && ['bakery', 'tavern', 'general_store', 'blacksmith', 'lumberyard', 'stall'].includes(plot.building.type) ? false : undefined;
       const status = project ? 'BUILDING' : plot.marketStatus === 'FOR_SALE' ? 'FOR_SALE' : plot.ownerId === 'council' ? 'COUNCIL' : 'OWNED';
       const selected = this.sim.selected.kind === 'plot' && this.sim.selected.id === plot.id;
-      const sig = [plot.building?.type, plot.building?.level, (plot.building?.condition ?? 100) < 60, plot.constructionStatus, project?.kind, project?.buildingType, Math.round(stageProgress * 4), open, status, selected, business?.type, burning.has(plot.id), business?.type === 'farm' || plot.building?.type === 'farm' ? season : ''].join('|');
+      const b = plot.building;
+      const sig = [b?.type, b?.level, (b?.condition ?? 100) < 60, b?.era, b?.seed, b?.floors, plot.constructionStatus, project?.kind, project?.buildingType, project?.targetEra, Math.round(stageProgress * 4), open, status, selected, business?.type, burning.has(plot.id), business?.type === 'farm' || b?.type === 'farm' ? season : ''].join('|');
       let node = this.plotNodes.get(plot.id);
       if (node && node.userData.sig === sig && !force) continue;
-      if (node) { this.plotLayer.remove(node); disposeInstanced(node); }
+      // A selection change is cheap and immediate; heavy rebuilds are spread across frames.
+      if (node && budget <= 0 && node.userData.sig.split('|').slice(0, 12).join('|') !== sig.split('|').slice(0, 12).join('|')) continue;
+      budget--;
+      if (node) { this.plotLayer.remove(node); disposeBaked(node); this.unghost(plot.id); }
       node = this.makePlot(plot, project, business, stageProgress, open, status, selected, burning.has(plot.id), season);
       node.userData.sig = sig;
       this.plotLayer.add(node);
       this.plotNodes.set(plot.id, node);
+      cranesChanged = true;
     }
-    for (const [id, node] of this.plotNodes) if (!s.plots.some((p) => p.id === id)) { this.plotLayer.remove(node); disposeInstanced(node); this.plotNodes.delete(id); }
+    for (const [id, node] of this.plotNodes) if (!s.plots.some((p) => p.id === id)) { this.plotLayer.remove(node); disposeBaked(node); this.plotNodes.delete(id); cranesChanged = true; }
+    if (cranesChanged || force) this.refreshSkyline();
     if (s.council.marketplace && !this.market) this.market = this.makeMarket();
     this.syncMemorial();
     this.syncRoadWorks();
+  }
+
+  /** After plots change: the cranes to animate, the skyline height, and camera limits that fit it. */
+  refreshSkyline() {
+    this.cranes = [];
+    let top = 0;
+    for (const node of this.plotNodes.values()) {
+      for (const c of node.userData.cranes ?? []) this.cranes.push(c);
+      top = Math.max(top, node.userData.height ?? 0);
+    }
+    this.skyline = top;
+    // Tall skylines need room to step back, a longer view and a larger shadow volume.
+    this.controls.maxDistance = Math.min(280, 160 + Math.max(0, top - 20) * 1.3);
+    this.camera.far = 520 + top * 2;
+    this.camera.updateProjectionMatrix();
+    Object.assign(this.sun.shadow.camera, { far: 160 + top * 1.5 });
+    this.sun.shadow.camera.updateProjectionMatrix();
+    const civ = this.sim.state.civ;
+    this.terrain.setLighting(civ ? serviceIn(this.sim.state, 'Old Town', 'power') : 0, this.sim.state.roads ?? []);
+  }
+
+  /**
+   * Tall buildings between the camera and the villager being followed or
+   * selected fade to a glass outline, so a skyline never hides the story.
+   * With "see-through towers" on, every tall building near the view centre does.
+   */
+  updateOcclusion() {
+    const s = this.sim.state;
+    const id = this.followId ?? (this.sim.selected.kind === 'citizen' ? this.sim.selected.id : null);
+    const c = id ? byId(s.citizens, id) : null;
+    const want = new Set();
+    if (c) {
+      const to = new THREE.Vector3(c.x, 1.2, c.z);
+      const from = this.camera.position;
+      const dir = to.clone().sub(from);
+      const len = dir.length();
+      this.raycaster.set(from, dir.normalize());
+      this.raycaster.far = len - 1;
+      for (const h of this.raycaster.intersectObjects(this.plotLayer.children, true)) {
+        const pid = h.object.userData.plotId;
+        if (pid && (this.plotNodes.get(pid)?.userData.height ?? 0) > 6) want.add(pid);
+      }
+      this.raycaster.far = Infinity;
+    }
+    // In Then & Now, tall neighbours step aside so the property can be seen.
+    if (this.thenNow) {
+      const tp = this.thenNow.plot;
+      for (const p of s.plots) if (p.id !== tp.id && (this.plotNodes.get(p.id)?.userData.height ?? 0) > 8 && Math.hypot(p.x - tp.x, p.z - tp.z) < 16) want.add(p.id);
+    }
+    if (this.seeThrough) {
+      const t = this.controls.target;
+      for (const p of s.plots) if ((this.plotNodes.get(p.id)?.userData.height ?? 0) > TALL && Math.hypot(p.x - t.x, p.z - t.z) < 26) want.add(p.id);
+    }
+    for (const pid of [...this.ghosts.keys()]) if (!want.has(pid)) this.unghost(pid);
+    for (const pid of want) if (!this.ghosts.has(pid)) this.ghost(pid);
+  }
+
+  ghost(pid) {
+    const node = this.plotNodes.get(pid);
+    const plot = this.sim.state.plots.find((p) => p.id === pid);
+    if (!node || !plot?.building) return;
+    const dm = buildingDims(plot, plot.building);
+    const box = new THREE.Mesh(G.box(), GHOST);
+    box.scale.set(dm.w, dm.h, dm.d);
+    box.position.set(plot.x, dm.h / 2, plot.z);
+    box.rotation.y = facingAngle(plot);
+    box.userData.plotId = pid;
+    for (const ch of node.children) if (ch.isLOD || (ch.isGroup && !ch.userData.keepVisible)) ch.visible = false;
+    this.plotLayer.add(box);
+    this.ghosts.set(pid, box);
+  }
+
+  unghost(pid) {
+    const box = this.ghosts.get(pid);
+    if (!box) return;
+    this.plotLayer.remove(box);
+    this.ghosts.delete(pid);
+    const node = this.plotNodes.get(pid);
+    if (node) for (const ch of node.children) ch.visible = true;
+  }
+
+  setSeeThrough(on) { this.seeThrough = !!on; }
+
+  // --- Then & Now ----------------------------------------------------------------------
+
+  /**
+   * Show a property as it stood on `day` beside (or instead of) what stands
+   * now. Visual only: the simulation, the property and its records are not
+   * touched. `split` (0..1) moves the dividing line across the plot.
+   */
+  showThenNow(plotId, day, split = 0.5) {
+    const s = this.sim.state;
+    const plot = s.plots.find((p) => p.id === plotId);
+    if (!plot) return false;
+    if (this.mode !== 'village') this.home();
+    this.exitThenNow(false);
+    const past = propertyOn(s, plotId, day);
+    const now = plot.building;
+    const make = (rec) => {
+      if (!rec?.t && !rec?.type) {
+        const g = new THREE.Group();
+        part(g, G.plane(), mat('#86b06d'), [plot.w - 0.3, 1, plot.d - 0.3], [0, 0.03, 0], null, false);
+        return g;
+      }
+      const b = rec.type ? rec : { type: rec.t, era: rec.e, seed: rec.s, floors: rec.f, level: rec.l, name: rec.n };
+      return buildingModel(b.type, { id: plot.id, w: plot.w, d: plot.d, open: true, level: b.level ?? 1, condition: 100, season: seasonIndex(s.day), b, plot });
+    };
+    const node = this.plotNodes.get(plotId);
+    if (node) node.visible = false;
+    this.unghost(plotId);
+    const angle = facingAngle(plot);
+    const right = new THREE.Vector3(Math.cos(angle), 0, -Math.sin(angle));
+    const planeThen = new THREE.Plane(), planeNow = new THREE.Plane();
+    const clip = (group, plane) => {
+      group.traverse((o) => {
+        if (!o.isMesh) return;
+        o.material = o.material.clone();
+        o.material.clippingPlanes = [plane];
+        o.material.clipShadows = true;
+        o.userData.ownMaterial = true;
+      });
+    };
+    const root = new THREE.Group();
+    const thenG = make(past), nowG = make(now);
+    for (const gg of [thenG, nowG]) { gg.rotation.y = angle; gg.position.set(plot.x, 0, plot.z); root.add(gg); }
+    clip(thenG, planeThen);
+    clip(nowG, planeNow);
+    // A thin glowing divider shows where the past ends and the present begins.
+    const divider = new THREE.Mesh(G.box(), DIVIDER);
+    const h = Math.max(4, buildingDims(plot, now ?? { type: 'cottage' }).h + 2, past?.t ? buildingDims(plot, { type: past.t, era: past.e, floors: past.f }).h + 2 : 0);
+    divider.scale.set(0.06, h, Math.max(plot.w, plot.d));
+    divider.rotation.y = angle;
+    root.add(divider);
+    this.village.add(root);
+    this.renderer.localClippingEnabled = true;
+    this.thenNow = { plotId, day, root, planeThen, planeNow, right, plot, divider, split, height: h };
+    this.setThenNowSplit(split);
+    this.flyTo(plot.x, plot.z, Math.max(40, h * 1.8));
+    return true;
+  }
+
+  setThenNowSplit(split) {
+    const t = this.thenNow;
+    if (!t) return;
+    t.split = Math.max(0, Math.min(1, split));
+    const half = Math.max(t.plot.w, t.plot.d) / 2;
+    const offset = (t.split - 0.5) * 2 * half;
+    const center = new THREE.Vector3(t.plot.x, 0, t.plot.z).addScaledVector(t.right, offset);
+    // "Then" keeps the part left of the line, "Now" the part right of it.
+    t.planeThen.setFromNormalAndCoplanarPoint(t.right.clone().negate(), center);
+    t.planeNow.setFromNormalAndCoplanarPoint(t.right.clone(), center);
+    t.divider.position.set(center.x, t.height / 2, center.z);
+    t.divider.visible = t.split > 0.01 && t.split < 0.99;
+  }
+
+  exitThenNow(restoreView = true) {
+    const t = this.thenNow;
+    if (!t) return;
+    this.village.remove(t.root);
+    t.root.traverse((o) => { if (o.isMesh && o.userData.ownMaterial) o.material.dispose(); if (o.isMesh && o.userData.ownGeometry) o.geometry.dispose(); });
+    const node = this.plotNodes.get(t.plotId);
+    if (node) node.visible = true;
+    this.renderer.localClippingEnabled = false;
+    this.thenNow = null;
+    if (restoreView) this.focusOn(t.plot.x, t.plot.z);
   }
 
   /** The Founders' Memorial stands in the square; it gains a crown once every founder has passed. */
@@ -329,23 +536,53 @@ export class World {
     const color = selected ? OUTLINE.SELECTED : OUTLINE[status];
     const edge = mat(color, { emissive: color, emissiveIntensity: selected ? 0.6 : 0.08 });
     const t = selected ? 0.22 : status === 'FOR_SALE' ? 0.07 : 0.12;
-    for (const sz of [-1, 1]) part(g, G.box(), edge, [plot.w, 0.05, t], [0, 0.05, sz * plot.d / 2], null, false);
-    for (const sx of [-1, 1]) part(g, G.box(), edge, [t, 0.05, plot.d], [sx * plot.w / 2, 0.05, 0], null, false);
-    const inner = new THREE.Group();
+    // The plot outline is one mesh (four strips merged).
+    const outline = new THREE.Group();
+    for (const sz of [-1, 1]) part(outline, G.box(), edge, [plot.w, 0.05, t], [0, 0.05, sz * plot.d / 2], null, false);
+    for (const sx of [-1, 1]) part(outline, G.box(), edge, [t, 0.05, plot.d], [sx * plot.w / 2, 0.05, 0], null, false);
+    const baked = bakeGroup(outline);
+    baked.userData.keepVisible = true;
+    g.add(baked);
+    let inner = new THREE.Group();
     inner.rotation.y = facingAngle(plot);
-    g.add(inner);
-    const opts = { id: plot.id, w: plot.w, d: plot.d, open, level: plot.building?.level ?? 1, condition: plot.building?.condition ?? 100, season };
+    const b = plot.building;
+    const opts = { id: plot.id, w: plot.w, d: plot.d, open, level: b?.level ?? 1, condition: b?.condition ?? 100, season, b, plot, era: b?.era ?? 1, seed: b?.seed, floors: b?.floors };
+    const typeOf = () => (business ? (business.type === 'farm' ? 'farm' : business.type) : b.type);
+    let tall = false;
     if (project && (project.kind === 'upgrade' || project.kind === 'repair')) {
       // Existing building stays in use under scaffolding while it is expanded or repaired.
-      const type = business ? business.type === 'farm' ? 'farm' : business.type : plot.building.type;
-      inner.add(constructionModel(type, 'FINISHING', progress, { ...opts, level: opts.level + (project.kind === 'upgrade' && progress > 0.5 ? 1 : 0) }));
+      inner.add(constructionModel(typeOf(), 'FINISHING', progress, { ...opts, level: opts.level + (project.kind === 'upgrade' && progress > 0.5 ? 1 : 0) }));
+    } else if (project && project.kind === 'rebuild' && project.stageIndex < 0 && b) {
+      // Planned but not begun: the old building stands, pegged out for the new one.
+      inner.add(buildingModel(typeOf(), opts));
+      part(inner, G.box(), mat('#e0b23a'), [0.1, 1.2, 0.1], [plot.w / 2 - 1, 0.6, plot.d / 2 - 1], null, false);
     } else if (project) {
-      const type = project.kind === 'demolition' ? plot.building?.type : project.buildingType;
-      inner.add(constructionModel(type ?? 'cottage', project.kind === 'demolition' ? 'DEMOLISHING' : plot.constructionStatus, progress, { ...opts, oldType: plot.building?.type }));
-    } else if (plot.building) {
-      inner.add(buildingModel(business ? business.type === 'farm' ? 'farm' : business.type : plot.building.type, opts));
+      const type = project.kind === 'demolition' ? b?.type : project.buildingType;
+      const era = project.targetEra ?? eraForType(this.sim.state, type ?? 'cottage');
+      const stage = project.kind === 'demolition' ? 'DEMOLISHING' : plot.constructionStatus;
+      inner.add(constructionModel(type ?? 'cottage', stage, progress, { ...opts, era, seed: project.seed ?? opts.seed, floors: project.floors, oldType: b?.type ?? project.oldBuilding?.type, oldBuilding: b ?? project.oldBuilding }));
+    } else if (b) {
+      inner.add(buildingModel(typeOf(), opts));
+      tall = buildingDims(plot, b).h > TALL;
     } else {
       part(inner, G.plane(), mat('#86b06d'), [plot.w - 0.3, 1, plot.d - 0.3], [0, 0.03, 0], null, false);
+    }
+    inner = bakeGroup(inner);
+    const cranes = [];
+    inner.traverse((o) => { if (o.userData.crane) cranes.push(o); });
+    g.userData.cranes = cranes;
+    if (tall) {
+      // Far away, a tower is drawn as its massing alone.
+      const lod = new THREE.LOD();
+      const far = bakeGroup(massingModel(b, buildingDims(plot, b)));
+      far.rotation.y = inner.rotation.y;
+      lod.addLevel(inner, 0);
+      lod.addLevel(far, 150);
+      g.add(lod);
+      g.userData.height = buildingDims(plot, b).h;
+    } else {
+      g.add(inner);
+      g.userData.height = b ? buildingDims(plot, b).h : 0;
     }
     if (status === 'FOR_SALE') {
       const sign = forSaleSign();
@@ -383,6 +620,8 @@ export class World {
     if (this.mode === 'kingdom') { const hit = this.away.pick(this.raycaster); if (hit) this.onPick?.(hit.kind, hit.id); return; }
     if (this.mode === 'battle') return;
     if (this.militia) { const m = this.raycaster.intersectObject(this.militia, true)[0]; if (m?.object.userData.armyId) { this.onPick?.('army', m.object.userData.armyId); return; } }
+    const riders = this.raycaster.intersectObjects(this.vehicles.root.children, true);
+    if (riders.length && riders[0].object.userData.citizenId) { const id = riders[0].object.userData.citizenId; this.sim.select('citizen', id); this.onPick?.('citizen', id); return; }
     const people = this.raycaster.intersectObjects(this.villagers.root.children, true).filter((h) => h.object.visible);
     if (people.length) {
       const id = this.villagers.pick(people[0].object);
@@ -428,6 +667,7 @@ export class World {
       this.syncMilitia();
       this.syncPlots();
       this.villagers.sync(s.citizens, s.day);
+      if (time - (this.lastOcclusion ?? 0) > 0.25) { this.updateOcclusion(); this.lastOcclusion = time; }
       this.terrain.setForest(s.commons.forest / s.commons.forestCap);
       this.terrain.syncRoads(s.roads ?? []);
       this.caravans.sync(s, navGrid(s).version);
@@ -438,6 +678,8 @@ export class World {
     this.updateSky(this.visualHour(), time, sky);
     const selected = this.sim.selected.kind === 'citizen' ? this.sim.selected.id : null;
     this.villagers.update(s.citizens, dt, time, selected, s.day, this.controls.target, this.quality);
+    this.vehicles.update(s.citizens, dt);
+    for (let i = 0; i < this.cranes.length; i++) this.cranes[i].rotation.y = Math.sin(time * 0.15 + i * 1.7) * 1.4;
     this.caravans.update(dt, time);
     if (this.followCaravanId) {
       const p = this.caravans.positionOf(this.followCaravanId);
@@ -538,6 +780,7 @@ export class World {
     this.scene.fog.near *= look.fog; this.scene.fog.far *= look.fog;
     const glow = Math.max(0, night - 0.25) * 2.2;
     litWindow.emissiveIntensity = 0.05 + glow * look.windows;
+    setFacadeGlow(glow * look.windows * 0.85);
     this.terrain.lampGlass.emissiveIntensity = glow * 1.4;
     const flicker = 0.85 + Math.sin(time * 13) * 0.08 + Math.sin(time * 7.3) * 0.07;
     this.terrain.fire.scale.y = 1.5 * flicker;
@@ -601,10 +844,26 @@ export class World {
 }
 
 function stageFraction(p) {
-  const s = stagesFor(p.kind)[p.stageIndex];
+  const s = stagesFor(p.kind, p)[p.stageIndex];
   return s ? Math.min(1, p.work / s.work) : 0;
 }
 
-function disposeInstanced(node) {
-  node.traverse((o) => { if (o.isInstancedMesh) o.dispose(); });
+const GHOST = new THREE.MeshStandardMaterial({ color: '#cfe6f2', transparent: true, opacity: 0.18, roughness: 0.2, metalness: 0.3, depthWrite: false });
+const DIVIDER = new THREE.MeshBasicMaterial({ color: '#ffe08a', transparent: true, opacity: 0.85 });
+
+/** A tiny pre-filtered sky for glass reflections (made once). */
+function skyEnvironment(renderer) {
+  const scene = new THREE.Scene();
+  const geo = new THREE.SphereGeometry(10, 16, 12);
+  const colors = [];
+  const pos = geo.attributes.position;
+  const top = new THREE.Color('#7fb6e8'), mid = new THREE.Color('#e9f3f8'), low = new THREE.Color('#7a9a6a');
+  for (let i = 0; i < pos.count; i++) { const y = pos.getY(i) / 10; const c = y > 0 ? mid.clone().lerp(top, y) : mid.clone().lerp(low, -y * 1.5); colors.push(c.r, c.g, c.b); }
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  scene.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
+  const pm = new THREE.PMREMGenerator(renderer);
+  const tex = pm.fromScene(scene, 0.04).texture;
+  pm.dispose();
+  geo.dispose();
+  return tex;
 }

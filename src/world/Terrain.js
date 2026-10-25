@@ -3,6 +3,7 @@ import { mat, PALETTE as P, G, part } from './Materials.js';
 import { ROAD_KINDS, RIVER } from '../navigation/RoadNetwork.js';
 import { bridgeModel } from './Models.js';
 import { addSnow } from '../effects/SnowAccumulation.js';
+import { bakeGroup, disposeBaked } from './Bake.js';
 
 // Ground, roads, the town square and all instanced scenery. The forest north
 // of Timber Edge mirrors the simulation's forest commons: as lumberyards cut
@@ -69,12 +70,22 @@ export function buildTerrain(scene) {
   const lampGlass = new THREE.MeshStandardMaterial({ color: '#ffe3a1', emissive: '#ffb04a', emissiveIntensity: 0, flatShading: true });
   for (const [x, z] of [[-13, 2.4], [13, 2.4], [-13, -2.4], [13, -2.4], [2.4, 11], [-2.4, -13], [26, 2.4], [-26, -2.4]]) {
     const lamp = new THREE.Group();
-    part(lamp, G.box(), mat(P.timberDark), [0.14, 2.6, 0.14], [0, 1.3, 0]);
-    part(lamp, G.box(), lampGlass, [0.36, 0.42, 0.36], [0, 2.7, 0], null, false);
     lamp.position.set(x, 0, z);
     scene.add(lamp);
     lamps.push(lamp);
   }
+  // Street lighting follows the town's power network: torches, gas lamps, electric, LED, then light rings.
+  const LAMP_STYLES = [
+    (l) => { part(l, G.box(), mat(P.timberDark), [0.14, 2.6, 0.14], [0, 1.3, 0]); part(l, G.box(), lampGlass, [0.36, 0.42, 0.36], [0, 2.7, 0], null, false); },
+    (l) => { part(l, G.cyl(8), mat('#2b2d2f', { metalness: 0.5 }), [0.12, 3, 0.12], [0, 1.5, 0]); part(l, G.cyl(4), lampGlass, [0.42, 0.5, 0.42], [0, 3.2, 0], [0, Math.PI / 4, 0], false); part(l, G.cone(4), mat('#2b2d2f'), [0.55, 0.3, 0.55], [0, 3.6, 0], [0, Math.PI / 4, 0], false); },
+    (l) => { part(l, G.cyl(8), mat('#8f969b'), [0.16, 4.2, 0.16], [0, 2.1, 0]); part(l, G.box(), mat('#8f969b'), [0.1, 0.1, 1.1], [0, 4.15, 0.5], null, false); part(l, G.box(), lampGlass, [0.34, 0.16, 0.5], [0, 4.05, 1.0], null, false); },
+    (l) => { part(l, G.cyl(8), mat('#5d6266', { metalness: 0.6 }), [0.12, 4.6, 0.12], [0, 2.3, 0]); part(l, G.box(), lampGlass, [0.22, 0.1, 1.2], [0, 4.6, 0.5], null, false); },
+    (l) => { part(l, G.cyl(10), mat('#f2f4f5', { roughness: 0.3 }), [0.14, 4.2, 0.14], [0, 2.1, 0]); part(l, G.ring(), lampGlass, [1.2, 1, 1.2], [0, 4.3, 0], [Math.PI / 2, 0, 0], false); part(l, G.cyl(10), lampGlass, [0.5, 0.06, 0.5], [0, 4.25, 0], null, false); },
+  ];
+  let lampStyle = -1;
+  const streetLights = new THREE.Group();
+  scene.add(streetLights);
+  let streetKey = '';
 
   // Instanced trees: an outer ring of woodland plus the managed forest commons.
   const trunks = [], crowns = [], pines = [], forest = [];
@@ -135,14 +146,18 @@ export function buildTerrain(scene) {
     dirt: mat(ROAD_KINDS.dirt.color, { roughness: 1 }),
     stone: mat(ROAD_KINDS.stone.color, { roughness: 0.9 }),
     ford: mat('#8fb4c4', { roughness: 0.4 }),
+    asphalt: mat('#4d5257', { roughness: 0.75 }),
+    smart: mat('#3c4a56', { roughness: 0.55, metalness: 0.15 }),
   };
+  const marking = mat('#f2f0e6', { roughness: 0.6 });
+  const smartEdge = new THREE.MeshStandardMaterial({ color: '#7fe8ff', emissive: '#3fd0ff', emissiveIntensity: 0.6, flatShading: true });
   // Roads take only a little snow, so they stay readable in winter.
   for (const m of Object.values(surface)) if (m.userData.snowScale) m.userData.snowScale.value = 0.3;
   const makeRoad = (r) => {
     const g = new THREE.Group();
     if (r.kind === 'bridge') g.add(bridgeModel(r));
     else {
-      const y = r.kind === 'stone' ? 0.034 : r.kind === 'ford' ? 0.07 : 0.026;
+      const y = r.kind === 'stone' || r.kind === 'asphalt' || r.kind === 'smart' ? 0.034 : r.kind === 'ford' ? 0.07 : 0.026;
       const m = part(g, G.plane(), surface[r.kind] ?? surface.dirt, [r.w, 1, r.d], [r.x, y, r.z], null, false);
       m.receiveShadow = true;
       if (r.kind === 'stone') {
@@ -150,6 +165,14 @@ export function buildTerrain(scene) {
         const along = r.w >= r.d;
         const len = along ? r.w : r.d;
         for (const side of [-1, 1]) part(g, G.box(), mat(P.stoneDark), along ? [len, 0.08, 0.18] : [0.18, 0.08, len], along ? [r.x, 0.06, r.z + side * (r.d / 2)] : [r.x + side * (r.w / 2), 0.06, r.z], null, false);
+      }
+      if (r.kind === 'asphalt' || r.kind === 'smart') {
+        // Kerbs, a dashed centre line, and on smart roads glowing guidance lines.
+        const along = r.w >= r.d;
+        const len = along ? r.w : r.d;
+        for (const side of [-1, 1]) part(g, G.box(), mat('#9a9c9e'), along ? [len, 0.1, 0.16] : [0.16, 0.1, len], along ? [r.x, 0.06, r.z + side * (r.d / 2)] : [r.x + side * (r.w / 2), 0.06, r.z], null, false);
+        if (Math.min(r.w, r.d) >= 2.2) for (let t = -len / 2 + 1; t < len / 2 - 0.5; t += 2.2) part(g, G.box(), marking, along ? [1.1, 0.02, 0.1] : [0.1, 0.02, 1.1], along ? [r.x + t, 0.045, r.z] : [r.x, 0.045, r.z + t], null, false);
+        if (r.kind === 'smart') for (const side of [-1, 1]) part(g, G.box(), smartEdge, along ? [len, 0.03, 0.06] : [0.06, 0.03, len], along ? [r.x, 0.05, r.z + side * (r.d / 2 - 0.25)] : [r.x + side * (r.w / 2 - 0.25), 0.05, r.z], null, false);
       }
       if (r.kind === 'ford') for (let i = 0; i < 6; i++) part(g, G.dodeca(), mat(P.stone), [0.7, 0.25, 0.6], [r.x + (i % 2 ? 0.7 : -0.7), 0.1, r.z - r.d / 2 + 0.6 + i * (r.d - 1.2) / 5], null, false);
     }
@@ -169,6 +192,37 @@ export function buildTerrain(scene) {
         if (!roadMeshes.has(key)) roadMeshes.set(key, makeRoad(r));
       }
       for (const [key, g] of roadMeshes) if (!keep.has(key)) { roads.remove(g); roadMeshes.delete(key); }
+    },
+    smartEdge,
+    /** Street lights for the power level (0..4); in later ages lamps line every street in town. */
+    setLighting(level, roads) {
+      const style = Math.max(0, Math.min(4, level));
+      if (style !== lampStyle) {
+        lampStyle = style;
+        for (const l of lamps) { l.clear(); LAMP_STYLES[style](l); }
+      }
+      const key = `${style}:${roads.length}:${roads.map((r) => r.kind[0]).join('')}`;
+      if (style < 1 || key === streetKey) return;
+      streetKey = key;
+      for (const old of streetLights.children) disposeBaked(old);
+      streetLights.clear();
+      const poles = new THREE.Group();
+      for (const r of roads) {
+        if (r.kind === 'bridge' || r.kind === 'ford' || r.kind === 'footpath' || Math.abs(r.x) > 70 || Math.abs(r.z) > 70) continue;
+        const along = r.w >= r.d, len = along ? r.w : r.d;
+        for (let t = -len / 2 + 4, i = 0; t < len / 2 - 2; t += style >= 3 ? 9 : 12, i++) {
+          const side = i % 2 ? 1 : -1;
+          const x = along ? r.x + t : r.x + side * (r.w / 2 + 0.5), z = along ? r.z + side * (r.d / 2 + 0.5) : r.z + t;
+          if (Math.hypot(x, z) < 6) continue;
+          const l = new THREE.Group();
+          LAMP_STYLES[style](l);
+          l.position.set(x, 0, z);
+          l.rotation.y = along ? (side > 0 ? Math.PI : 0) : (side > 0 ? -Math.PI / 2 : Math.PI / 2);
+          poles.add(l);
+        }
+      }
+      // One draw call per material for the whole town's lamps.
+      streetLights.add(bakeGroup(poles));
     },
     /** Show as many commons trees as the forest stock supports. */
     setForest(fraction) {

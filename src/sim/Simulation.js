@@ -39,6 +39,7 @@ import { planCity, reviewPlans, reviewDistricts } from '../city/CityPlanner.js';
 import { considerDevelopment } from '../city/UrbanDevelopment.js';
 import { dailyHooks, hourlyHooks } from './Hooks.js';
 import './Milestone5.js';
+import '../civilization/index.js';
 
 lifecycleHooks.teen.push((state, c) => { chooseTrade(state, c); findMaster(state, c); });
 lifecycleHooks.adulthood.push((state, c) => onAdulthood(state, c));

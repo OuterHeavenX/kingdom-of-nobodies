@@ -50,8 +50,11 @@ export const BUSINESS_TYPES = {
   },
 };
 
-/** Staff a business can employ: bigger premises (upgrades) take more hands. */
-export const staffCap = (b) => BUSINESS_TYPES[b.type].maxStaff + ((b.level ?? 1) - 1) * 2;
+/** Staff a business can employ: bigger premises (upgrades, modern rebuilds) take more hands. */
+export const staffCap = (b) => BUSINESS_TYPES[b.type].maxStaff + ((b.level ?? 1) - 1) * 2 + (b.premisesStaff ?? 0);
+
+/** Systems that change how productive premises are (architecture, technology, utilities) register here. */
+export const productionHooks = [];
 
 export const businessById = (state, id) => byId(state.businesses, id);
 export const isTrading = (b) => b.status === 'OPEN' || b.status === 'STRUGGLING';
@@ -111,6 +114,7 @@ export function produce(state, b, productivity) {
   const plot = state.plots.find((p) => p.id === b.plotId);
   if ((plot?.building?.condition ?? 100) < 60) perShift *= 0.6;
   perShift *= 1 + ((b.level ?? 1) - 1) * 0.15;
+  for (const fn of productionHooks) perShift *= fn(state, b, plot);
   let batches = Math.floor(perShift * productivity + 0.5);
   const hasTool = def.usesTools && qty(b.inventory, 'tools') > 0;
   if (hasTool) batches = Math.round(batches * ECONOMY.toolBoost);

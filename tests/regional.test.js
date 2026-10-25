@@ -31,7 +31,7 @@ test('39. a real Milestone 3 save (version 4) migrates into a working Milestone 
   assert.equal(old.version, 4);
   const s = deserialize(text);
   assert.equal(s.version, SAVE_VERSION);
-  assert.equal(SAVE_VERSION, 7); // Milestone 5.1 raised the format again (holidays); a v4 save migrates through v5 and v6 to v7
+  assert.equal(SAVE_VERSION, 8); // v0.5.2 raised the format again (civilization ages); a v4 save migrates through v5, v6 and v7 to v8
   assert.equal(s.citizens.length, old.citizens.length, 'nobody is lost');
   for (const [acct, coins] of Object.entries(old.accounts)) if (acct !== 'outside') assert.equal(s.accounts[acct], coins, `${acct} keeps its coins`);
   const topUp = s.migrationNotes.find((n) => n.version === 5).outsideTopUp;
@@ -85,7 +85,7 @@ test('acceptance: Ironhold goes hungry, a First Hearth merchant brings Greenvale
   const s = () => sim.state;
   const isTheTrade = (c) => c.merchantHome === 'hearth' && c.merchantId.startsWith('c') && c.origin === 'greenvale' && c.destination === 'ironhold' && ['grain', 'provisions'].includes(c.commodity) && /short of food/.test(c.reason);
   let contract = null, merchantBefore = 0, grainBefore = 0, departTick = 0, reloadedMidJourney = false, delivered = null;
-  for (const seed of [1, 2, 3, 4]) {
+  for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
     if (delivered) break;
     sim = new Simulation(createKingdom(seed));
     money = totalMoney(s());

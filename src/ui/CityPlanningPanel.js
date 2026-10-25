@@ -5,6 +5,7 @@ import { ROAD_KINDS } from '../navigation/RoadNetwork.js';
 import { WEATHER_LABEL, WEATHER_ICON } from '../events/Weather.js';
 import { settlementStage } from '../population/Expansion.js';
 import { esc, capital } from './util.js';
+import { eraPanel, evolutionPanel } from './EraPanel.js';
 
 // The World tab: the town as it grows — what it needs, the plans before the
 // council, streets being built, districts and their changing character,
@@ -15,7 +16,7 @@ export function worldPanel(sim, view) {
   const city = ensureCity(s);
   const d = landDemand(s);
   const mode = view.worldMode ?? 'overview';
-  const seg = `<div class="segmented scroll-seg">${[['overview', 'Town'], ['plans', 'Plans'], ['districts', 'Districts'], ['building', 'Building']].map(([k, l]) => `<button class="${mode === k ? 'active' : ''}" data-act="world-mode" data-id="${k}">${l}</button>`).join('')}</div>`;
+  const seg = `<div class="segmented scroll-seg">${[['overview', 'Town'], ['era', 'Era & tech'], ['evolution', 'Evolution'], ['plans', 'Plans'], ['districts', 'Districts'], ['building', 'Building']].map(([k, l]) => `<button class="${mode === k ? 'active' : ''}" data-act="world-mode" data-id="${k}">${l}</button>`).join('')}</div>`;
   const camera = `<div class="grid2"><button class="btn" data-act="overview">🔭 Overview</button><button class="btn" data-act="tab" data-id="region">🗺️ Region</button><button class="btn" data-act="celebrations">🎉 Seasons & holidays</button></div>`;
   let body = '';
   if (mode === 'overview') {
@@ -23,6 +24,10 @@ export function worldPanel(sim, view) {
     body = `<div class="card"><dl class="kv"><dt>Settlement</dt><dd>${esc(settlementStage(s.citizens.length))} · ${s.citizens.length} people</dd><dt>Weather</dt><dd>${w ? `${WEATHER_ICON[w.kind]} ${esc(WEATHER_LABEL[w.kind])}` : '—'}</dd>
       <dt>Homes short</dt><dd>${d.housingShortage}${d.homeless ? ` (${d.homeless} homeless)` : ''}</dd><dt>House plots for sale</dt><dd>${d.vacantResidential}</dd><dt>Shop land for sale</dt><dd>${d.vacantCommercial}</dd><dt>People per shop</dt><dd>${Math.round(d.commercialDemand * 14)}</dd>
       <dt>Out of work</dt><dd>${d.unemployed} (${d.openings} openings)</dd><dt>Average land price</dt><dd>${d.landPrice}🪙</dd><dt>Busiest road</dt><dd>${d.congestion.busiest ? `${esc(d.congestion.busiest.name)} (${d.congestion.busiest.avg} trips)` : '—'}</dd></dl></div>${camera}`;
+  } else if (mode === 'era') {
+    body = eraPanel(sim);
+  } else if (mode === 'evolution') {
+    body = evolutionPanel(sim);
   } else if (mode === 'plans') {
     body = `${city.proposals.slice().reverse().slice(0, 12).map((p) => `<div class="card"><strong>${esc(p.name)}</strong> · ${esc(p.status.toLowerCase())}<p class="muted" style="font-size:12px;margin:4px 0">${esc(capital(p.reason))}.</p>
       <dl class="kv"><dt>Street</dt><dd>${Math.round(Math.max(p.road.w, p.road.d))} paces of ${esc(ROAD_KINDS[p.road.kind].label.toLowerCase())}</dd><dt>Plots</dt><dd>${p.plots.length} (${p.appraisal.beds} beds, ${p.appraisal.shops} shops)</dd><dt>Cost</dt><dd>${p.appraisal.total}🪙${p.loanId ? ' (part borrowed)' : ''}</dd>${p.decision ? `<dt>Council</dt><dd>${esc(p.decision)}</dd>` : ''}</dl></div>`).join('') || '<p class="empty">No street plans yet. The planners take over once the old districts are full.</p>'}

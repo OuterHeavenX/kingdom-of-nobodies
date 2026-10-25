@@ -1,14 +1,15 @@
 import { POPULATION } from '../core/Config.js';
 import { byId } from '../core/EntityRegistry.js';
+import { formOf } from '../civilization/ArchitectureData.js';
 
 // The land registry: every plot in the settlement, who owns it and what stands on it.
 
 export const LAND_TYPES = {
-  farmland: { label: 'Farmland', base: 44, allows: ['farm', 'cottage'] },
-  commercial: { label: 'Commercial', base: 38, allows: ['bakery', 'general_store', 'tavern', 'blacksmith', 'bank', 'guildhall'] },
-  workshop: { label: 'Workshop land', base: 34, allows: ['lumberyard', 'blacksmith', 'general_store', 'guildhall', 'barracks'] },
-  residential: { label: 'Residential', base: 22, allows: ['cottage', 'shrine'] },
-  civic: { label: 'Civic', base: 50, allows: ['hall', 'market', 'school', 'granary', 'well', 'townhall', 'memorial', 'courthouse', 'shrine', 'chapel', 'temple', 'barracks'] },
+  farmland: { label: 'Farmland', base: 44, allows: ['farm', 'cottage', 'mansion', 'grounds'] },
+  commercial: { label: 'Commercial', base: 38, allows: ['bakery', 'general_store', 'tavern', 'blacksmith', 'bank', 'guildhall', 'apartment', 'tower', 'grounds', 'hospital'] },
+  workshop: { label: 'Workshop land', base: 34, allows: ['lumberyard', 'blacksmith', 'general_store', 'guildhall', 'barracks', 'station', 'grounds'] },
+  residential: { label: 'Residential', base: 22, allows: ['cottage', 'shrine', 'apartment', 'tower', 'mansion', 'grounds'] },
+  civic: { label: 'Civic', base: 50, allows: ['hall', 'market', 'school', 'granary', 'well', 'townhall', 'memorial', 'courthouse', 'shrine', 'chapel', 'temple', 'barracks', 'station', 'hospital', 'grounds'] },
 };
 
 export const BUILDING_INFO = {
@@ -34,7 +35,17 @@ export const BUILDING_INFO = {
   chapel: { label: 'Chapel', class: 'faith', value: 50 },
   temple: { label: 'Temple', class: 'faith', value: 95 },
   barracks: { label: 'Barracks', class: 'civic', value: 60 },
+  // v0.5.2: density, wealth and infrastructure.
+  apartment: { label: 'Apartment building', class: 'home', value: 60 },
+  tower: { label: 'Residential tower', class: 'home', value: 90 },
+  mansion: { label: 'Mansion', class: 'home', value: 70 },
+  grounds: { label: 'Grounds', class: 'annex', value: 10 },
+  station: { label: 'Station', class: 'civic', value: 70 },
+  hospital: { label: 'Hospital', class: 'civic', value: 90 },
 };
+
+/** Systems that stamp architecture on new buildings and adjust land prices register here (see civilization/). */
+export const buildingHooks = { stamp: null, landFactor: null };
 
 // Hand-placed village layout around the crossroads at (0, 0).
 const LAYOUT = [
@@ -98,9 +109,13 @@ export const buildingClass = (type) => BUILDING_INFO[type]?.class ?? null;
 export const allows = (plot, buildingType) => LAND_TYPES[plot.landType].allows.includes(buildingType);
 
 export function plotValue(plot) {
-  const land = LAND_TYPES[plot.landType].base;
-  const building = plot.building && plot.constructionStatus === 'COMPLETE' ? BUILDING_INFO[plot.building.type].value : 0;
-  return land + building;
+  const land = Math.round(LAND_TYPES[plot.landType].base * (buildingHooks.landFactor?.(plot) ?? 1));
+  const b = plot.building;
+  if (!b || plot.constructionStatus !== 'COMPLETE') return land;
+  // A building's worth grows with its architecture and falls with neglect.
+  const era = b.era ?? 1;
+  const worth = era <= 1 && !b.floors ? BUILDING_INFO[b.type].value : Math.round(BUILDING_INFO[b.type].value * formOf(b.type, era).value * (0.55 + 0.45 * Math.min(100, b.condition ?? 100) / 100));
+  return land + worth;
 }
 
 export function plotHistory(state, plot, text) {
@@ -108,8 +123,9 @@ export function plotHistory(state, plot, text) {
   if (plot.history.length > 24) plot.history.shift();
 }
 
-export function setBuilding(state, plot, type, name = null) {
+export function setBuilding(state, plot, type, name = null, arch = null) {
   plot.building = { type, name: name ?? BUILDING_INFO[type].label, builtDay: state.day };
+  buildingHooks.stamp?.(state, plot, plot.building, arch);
   plot.constructionStatus = 'COMPLETE';
 }
 
@@ -123,7 +139,8 @@ export function plotsForSale(state, buildingType, buyerId) {
 
 export function bedsAt(state, plot) {
   if (!plot.building || plot.constructionStatus !== 'COMPLETE') return 0;
-  if (plot.building.type === 'hall' || plot.building.type === 'townhall') return POPULATION.hallBeds;
-  if (plot.building.type === 'cottage') return (plot.building.level ?? 1) >= 2 ? POPULATION.houseBeds : POPULATION.cottageBeds;
+  if (plot.building.type === 'hall' || plot.building.type === 'townhall') return POPULATION.hallBeds + Math.max(0, formOf(plot.building.type, plot.building.era ?? 1).beds - POPULATION.hallBeds);
+  if (plot.building.type === 'cottage') return ((plot.building.level ?? 1) >= 2 ? POPULATION.houseBeds : POPULATION.cottageBeds) + Math.max(0, formOf('cottage', plot.building.era ?? 1).beds - POPULATION.cottageBeds);
+  if (['apartment', 'tower', 'mansion'].includes(plot.building.type)) return Math.round(formOf(plot.building.type, plot.building.era ?? 1).beds * (plot.building.serviceFactor ?? 1));
   return 0;
 }

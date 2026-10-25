@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { widthOf, depthOf, heightOf } from '../property/Footprints.js';
+import { widthOf, depthOf, heightOf, buildingDims, hasWing } from '../property/Footprints.js';
+import { eraModel, modernSite } from './ProceduralArchitecture.js';
 import { mat, PALETTE as P, G, part } from './Materials.js';
 
 // Procedural low-poly building models. Every model is built in local space
@@ -106,10 +107,12 @@ const BUILDERS = {
     }
     crops.castShadow = true;
     g.add(crops);
-    const barn = new THREE.Group();
-    house(barn, { w: 3.2, d: 2.6, h: 2.2, wall: '#a8513f', roof: P.roofBrown, roofH: 1.4, frame: false, chimney: null });
-    barn.position.set(fw / 2 - 1.2, 0, fd / 2 - 0.4);
-    g.add(barn);
+    if (!o.noBarn) {
+      const barn = new THREE.Group();
+      house(barn, { w: 3.2, d: 2.6, h: 2.2, wall: '#a8513f', roof: P.roofBrown, roofH: 1.4, frame: false, chimney: null });
+      barn.position.set(fw / 2 - 1.2, 0, fd / 2 - 0.4);
+      g.add(barn);
+    }
     for (const [x, z] of [[-fw / 2 + 0.8, fd / 2 - 0.2], [-fw / 2 + 2, fd / 2 - 0.4]]) part(g, G.cyl(8), mat(P.thatch), [1.1, 0.9, 1.1], [x, 0.45, z]);
     fence(g, o.w - 0.2, o.d - 0.2, 2);
   },
@@ -216,24 +219,39 @@ const BUILDERS = {
 /** Build a finished building. opts: { id, w, d, open (bool|undefined), level, condition } */
 export { BUILDERS, house, fence, sign, crate, barrel, logPile };
 
+/** Types that only exist from v0.5.2 on; they are always drawn procedurally. */
+const PROCEDURAL_TYPES = new Set(['apartment', 'tower', 'mansion', 'grounds', 'station', 'hospital']);
+
+/**
+ * Build a finished building. opts: { id, w, d, open (bool|undefined), level, condition, season,
+ * b (the building record: era, seed, floors), plot }. Age of Foundations
+ * buildings keep their hand-made models; later eras are procedural.
+ */
 export function buildingModel(type, opts) {
   const g = new THREE.Group();
-  (BUILDERS[type] ?? BUILDERS.cottage)(g, opts);
+  const rec = opts.b ? { ...opts.b, type } : { type, era: 1 };
+  const era = rec.era ?? 1;
+  const procedural = (era >= 2 && type !== 'ruins') || PROCEDURAL_TYPES.has(type);
+  const dims = opts.plot ? buildingDims(opts.plot, rec) : { w: widthOf(type), d: depthOf(type), h: heightOf(type) };
+  if (procedural) {
+    if (type === 'farm') BUILDERS.farm(g, { ...opts, noBarn: true });
+    g.add(eraModel(rec, dims, opts.plot ?? opts));
+  } else (BUILDERS[type] ?? BUILDERS.cottage)(g, opts);
   const level = opts.level ?? 1;
-  if (level >= 2 && !['farm', 'well', 'ruins', 'lumberyard'].includes(type)) {
+  if (!procedural && hasWing({ type, level, era })) {
     // An expanded building gains a side wing.
     const wing = new THREE.Group();
     house(wing, { w: 2.4, d: 2.6, h: 2 + (level - 2) * 0.8, roof: P.roofBrown, roofH: 1.2, chimney: null, door: false });
     wing.position.set(-(widthOf(type) / 2 + 1.1), 0, -0.2);
     g.add(wing);
   }
-  if ((opts.condition ?? 100) < 60 && type !== 'ruins') {
+  if ((opts.condition ?? 100) < 60 && type !== 'ruins' && type !== 'grounds') {
     // Fire damage: soot and missing roof timbers until repaired.
-    for (let i = 0; i < 4; i++) part(g, G.box(), mat('#1f1b19'), [0.9, 0.08, 0.9], [-1.2 + i * 0.8, heightOf(type) + 0.9 + (i % 2) * 0.3, 0.3], [0.5, i, 0.3], false);
+    for (let i = 0; i < 4; i++) part(g, G.box(), mat('#1f1b19'), [0.9, 0.08, 0.9], [-1.2 + i * 0.8, (procedural ? dims.h : heightOf(type)) + 0.9 + (i % 2) * 0.3, 0.3], [0.5, i, 0.3], false);
   }
-  if (opts.open === false && type !== 'farm' && type !== 'cottage') {
+  if (opts.open === false && type !== 'farm' && type !== 'cottage' && type !== 'grounds') {
     // Boarded-up door shows the business has closed.
-    for (const r of [0.6, -0.6]) part(g, G.box(), mat(P.timberDark), [1.2, 0.14, 0.08], [0, 1.05, (type === 'stall' ? 0.85 : depthOf(type) / 2) + 0.14], [0, 0, r], false);
+    for (const r of [0.6, -0.6]) part(g, G.box(), mat(P.timberDark), [1.2, 0.14, 0.08], [0, 1.05, (type === 'stall' ? 0.85 : procedural ? dims.d / 2 : depthOf(type) / 2) + 0.14], [0, 0, r], false);
   }
   return g;
 }
@@ -251,12 +269,19 @@ function scaffold(g, w, d, h) {
  * Stages: PLANNING, FOUNDATION, FRAME, ROOF, FINISHING, DEMOLISHING.
  */
 export function constructionModel(type, stage, progress, opts) {
+  const era = opts.era ?? 1;
+  if (stage !== 'DEMOLISHING' && opts.plot && (era >= 2 || PROCEDURAL_TYPES.has(type))) {
+    const dims = buildingDims(opts.plot, { type, era, floors: opts.floors });
+    const site = modernSite(type, Math.max(2, era), stage, progress, dims);
+    if (stage === 'FINISHING') site.add(buildingModel(type, { ...opts, b: { type, era, seed: opts.seed ?? 1, floors: dims.floors }, open: true }));
+    return site;
+  }
   const g = new THREE.Group();
   const w = widthOf(type), d = depthOf(type), h = heightOf(type);
   part(g, G.plane(), mat('#a68a64'), [w + 2.4, 1, d + 2.4], [0, 0.03, 0], null, false);
   logPile(g, w / 2 + 1.6, -d / 2, stage === 'FINISHING' ? 2 : 4);
   if (stage === 'DEMOLISHING') {
-    const old = buildingModel(opts.oldType ?? type, { ...opts, open: false });
+    const old = buildingModel(opts.oldType ?? type, { ...opts, b: opts.oldBuilding ?? opts.b, open: false });
     old.scale.y = Math.max(0.15, 1 - progress * 0.85);
     g.add(old);
     for (let i = 0; i < 7; i++) part(g, G.dodeca(), mat(i % 2 ? P.stone : P.plank), [0.6, 0.4, 0.6], [((i * 37) % 7) - 3, 0.2, ((i * 53) % 5) - 2.5 + d / 2 + 1]);

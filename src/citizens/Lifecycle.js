@@ -1,3 +1,4 @@
+import { healthHooks } from '../events/Disasters.js';
 import { byId } from '../core/EntityRegistry.js';
 import { LIFE, DAYS_PER_YEAR, TIME, FOOD_GOODS } from '../core/Config.js';
 import { ageOn, stageForAge, isBirthday, seasonOf, yearOf } from '../core/Calendar.js';
@@ -25,7 +26,7 @@ export const lifecycleHooks = { death: [], adulthood: [], teen: [] };
 export function dailyMortality(state, c) {
   const age = ageOf(state, c);
   let yearly = LIFE.gompertzA * Math.exp(LIFE.gompertzB * age);
-  if (age < 3) yearly += LIFE.infantYearlyRisk;
+  if (age < 3) yearly += LIFE.infantYearlyRisk * (healthHooks.infant?.(state) ?? 1);
   const home = plotById(state, c.homePlotId);
   if (!home) yearly *= 1.3;
   if (state.season?.harshWinter && seasonOf(state.day) === 'Winter' && (age >= 60 || age < 3)) yearly *= 2;

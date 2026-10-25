@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>Kingdom of Nobodies</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#174d38"/>
+      <stop offset="1" stop-color="#0a281d"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.62" r="0.48">
+      <stop offset="0" stop-color="#3f9b6c" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#3f9b6c" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffd966"/>
+      <stop offset="1" stop-color="#d4951c"/>
+    </linearGradient>
+    <linearGradient id="future" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff3c4"/>
+      <stop offset="1" stop-color="#f0bf45"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <rect width="1024" height="1024" fill="url(#glow)"/>
+  <g id="art" transform="translate(512 520) scale(0.74) translate(-512 -497)">
+    <!-- Crown: low-poly facets -->
+    <polygon points="318,372 318,206 418,292 512,150 512,372" fill="#ffd45c"/>
+    <polygon points="512,150 606,292 706,206 706,372 512,372" fill="#e2a228"/>
+    <polygon points="318,206 418,292 418,372 318,372" fill="#f7c447"/>
+    <polygon points="606,292 706,206 706,372 606,372" fill="#cf8f1a"/>
+    <rect x="300" y="352" width="424" height="58" rx="10" fill="#b97a12"/>
+    <rect x="300" y="352" width="212" height="58" rx="10" fill="#d0901c"/>
+    <circle cx="318" cy="200" r="26" fill="#fff1b8"/>
+    <circle cx="512" cy="144" r="30" fill="#fff1b8"/>
+    <circle cx="706" cy="200" r="26" fill="#fff1b8"/>
+    <polygon points="512,362 534,381 512,400 490,381" fill="#2f8f63"/>
+    <circle cx="410" cy="381" r="11" fill="#fff1b8"/>
+    <circle cx="614" cy="381" r="11" fill="#fff1b8"/>
+    <!-- Skyline: medieval keep and cottage on the left, glass towers and a garden spire on the right -->
+    <g fill="url(#gold)">
+      <rect x="176" y="590" width="150" height="230"/>
+      <rect x="176" y="560" width="30" height="40"/><rect x="236" y="560" width="30" height="40"/><rect x="296" y="560" width="30" height="40"/>
+      <polygon points="206,500 251,410 296,500"/>
+      <rect x="216" y="500" width="70" height="90"/>
+      <rect x="326" y="690" width="110" height="130"/>
+      <polygon points="316,694 381,624 446,694"/>
+      <rect x="452" y="600" width="64" height="220"/>
+      <polygon points="452,604 484,500 516,604"/>
+    </g>
+    <g fill="url(#future)">
+      <polygon points="532,820 532,520 610,470 610,820"/>
+      <polygon points="622,820 622,430 664,330 706,430 706,820"/>
+      <rect x="718" y="560" width="106" height="260" rx="44"/>
+      <rect x="840" y="660" width="34" height="160"/>
+    </g>
+    <path d="M771 560 C 735 520, 745 470, 790 452 C 805 500, 800 535, 771 560 Z" fill="#4fbf86"/>
+    <!-- Windows: lamplight on the left, cool glass on the right -->
+    <g fill="#0f3b2b">
+      <rect x="236" y="640" width="30" height="44" rx="14"/>
+      <rect x="236" y="740" width="30" height="80" rx="14"/>
+      <rect x="366" y="740" width="30" height="40"/>
+      <rect x="474" y="650" width="20" height="30"/>
+    </g>
+    <g fill="#2f7d6a">
+      <rect x="550" y="560" width="14" height="240"/><rect x="578" y="545" width="14" height="255"/>
+      <rect x="640" y="460" width="14" height="340"/><rect x="674" y="460" width="14" height="340"/>
+      <rect x="742" y="610" width="58" height="12"/><rect x="742" y="650" width="58" height="12"/><rect x="742" y="690" width="58" height="12"/><rect x="742" y="730" width="58" height="12"/>
+    </g>
+    <rect x="150" y="818" width="724" height="26" rx="13" fill="#d9a12a"/>
+  </g>
+</svg>

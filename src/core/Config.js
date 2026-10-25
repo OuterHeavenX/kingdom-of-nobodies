@@ -3,7 +3,7 @@
 
 /** Coins held by the wider world beyond the region (the 'outside' account) at the founding. */
 export const WIDER_WORLD = 250000;
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 
 export const TIME = {
   minutesPerTick: 10,
@@ -260,4 +260,27 @@ export const MILITARY = {
   garrisonShare: 0.04,
   mobiliseShare: 0.12,
   militiaWage: 3,
+};
+
+// ---------------------------------------------------------------------------
+// v0.5.2: The Evolution of Civilization
+// ---------------------------------------------------------------------------
+
+export const CIV = {
+  techReserve: 60, // the council keeps this much after paying for a technology
+  utilityReserve: 80, // and this much after paying a utility instalment
+  modernizeEveryDays: 6, // owners review their buildings on this rhythm
+  minRebuildYears: 35, // a building this young is not pulled down for a newer style (unless run down)
+  techSpacingDays: 30, // the council adopts at most one technology in this many days
+  maxRebuilds: [0, 1, 2, 3, 3, 4], // concurrent private rebuilds allowed, by age
+  rebuildCostScale: [1, 1, 1.25, 1.5, 1.8, 2.1], // labour and materials by target era
+  wearPerYear: [0, 1.6, 1.2, 0.9, 0.7, 0.5], // condition lost each year by a building of that era
+  wearFloor: 62, // ordinary ageing never takes a building below this (fires and neglect can)
+  rentPerDay: 1, // a rented flat costs each household a coin a day
+  evictAfterDays: 6,
+  populationCap: [250, 250, 265, 285, 305, 325], // the town can grow a little once it builds upward
+  maxTowers: 10,
+  maxMansions: 8,
+  developEveryDays: 4,
+  archivePerPlot: 40, // compact Then & Now records kept per property
 };

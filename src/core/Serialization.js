@@ -90,6 +90,21 @@ export function migrateV6(s) {
   return s;
 }
 
+/**
+ * Milestone 5.1 (v7) → v0.5.2 (v8): the evolution of civilization. Every
+ * building standing is recorded as Age of Foundations architecture with a
+ * deterministic seed, the world joins the age its calendar has reached (with
+ * no technology adopted beyond the founders' timber framing), utilities start
+ * unbuilt, and each property's Then & Now record begins with what stands on
+ * it today. No coins, goods, people or dates change.
+ */
+export function migrateV7(s) {
+  addMilestone5State(s);
+  s.version = 8;
+  s.migrationNotes = [...(s.migrationNotes ?? []), { version: 8, day: s.day, note: 'Added the five civilization ages, technology, utilities, architectural eras for every building, heritage records and Then & Now property histories. No coins, goods or dates changed.' }];
+  return s;
+}
+
 export function migrateV5(s) {
   addMilestone5State(s);
   s.version = 6;
@@ -132,6 +147,11 @@ export function deserialize(text) {
  * ([label, text] pairs). Write time decides, not simulation progress, so an
  * imported or newly started kingdom is never displaced by an older, longer one.
  */
+/** The save format version of a stored text (null if unreadable). */
+export function versionOf(text) {
+  try { const env = JSON.parse(text); return env?.format === FORMAT ? env.version : env?.version ?? null; } catch { return null; }
+}
+
 export function newestSave(candidates) {
   let best = null;
   for (const [label, text] of candidates) {
@@ -140,7 +160,7 @@ export function newestSave(candidates) {
       const state = deserialize(text);
       let savedAt = '';
       try { savedAt = JSON.parse(text).savedAt ?? ''; } catch { /* bare legacy state */ }
-      if (!best || savedAt > best.savedAt) best = { label, state, savedAt };
+      if (!best || savedAt > best.savedAt) best = { label, state, savedAt, text };
     } catch (e) {
       console.warn(`Skipping ${label}:`, e.message);
     }
@@ -165,6 +185,7 @@ export function migrate(s) {
     s.events = [];
     return s;
   }
+  if (s.version === 7) return migrate(migrateV7(s));
   if (s.version === 6) return migrate(migrateV6(s));
   if (s.version === 5) return migrate(migrateV5(s));
   if (s.version === 4) return migrate(migrateV4(s));
