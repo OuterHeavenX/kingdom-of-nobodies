@@ -177,12 +177,13 @@ export class World {
   }
 
   clearAway() {
+    // Name labels belong to whichever place is on screen; they are rebuilt for the new view.
+    for (const el of this.labelEls.values()) el.remove();
+    this.labelEls.clear();
     if (!this.away) return;
     this.scene.remove(this.away.group);
     this.away.dispose();
     this.away = null;
-    for (const el of this.labelEls.values()) el.remove();
-    this.labelEls.clear();
   }
 
   /** Smoothly move the camera to look at a point from a given distance. */

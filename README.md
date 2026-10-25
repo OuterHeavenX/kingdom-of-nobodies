@@ -1,11 +1,140 @@
-# Kingdom of Nobodies — Milestone 4: Beyond the Hearth
+# Kingdom of Nobodies — Milestone 5: The Age of Empires & Prosperity
 
-A mobile-first, low-poly 3D medieval settlement that lives for generations and trades with its neighbours.
-Five strangers light a hearth. Their descendants walk real roads, haul grain to hungry kingdoms, take each
-other to court over unpaid wages, and dance at the Harvest Festival. You are the council: you can nudge the
-society, but you can't control anyone.
+A mobile-first, low-poly 3D medieval settlement that lives for generations among neighbouring kingdoms.
+Five strangers light a hearth. Their descendants lay out streets, borrow from banks, join guilds, keep
+their faiths, trade with kingdoms whose people have names, and live through wars they did not start. You
+are the council: you can nudge the society, but you can't control anyone.
 
-**Play:** https://outerheavenx.github.io/kingdom-of-nobodies/ · version 0.4.0
+**Play:** https://outerheavenx.github.io/kingdom-of-nobodies/ · version 0.5.0
+
+## The Age of Empires & Prosperity (Milestone 5)
+
+The rule from earlier milestones holds: the chronicle only reports what the simulation actually did, and
+every coin moves through the ledger. Money is still conserved exactly. Banks, guilds and faith communities
+have ledger accounts of their own, and the stress test checks the books.
+
+- **The town plans itself.** The four inner districts keep their hand-drawn layout. After that, the town
+  grows street by street.
+  - The planners measure real demand:
+    - families squeezed into the communal hall;
+    - homelessness and growth;
+    - people per shop;
+    - empty land;
+    - traffic.
+  - They search for the best street that branches at right angles off an existing road. A street is
+    rejected if it would cross the river, a building, a plot or another road, or leave the valley.
+  - Each plan goes to the council with its costs (road, survey) and benefits (beds, shops, land value).
+    The council approves it, cuts it down to fit the treasury, borrows the gap from a bank against the land
+    it will open, or rejects it.
+  - The works crew builds the street shift by shift. Its plots are surveyed only once it is finished, so
+    every new home has a road to its door (tested with the pathfinder).
+  - Districts record how their character changes, for example from a residential quarter to a market
+    quarter. The council rezones idle land toward what is short.
+  - Citizens with capital (or a loan) build cottages to sell, but only while families need homes and some
+    of them could afford the price. Only two such cottages are under way at a time. Families can buy a
+    finished cottage and move in.
+- **Kingdoms you can visit.** Kingdoms → *Visit in 3D* takes the camera to Greenvale, Ironhold or Saltmere.
+  Only one settlement is drawn at a time, and the simulation keeps running everywhere.
+  - Each kingdom has its own scene:
+    - **Greenvale**: rolling farmland with windmills.
+    - **Ironhold**: a walled stone town with mines and a smelter under the mountains.
+    - **Saltmere**: a harbour with docks, boats, warehouses and a lighthouse.
+  - Each kingdom has about 25 persistent named people with stable ids: a ruler, councillors, merchants, a
+    guild master, a faith keeper, craftspeople and residents. They age, marry, have children, change
+    trades, rise and fall with their kingdom, migrate along the real roads (taking days, never
+    teleporting) and die. Vacant roles are filled by promotion.
+  - Rulers are named citizens. Their character (ambition, caution, warmth, pride) shapes their priorities,
+    how they negotiate and whether they go to war. Their record lists the treaties and wars of their reign.
+  - Foreign merchant houses send a named merchant with each caravan, and that merchant is away until the
+    caravan comes home. Carts in a kingdom's market are the caravans actually stopped there. Tents outside
+    its walls are an army actually camped there.
+- **Banks, credit and loans.** All banks keep a real balance sheet: cash, loans, deposits and equity.
+  - The banks are moneylenders, merchant banks, the council's savings house and guild credit funds.
+  - A deposit moves coins into the bank and records what the bank owes. You can only withdraw what you
+    deposited, and only what the bank actually holds in cash.
+  - Credit is assessed from:
+    - income and how long the borrower has worked;
+    - business profit;
+    - repayment history;
+    - existing debts;
+    - collateral;
+    - reputation.
+
+    A rich idler with past defaults is refused, while a steady smith is not.
+  - Loans pay for premises, homes, business expansion and development. The council can also borrow, for
+    streets and for grain in a famine.
+  - Interest accrues once a season, in whole coins, and never twice across a save and reload. Deposit
+    interest is paid out of what the bank's loans earn, so idle savings cannot bankrupt it.
+  - Missed payments bring penalties, then one restructuring, then default. A default goes to court under
+    the Debt Recovery Act, and the judgment is carried out once:
+    - repayment from the borrower's means;
+    - or a forced sale of the pledged land, which repays the lender first;
+    - or bankruptcy, with the loss written off and the borrower's credit ruined for ten years.
+  - A failing bank is wound up in an orderly way. A healthy bank takes over its accounts and honours
+    deposits as far as the failed bank's assets cover them. Without one, depositors share its cash pro
+    rata.
+  - Deaths and emigration settle debts and savings.
+- **Guilds.** Merchants', Builders', Blacksmiths' and Carpenters' guilds and the Farmers' Association form
+  once a trade has three practitioners.
+  - Members pay dues into a real fund and elect a master.
+  - The guild trains members, raises the quality of their shops, helps members who are out of work, and
+    builds a hall (which raises the price of land nearby). Large guilds open credit funds and sponsor
+    public works.
+  - At elections, guilds back the candidate whose platform suits their trade, and their members' votes
+    follow. A guild whose candidate wins may be granted a privilege, such as a lower market levy. Rival
+    guilds that back opposing candidates are recorded as a dispute.
+- **Faith.** Five original traditions:
+  - **The Old Furrow**: nature and harvest.
+  - **The Hearthkin**: ancestors and family memory.
+  - **The Dawnlight**: light and renewal.
+  - **The Open Hand**: service and charity.
+  - **The Quiet Lantern**: scholarship and contemplation.
+
+  Each villager is devout, casually affiliated, sceptical or holds to none, and that can change over a
+  lifetime. Belief never affects honesty, intelligence, temper or worth.
+
+  Communities collect offerings and pay for upkeep and a keeper. They raise shrines, chapels and temples
+  and keep their seasonal rites. They also:
+  - buy food from the village's own shops for a winter charity table, and in any hunger crisis;
+  - sit with the bereaved;
+  - sponsor the school;
+  - help fire victims rebuild;
+  - keep a book of the village's memorable days.
+
+  People remember who helped them.
+- **Alliances and war.**
+  - **Disputes.** Three contested lands lie along real roads. Tension over each rises and falls for recorded
+    reasons: relations, toll quarrels, need, embargoes, a ruler's pride. A formal dispute is negotiated
+    every season.
+  - **Deciding on war.** War is considered only after talks have failed twice. The ruler must be willing,
+    the treasury must allow it, and the aggressor must expect to win. Defensive alliances can deter a war
+    (the Chronicle says when they do).
+  - **Allies.** When war is declared, allies must join or break their treaty. First Hearth can be drawn in
+    through an alliance; its militia is made of real villagers who leave their jobs.
+  - **Armies.** Mobilisation takes workers out of a kingdom's fields and mines. Armies carry real food,
+    are paid every day, and march by the hour along the roads. Hunger costs them morale and deserters.
+  - **Battles** weigh numbers, training, equipment, morale, supply, the commander and the ground, with a
+    ±15% roll for the fortunes of the day.
+  - **Sieges** close a town's roads to trade. They end in surrender, withdrawal, a parley or an assault.
+  - **Peace.** Exhaustion, defeats and a three-year limit push both sides toward peace. The treaty sets
+    who holds the land, any reparations, a non-aggression pact or ceasefire, and a recognised border.
+  - **At home.** War blocks trade between the belligerents, sends refugees to First Hearth, and moves
+    transit tolls with the territory. Any battle can be replayed on stylised ground.
+- **Weather.** Clear, rain, fog, wind and snow follow the seasons and tend to persist from day to day.
+  - Rain waters the crops in the growing months, while snow and fog slow the roads.
+  - Wind fans fires, and a clear day lifts people's spirits.
+  - The renderer draws whatever the simulation decided.
+- **Optional cloud backup.** A Cloudflare Worker with a D1 database, GitHub sign-in, revision history,
+  conflict detection and server-side validation (see [cloud/README.md](cloud/README.md)). It is
+  implemented and tested in-process, but **not deployed**: it needs secrets that only the owner can
+  create. Until then the Cloud card says it is not set up, and local saving is unchanged.
+- **Look and feel.** New buildings: a counting house, guild halls, shrines, chapels, temples and barracks.
+  - Houses have ridge beams, door frames, window sills and shutters.
+  - There are rain and snow particles, overcast light and fog.
+  - Militia muster at the north gate.
+  - The camera has an overview and smooth zoom.
+  - The navigation was rebuilt (see below).
+  - Three.js is a separately cached chunk, so a game update does not re-download the engine.
 
 ## Beyond the Hearth (Milestone 4)
 
@@ -127,16 +256,27 @@ the state behind it changed.
 1. Open the link above in Safari. To make it feel like an app, tap Share → *Add to Home Screen*.
 2. Drag with one finger to orbit, pinch to zoom, and use two fingers to pan.
 3. Bottom tabs:
-   - **People**: search, demographics and a population pyramid.
-   - **Families**: houses and family trees.
-   - **Economy**: businesses, **trade** (market prices, contracts, caravans, merchants) and land.
-   - **Politics**: government, **laws & courts** (the legal code, proposals, cases with evidence and
-     judgments) and **foreign** relations (treaties, embargoes and the causes behind each relationship).
-   - **Region**: the map, kingdoms, caravans, diplomacy and exploration. Tap a kingdom, a caravan or a
-     landmark.
-   - **History**: eras, the Memorial, the timeline, the departed and **culture** (festivals and traditions).
-     The chronicle can be filtered by trade, diplomacy, law and culture.
-   - **Council**: actions (including scouting and diplomatic gifts), region & roads, and settings.
+   - **World**: the town:
+     - what it needs;
+     - the street plans before the council and its decisions;
+     - districts and how their character has changed;
+     - road works, building sites and homes built to sell;
+     - the weather, and an *Overview* camera.
+   - **People**: search, demographics, a population pyramid, and **Families** (houses and family trees). A
+     citizen's page shows their money (savings, loans, credit record) and their belief.
+   - **Kingdoms**:
+     - the map, with armies and caravans where they really are;
+     - kingdoms, with their ruler, named people and forces, and *Visit in 3D*;
+     - alliances and the military balance;
+     - disputed lands, wars, diplomacy, caravans and exploration.
+   - **Economy**: businesses, trade, **banks** (balance sheets and loans), **guilds** and land.
+   - **Politics**: government, laws & courts, **faith** and foreign relations.
+   - **History**:
+     - eras, the Memorial, the timeline and the departed;
+     - **wars** (battles can be replayed);
+     - **kingdoms'** own histories;
+     - culture.
+   - **Council**: actions, region & roads, settings and the optional **cloud backup**.
 4. Tap anyone, anywhere, to read their story. *Follow in village* keeps the camera on them until you drag the
    view. 🌳 opens a family tree centred on that person, and 📖 opens a biography.
 5. Use ⏸ and **1× / 3× / 6× / 20×** in the top bar. 20× is for watching generations pass.
@@ -150,9 +290,9 @@ Requires Node.js 20.19+ or 22.12+.
 ```bash
 npm ci
 npm run dev                  # development server
-npm test                     # unit, economy, property, save, simulation, legacy, navigation, trade,
-                             # diplomacy, law, festival, regional (acceptance) and build tests
-npm run test:longevity -- 200 1,2,3   # headless 200-year stress test across seeds
+npm test                     # all node:test suites, including Milestone 5: city-planning, travel, finance,
+                             # institutions, warfare and cloud-saves
+npm run test:longevity -- 200 1,2,3,4 # headless 200-year stress test across seeds
 npm run build && npm run preview      # production build on http://localhost:4173/kingdom-of-nobodies/
 npm run test:e2e             # touch end-to-end test (needs Playwright + Chromium and the preview running)
 ```
@@ -168,7 +308,8 @@ src/
   core/        Game, GameClock, Config (all tuning), Calendar (dates, ages, stages), Random (seeded, in state),
                EntityRegistry (cached id lookups), Serialization (checksummed, versioned saves + migration),
                SaveManager (IndexedDB current/previous/yearly snapshot + localStorage backup)
-  sim/         Simulation (tick, hourly and daily schedules; lifecycle hooks), Setup (the founding)
+  sim/         Simulation (tick, hourly and daily schedules; lifecycle hooks), Setup (the founding),
+               Hooks (hook arrays that wire the Milestone 5 systems in without import cycles), Milestone5
   ai/          CitizenBrain (activities), DecisionUtility (life-stage-aware scoring + explanations),
                GoalPlanner (dreams → steps), Personality, MemorySystem
   citizens/    Citizen, Lifecycle (ageing, mortality, death), Families (marriage, births, adoption),
@@ -176,25 +317,41 @@ src/
   education/   Skills, Education (lessons, trades, apprenticeships, mentoring)
   economy/     Transactions (ledger), Businesses, Marketplace, Employment, EconomyManager, Inheritance
   property/    LandRegistry, Ownership, Construction (build, refit, expand, repair), Demolition, Footprints
+  city/        LandDemand (housing, commercial, jobs, land prices, congestion), RoadPlanner (streets off
+               existing roads, obstacle checks), CityPlanner (proposals, council review, districts, rezoning),
+               UrbanDevelopment (speculative homes built to sell)
+  finance/     BankAccounts (deposits, raiseCash, spendable), CreditAssessment, LoanManager (amortised
+               loans, liens, restructuring, municipal borrowing), InterestSystem, DebtCollection (default,
+               court claims, forced sales), BankManager (founding, balance sheets, failure)
+  institutions/ Registry (institutions as legal persons), GuildManager + GuildEconomy (dues, elections,
+               training, halls, credit funds, privileges), FaithManager (five traditions, evolving belief),
+               ReligiousInstitutions (offerings, rites, shrines → temples, charity, relief), CommunityEvents
   politics/    Government (offices, elections, scandals, protests), Policies, Opinion (factions)
   population/  Migration, Housing, Expansion (districts), SocialClasses
-  events/      Disasters (fire, crop failure, winter, fever, recession), Discoveries
+  events/      Disasters (fire, crop failure, winter, fever, recession), Discoveries, Weather
   history/     Archive, Biography, Eras (yearly review), Compaction (bounded state growth)
   society/     Chronicle, Gossip, Reputation
   council/     Council actions, standing duties, public infrastructure
-  world/       World (renderer, seasons, fires, memorial, camera follow, label LOD), Terrain (river and roads
-               by kind), Models (incl. bridge and courthouse), Caravans (carts), Festival (decorations),
-               Villagers (age-scaled figures, distance LOD), Materials
+  world/       World (renderer, village / kingdom / battle modes, seasons, weather sky, camera flights),
+               KingdomScene (3D foreign towns with named figures, carts and armies), BattleView,
+               WeatherLayer (rain, snow, mist), Terrain, Models, Caravans, Festival, Villagers, Materials
   navigation/  RoadNetwork (road kinds, river, gates), NavigationGrid (footprints → cost grid), Pathfinding
                (A*, smoothing, route cache), Traffic, RoadConstruction (proposals, approval, works), NavCache
-  region/      RegionData (kingdoms, commodities, routes), Settlement (aggregate kingdom simulation),
-               RegionManager (fog, routes, journeys, regional events), Exploration
+  region/      RegionData (kingdoms, commodities, routes, disputed lands), Settlement (aggregate kingdom
+               simulation), RegionManager, Exploration, ForeignCitizenManager (named rulers, nobles,
+               merchants and families; succession; travellers)
   trade/       Markets (prices, reservations, deliveries), Contracts (escrow), Caravans, TradeManager (merchants)
-  diplomacy/   Diplomacy (relations with causes, treaties, embargoes, tariffs, tolls, aid)
-  law/         LegalCode (laws, effective dates, lawmaking), Courts (claims, evidence, cases, judgments)
+  diplomacy/   Diplomacy (relations, treaties incl. defence pacts and ceasefires, embargoes, tariffs, aid),
+               Alliances, TerritorialClaims (disputes, tension, negotiation)
+  military/    Army (marches along real routes), MilitaryManager (garrisons, mobilisation, village militia,
+               supply), BattleResolver (explained outcomes), SiegeSystem, WarManager (causes, declarations,
+               allies, exhaustion, peace terms)
+  persistence/ SaveValidation, ConflictResolution, CloudSaveClient, CloudSync (optional cloud backup)
+  law/         LegalCode (laws, effective dates, lawmaking, debt law), Courts (claims, evidence, judgments)
   culture/     Festivals, Traditions (emergent traditions, cultural exchange)
-  ui/          HUD and the People/Families/Economy/Politics/Region/History/Council panels (with Trade, Law
-               and Region panels), BottomSheet
+  ui/          HUD (World / People / Kingdoms / Economy / Politics / History / Council), BottomSheet, and the
+               panels: City planning, Finance, Guilds, Religion, Military, Region, Cloud save, and the rest
+cloud/         Optional Cloudflare Worker + D1 backup service (not deployed; see cloud/README.md)
 tests/         node:test suites, longevity.mjs (stress test), e2e/mobile.e2e.cjs
 ```
 
@@ -225,7 +382,7 @@ Key design rules:
 
 ### Saves
 
-Saves are checksummed envelopes (format version 5) stored in IndexedDB:
+Saves are checksummed envelopes (format version 6) stored in IndexedDB:
 
 - Every write keeps the previous save in the same transaction.
 - Once per game year, a **recovery snapshot** is also kept, which you can restore from the Council tab.
@@ -234,6 +391,12 @@ Saves are checksummed envelopes (format version 5) stored in IndexedDB:
 
 Older saves migrate automatically.
 
+- **A Milestone 4 kingdom (version 5)** gains the city planner (its existing districts become named
+  districts), weather, the banking system (no bank exists until someone founds one), a belief for every
+  existing citizen (guilds and faith communities then form from them in the following seasons), named
+  foreign citizens for each kingdom, territorial disputes and the military records. No coins are created: every new account starts empty. What was added is
+  listed in `migrationNotes`. `tests/fixtures/m4-save.json` is a real save produced by the Milestone 4 code;
+  tests migrate it, check every citizen and coin survives, and run it on.
 - **A Milestone 3 village (version 4)** gains:
   - the road network, including roads for districts it has already opened;
   - the three kingdoms, funded from the outside account so no coins are created;
@@ -347,23 +510,25 @@ system off:
 
 ## Known limitations
 
-- The kingdoms are simulated in aggregate. Their people are numbers, not citizens, until someone migrates.
-- The regional map is schematic, and kingdoms are not rendered in 3D. Carts are drawn only within about
-  3 km of the village.
+- Each kingdom has about 25 named people (rulers, nobles, merchants, families); the rest of its population
+  is still simulated in aggregate. The 3D kingdom views are procedural towns built from the kingdom's state,
+  not hand-made places, and you visit them as an observer.
+- Warfare is resolved at the scale of armies and battles, with explained strength factors and a ±15% roll;
+  there is no tactical control of units.
+- The cloud backup has been tested end-to-end only in-process (the Worker running against node:sqlite in
+  the test suite). It is **not deployed**, so the shipped game shows cloud backup as "not set up".
 - Unemployment can still run high in some seeds (around half of adults in one run). Emigration is the
   release valve, so migration churn is high: about 750 arrivals and 500 departures over 200 years.
 - Hunger still occasionally kills: 2–10 people per 200 years, almost all children of jobless families.
   Each death records its cause.
 - The council's treasury is often low, so festivals are sometimes scaled down or cancelled.
 - The simulation pauses while the page is closed. There is no offline catch-up.
-- The district layout is still a fixed set of ten blocks, now linked by real roads. Citizens can pave and
-  bridge, but cannot lay out new blocks.
+- Planned streets are straight dirt streets branching at right angles from existing roads; there are no
+  curved streets, and the planner caps the town at 420 plots.
 
-## Toward Milestone 5
+## Toward Milestone 6
 
-- Citizen-planned districts and streets on top of the road network.
-- The kingdoms as places: visit them in 3D, with named foreign citizens and rulers to negotiate with.
-- Credit, banks and loans, so merchants and businesses can borrow against their prospects.
-- Religion, guilds and a richer culture system, building on traditions and festivals.
-- Wars, alliances and border disputes built on top of treaties and embargoes.
-- A server-side save backup and an offline catch-up simulation.
+- An offline catch-up simulation for the time the page is closed.
+- Deploying the cloud backup service (see `cloud/README.md`) once an account and domain are chosen.
+- More of each kingdom's population as individual people, and playable diplomacy with named rulers.
+- Curved and terrain-following streets, and town walls raised in response to war.

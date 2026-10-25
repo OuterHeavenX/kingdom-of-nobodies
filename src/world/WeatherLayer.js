@@ -33,7 +33,7 @@ export class WeatherLayer {
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    const m = new THREE.PointsMaterial({ color: kind === 'rain' ? '#bcd3e6' : '#ffffff', size: kind === 'rain' ? 0.18 : 0.42, transparent: true, opacity: kind === 'rain' ? 0.55 : 0.9, depthWrite: false });
+    const m = new THREE.PointsMaterial({ color: kind === 'rain' ? '#bcd3e6' : '#ffffff', size: kind === 'rain' ? 0.3 : 0.42, transparent: true, opacity: kind === 'rain' ? 0.7 : 0.9, depthWrite: false });
     this.points = new THREE.Points(geo, m);
     this.points.frustumCulled = false;
     this.scene.add(this.points);

@@ -83,7 +83,7 @@ export function migrateV5(s) {
   addMilestone5State(s);
   s.version = 6;
   s.migratedFrom = s.migratedFrom ?? 'milestone-4';
-  s.migrationNotes = [...(s.migrationNotes ?? []), { version: 6, day: s.day }];
+  s.migrationNotes = [...(s.migrationNotes ?? []), { version: 6, day: s.day, note: 'Added city planning, weather, banking, guilds, faith, named foreign citizens, territorial disputes and military records. Every new account starts empty; no coins were created.' }];
   return s;
 }
 
