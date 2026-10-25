@@ -1,0 +1,30 @@
+name: Release
+
+# Pushing a version tag (v0.5.2) publishes a GitHub release. The notes are
+# kept in the repository at docs/releases/<tag>.md; the first line is the
+# release title.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          notes="docs/releases/$TAG.md"
+          if [ ! -f "$notes" ]; then echo "No release notes at $notes"; exit 1; fi
+          if gh release view "$TAG" >/dev/null 2>&1; then echo "Release $TAG already exists"; exit 0; fi
+          title=$(head -n 1 "$notes" | sed 's/^# *//')
+          tail -n +3 "$notes" > "$RUNNER_TEMP/notes.md"
+          gh release create "$TAG" --verify-tag --title "$title" --notes-file "$RUNNER_TEMP/notes.md"
