@@ -368,9 +368,14 @@ export function financeSummary(state) {
   const f = ensureFinance(state);
   const banks = f.banks.map((b) => ({ id: b.id, name: b.name, status: b.status, ...balanceSheet(state, b) }));
   const live = liveLoans(state);
+  // The running totals come first so the current figures below are never
+  // overwritten by a total of the same name (stats.deposits is every coin ever
+  // deposited, not what the banks hold now).
+  const { deposits: depositedEver, ...stats } = f.stats;
   return {
+    ...stats, depositedEver,
     banks, loans: live.length, outstanding: live.reduce((s, l) => s + l.balance, 0),
-    deposits: banks.reduce((s, b) => s + b.deposits, 0), ...f.stats,
+    deposits: banks.reduce((s, b) => s + b.deposits, 0),
     delinquent: live.filter((l) => l.status === 'DELINQUENT').length,
   };
 }

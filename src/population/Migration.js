@@ -48,7 +48,12 @@ export function attractiveness(state) {
   const foodPerHead = villageFood(state) / Math.max(1, pop);
   const mood = state.citizens.reduce((s, c) => s + c.mood, 0) / Math.max(1, pop);
   const troubled = (state.season?.troubledUntil ?? 0) > state.day;
-  let score = 0.4 + Math.min(0.5, free * 0.05) + openings * (jobless > 2 ? 0.05 : 0.2) + Math.min(0.3, foodPerHead * 0.05) + (mood - 50) / 100 - 1.6 * jobless / Math.max(4, adults.length) - (troubled ? 0.4 : 0);
+  // Empty homes draw newcomers only while there is work for them: once the
+  // town plans its own streets there are nearly always beds to spare, and
+  // without this a jobless town kept filling until its children went hungry.
+  const joblessShare = jobless / Math.max(4, adults.length);
+  const bedPull = Math.min(0.5, free * 0.05) * Math.max(0, 1 - 2 * joblessShare);
+  let score = 0.4 + bedPull + openings * (jobless > 2 ? 0.05 : 0.2) + Math.min(0.3, foodPerHead * 0.05) + (mood - 50) / 100 - 1.6 * joblessShare - (troubled ? 0.4 : 0);
   if (pop < 12) score += 0.3; // a tiny hamlet needs hands
   return { score: Math.max(0, score), free };
 }

@@ -59,6 +59,10 @@ test('deposits and withdrawals move real coins and keep the books balanced', () 
   assert.equal(withdraw(s, bank, saver.id, 100), 30);
   assert.equal(depositOf(s, saver.id), 70, 'the rest stays owed');
   assert.equal(after.assets, after.liabilities + after.equity);
+  // The summary reports what is on deposit now, not every coin ever deposited.
+  const sum = financeSummary(s);
+  assert.equal(sum.deposits, balanceSheet(s, bank).deposits);
+  assert.equal(sum.depositedEver, 250);
 });
 
 test('credit assessment weighs income, history and security — wealth alone is not enough', () => {
