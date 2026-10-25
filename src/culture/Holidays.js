@@ -38,10 +38,19 @@ export function ensureHolidays(state) {
   return h;
 }
 
-/** The holiday the kingdom is keeping right now, or null. */
+/**
+ * The holiday the kingdom is keeping right now, or null. Every citizen asks
+ * this when deciding what to do, so the answer is kept for the current
+ * minute (a derived value: it is never saved and never goes stale).
+ */
+let cached = { state: null, tick: -1, day: -1, minute: -1, rev: -1, value: null };
 export function holidayNow(state) {
   const h = state.holidays;
-  return holidayAt(state.day, state.minute, { enabled: h?.enabled ?? null });
+  const rev = h?.rev ?? 0;
+  if (cached.state === state && cached.tick === state.tick && cached.day === state.day && cached.minute === state.minute && cached.rev === rev) return cached.value;
+  const value = holidayAt(state.day, state.minute, { enabled: h?.enabled ?? null });
+  cached = { state, tick: state.tick, day: state.day, minute: state.minute, rev, value };
+  return value;
 }
 
 const entryFor = (state, key) => ensureHolidays(state).log.find((e) => e.key === key) ?? null;
@@ -189,5 +198,6 @@ export function setHolidayEnabled(state, id, on) {
   const h = ensureHolidays(state);
   if (!(id in h.enabled)) return false;
   h.enabled[id] = !!on;
+  h.rev = (h.rev ?? 0) + 1; // the cached answer to "which holiday is it?" is now out of date
   return true;
 }

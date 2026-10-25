@@ -262,7 +262,11 @@ function spread(list, n, rand) {
   const step = list.length / n, start = rand() * step;
   return Array.from({ length: n }, (_, i) => list[Math.floor(start + i * step) % list.length]);
 }
-const around = (rand, [x, z], r) => [x + (rand() - 0.5) * r, z + (rand() - 0.5) * r];
+/** A scattered point near a spot, kept only if it is also clear of roads, doors and buildings. */
+const around = (rand, sites, [x, z], r) => {
+  const nx = x + (rand() - 0.5) * r, nz = z + (rand() - 0.5) * r;
+  return sites.free(nx, nz, 0.35) ? [nx, nz] : [x, z];
+};
 
 function bunting(set, sites, items, rand, { sag = 0.45 } = {}) {
   // Strung between poles around the square and between lamps along the main road.
@@ -326,7 +330,7 @@ const SETS = {
   },
   stpatrick(set, sites, { n, rand }) {
     bunting(set, sites, FLAG_SETS.green, rand);
-    for (const [x, z] of spread([...sites.homes, ...sites.yards, ...sites.verges], n(60), rand)) set.add(PROPS.shamrock(rand), ...around(rand, [x, z], 0.8), rand() * 6);
+    for (const [x, z] of spread([...sites.homes, ...sites.yards, ...sites.verges], n(60), rand)) set.add(PROPS.shamrock(rand), ...around(rand, sites, [x, z], 0.8), rand() * 6);
     const f = sites.features[0];
     if (f) { set.add(PROPS.rainbow(rand, 1), f[0], f[1], 0.7); set.add(PROPS.potOfGold(), f[0] + Math.cos(0.7) * 3.6, f[1] - Math.sin(0.7) * 3.6); }
     lanternPoles(set, sites, n(14), rand);
@@ -334,7 +338,7 @@ const SETS = {
   spring(set, sites, { n, rand, trees }) {
     blossomTrees(set, trees, n(70), rand);
     bunting(set, sites, FLAG_SETS.pastel, rand);
-    for (const [x, z] of spread([...sites.yards, ...sites.homes, ...sites.verges], n(70), rand)) set.add(PROPS.egg(rand), ...around(rand, [x, z], 1.2), rand() * 6);
+    for (const [x, z] of spread([...sites.yards, ...sites.homes, ...sites.verges], n(70), rand)) set.add(PROPS.egg(rand), ...around(rand, sites, [x, z], 1.2), rand() * 6);
     spread(sites.homes, n(14), rand).forEach(([x, z, yaw]) => set.add(PROPS.eggBasket(rand), x, z, yaw));
     spread(sites.homes, n(20), rand).forEach(([x, z, yaw]) => set.add(PROPS.flowerBed(rand), x, z, yaw));
     spread(sites.square, 3, rand).forEach(([x, z, yaw]) => set.add(PROPS.flowerArch(rand), x, z, yaw));
@@ -357,7 +361,7 @@ const SETS = {
   harvest(set, sites, { n, rand }) {
     bunting(set, sites, FLAG_SETS.autumn, rand);
     spread(sites.farms, n(16), rand).forEach(([x, z, yaw], i) => set.add(i % 3 === 0 ? PROPS.scarecrow(rand) : i % 3 === 1 ? PROPS.hayBale(rand) : PROPS.cornStalks(), x, z, yaw));
-    for (const [x, z] of spread(sites.farms, n(24), rand)) set.add(PROPS.pumpkin(rand), ...around(rand, [x, z], 1.4));
+    for (const [x, z] of spread(sites.farms, n(24), rand)) set.add(PROPS.pumpkin(rand), ...around(rand, sites, [x, z], 1.4));
     spread(sites.square, 4, rand).forEach(([x, z, yaw]) => set.add(PROPS.harvestDisplay(rand), x, z, yaw));
     spread(sites.verges, n(8), rand).forEach(([x, z, yaw]) => set.add(PROPS.harvestCart(rand), x, z, yaw + Math.PI / 2, 0.85));
     spread(sites.homes, n(18), rand).forEach(([x, z, yaw]) => set.add(rand() < 0.5 ? PROPS.hayBale(rand) : PROPS.cornStalks(), x, z, yaw, 0.7));
@@ -367,7 +371,7 @@ const SETS = {
     const mats = materialTable(set, ['bone', 'boneShade', 'hat']);
     for (const [x, z, yaw] of spread(sites.homes, n(sites.homes.length), rand)) set.add(rand() < 0.55 ? PROPS.jackolantern(rand) : PROPS.pumpkin(rand), x, z, yaw);
     for (const [x, z, yaw] of spread(sites.verges, n(28), rand)) set.add(rand() < 0.5 ? PROPS.jackolantern(rand, 0.8) : PROPS.pumpkin(rand, 0.8), x, z, yaw);
-    for (const [x, z] of spread(sites.farms, n(30), rand)) set.add(PROPS.pumpkin(rand, 1.1), ...around(rand, [x, z], 1.5));
+    for (const [x, z] of spread(sites.farms, n(30), rand)) set.add(PROPS.pumpkin(rand, 1.1), ...around(rand, sites, [x, z], 1.5));
     for (const [x, z, yaw] of sites.square) set.add(rand() < 0.6 ? PROPS.jackolantern(rand, 0.9) : PROPS.pumpkin(rand), x, z, yaw);
     spread(sites.farms, n(6), rand).forEach(([x, z, yaw]) => set.add(PROPS.scarecrow(rand), x, z, yaw));
     spread(sites.yards, n(6), rand).forEach(([x, z, yaw]) => set.add(PROPS.scarecrow(rand), x, z, yaw));
@@ -423,7 +427,7 @@ const SEASON_SETS = {
     spread(sites.verges, n(10), rand).forEach(([x, z, yaw]) => set.add(PROPS.pennant(rand), x, z, yaw));
   },
   2(set, sites, { n, rand, trees }) {
-    for (const [x, z] of spread(sites.verges, n(90), rand)) set.add(PROPS.fallenLeaf(rand), ...around(rand, [x, z], 1.4));
+    for (const [x, z] of spread(sites.verges, n(90), rand)) set.add(PROPS.fallenLeaf(rand), ...around(rand, sites, [x, z], 1.4));
     for (const t of spread(trees, n(60), rand)) for (let k = 0; k < 4; k++) set.add(PROPS.fallenLeaf(rand), t.x + (rand() - 0.5) * 3, t.z + (rand() - 0.5) * 3);
     spread(sites.farms, n(10), rand).forEach(([x, z, yaw], i) => set.add(i % 2 ? PROPS.hayBale(rand) : PROPS.pumpkin(rand, 1.2), x, z, yaw));
     if (sites.farms.length) set.add(PROPS.harvestCart(rand), sites.farms[0][0], sites.farms[0][1], sites.farms[0][2]);

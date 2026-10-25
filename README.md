@@ -1,11 +1,110 @@
-# Kingdom of Nobodies — Milestone 5: The Age of Empires & Prosperity
+# Kingdom of Nobodies — Milestone 5.1: Seasons & Celebrations
 
 A mobile-first, low-poly 3D medieval settlement that lives for generations among neighbouring kingdoms.
 Five strangers light a hearth. Their descendants lay out streets, borrow from banks, join guilds, keep
 their faiths, trade with kingdoms whose people have names, and live through wars they did not start. You
 are the council: you can nudge the society, but you can't control anyone.
 
-**Play:** https://outerheavenx.github.io/kingdom-of-nobodies/ · version 0.5.0
+**Play:** https://outerheavenx.github.io/kingdom-of-nobodies/ · version 0.5.1
+
+## Seasons & Celebrations (Milestone 5.1)
+
+The valley now changes with the year, and you can tell the season or holiday just by looking at it.
+
+- **Spring:** vivid green grass, blossom on the trees, flower beds by the doors, butterflies, young crops,
+  warm light and spring showers.
+- **Summer:** deep greens and bright sun, flowers and pennants, full-grown crops, drifting clouds, and
+  fireflies in the evening.
+- **Autumn:** orange, gold and red trees (each tree its own shade), drifting leaves, leaves on the road
+  verges, golden fields, hay bales and pumpkin patches on the farms, and golden light.
+- **Winter:** snow falls and settles on upward-facing surfaces: ground, roofs, fences, trees, wall tops and
+  stalls. It lies in patches rather than one white sheet, and roads take much less so they stay readable.
+  How much lies, and how fast it melts, comes from the simulation's own weather of the last twelve days;
+  there is no second climate model. Also frost, cold morning mist and lit windows on long evenings.
+
+Colours ease over the last fifth of each season and over a few seconds when something changes, so
+there are no hard cuts.
+
+### The holidays
+
+The kingdom's year starts with spring, so New Year's midnight is the real moment its year number
+advances. Holidays are placed by their part of the season rather than by month, so a calendar with
+shorter or longer seasons keeps them all in order.
+
+| Holiday | When (kingdom calendar) | What you see |
+|---|---|---|
+| 🎆 New Year's Eve / Day | Winter 3, 14:00 → Spring 1, 10:00 | Lanterns, banners and lights; a countdown in the top bar; fireworks at midnight, then confetti |
+| 💗 Valentine's Day | Spring 1 | Pink blossom on every tree, heart garlands, heart posts, romantic benches, flowers, floating hearts |
+| ☘️ St. Patrick's Day | Spring 2, morning | Green bunting, shamrocks in the grass, a rainbow with a pot of gold, green lanterns |
+| 🥚 Spring Festival | Spring 2–3 | Painted eggs, egg baskets, flower arches, flower beds, pastel bunting, blossom |
+| 🔥 Summer Solstice | Summer 1–2 | Bonfires with rising sparks, flower wreaths on doors, colourful bunting, lanterns, fireflies |
+| 🎏 Founders' Day | Summer 3 | Kingdom flags along the roads, a parade float, fireworks at 21:00 |
+| 🌽 Harvest Festival | Autumn 1–2 | Hay bales, corn stalks, pumpkins, scarecrows, harvest carts, harvest displays |
+| 🎃 Halloween | Autumn 2 night → Autumn 3 | Pumpkins and glowing jack-o'-lanterns by homes, roads, the square and farms; waving skeletons; friendly ghosts; bats; scarecrows; cobwebs; spooky trees; orange and purple lanterns; haunted stalls; purple ground fog |
+| 🦃 Gratitude Feast | Autumn 3 night → Winter 1 | Long food tables, autumn wreaths, harvest displays |
+| 🎄 Winter Festival | Winter 1–3 | A great decorated tree with gifts, smaller trees, wreaths on doors, ribbon posts, coloured lights, warm lanterns, holiday stalls, falling snow |
+
+**Every kingdom celebrates in its own way.**
+- Greenvale ties ribbons to its windmills and fills its fields.
+- Ironhold's walled mountain town keeps a winter blanket of snow, and lines its walls with lanterns.
+- Saltmere hangs lanterns along its docks, dresses its ships, and sets off fireworks over the water. Its
+  mild coast sees sleet where First Hearth gets snow.
+
+Kingdoms you are not visiting keep no decoration state; it is all derived when you arrive.
+
+**Placement.**
+- Decorations are seeded by holiday and place, so the same pumpkins sit on the same steps after a reload.
+- They stand beside doors (never in front of them), in yard corners, on road verges (never on the road),
+  around the square and in the fields. Wreaths hang on doors and cobwebs on eaves.
+- A test checks every ground decoration of every set against roads and buildings. New districts are
+  decorated as they are built.
+- All of it is built from shared low-poly parts, drawn as one instanced mesh per part type. The
+  decorations are faded out and their GPU resources released when a holiday ends.
+
+**Citizens take part by choice.** Celebrating is one more option weighed against work, food and sleep.
+- The hungry eat first, and workers finish their shifts.
+- Couples meet at the sweethearts' benches on Valentine's Day.
+- Friends exchange handmade gifts at the Winter Festival.
+- Some stay up for the New Year's countdown in the square.
+- Children go lantern-visiting at Halloween.
+- On market days, people with coins to spare buy a treat at an open stall: an ordinary sale.
+
+The Spring and Winter Festivals are feasts of particular faith traditions (Dawn and Furrow, Hearthkin and
+Lantern). Their followers lean in, devout followers of other traditions may keep their own observances,
+and sceptics come for the lights. Celebrations create no coins or goods. The chronicle records each New
+Year, and a short log of each celebration is kept: how many came, couples and gifts.
+
+### Settings, preview and accessibility
+
+All of these are in **Council → Seasons & celebrations** (also reachable from the World tab).
+
+- **Holiday Preview:** see any season or any holiday right now, by day or by night, with fireworks again
+  on demand. It changes only the picture: simulation time, ages, money, births and deaths, festivals, the
+  chronicle and the save are untouched (tested byte for byte). *Exit preview* returns immediately.
+- **Holidays the kingdom keeps:** a switch for each one. This is saved with the kingdom; a holiday that is
+  off is neither decorated nor celebrated.
+- **Graphics:** Low / Medium / High quality. On a phone:
+  - Low means no shadows, at most about 260 particles, and fewer decorations.
+  - Medium means lighter shadows.
+  - High means full resolution and soft shadows.
+- **Display toggles:** holiday decorations and effects, snow particles, fireworks, seasonal atmosphere,
+  and decoration density.
+- **Reduced motion:** Auto (follows the system setting), On or Off. On means fewer and slower particles,
+  gentle fireworks without bursts or flashes, and calmer ghosts and bats.
+- **Timing:**
+  - Holiday length (short / normal / long).
+  - A minimum time each holiday's look stays on screen, so a holiday doesn't flash past at 20× speed.
+  - *Match my calendar* shows today's real season and holiday. This is visual only: the kingdom's own
+    time is unchanged.
+- **Bells at New Year:** synthesised, and off by default.
+- **Popups** now stay about 8 seconds (holidays 10), show a draining timer bar, pause while you hold one,
+  and close when tapped.
+- **Palette:** the interface uses a brighter palette of deep royal indigo with sunflower gold, coral and
+  teal accents.
+
+**Performance.** Particles (snow, leaves, petals, confetti, hearts, sparks, butterflies, fireflies,
+fireworks) are animated entirely on the GPU, in a box that follows the camera. The CPU only sets a clock
+and a centre each frame. The theme is checked twice a second, never every frame.
 
 ## The Age of Empires & Prosperity (Milestone 5)
 
@@ -347,8 +446,15 @@ src/
                supply), BattleResolver (explained outcomes), SiegeSystem, WarManager (causes, declarations,
                allies, exhaustion, peace terms)
   persistence/ SaveValidation, ConflictResolution, CloudSaveClient, CloudSync (optional cloud backup)
+  holidays/    HolidayRegistry (the ten holidays), HolidayCalendar (dates on any calendar length, real-world
+               mapping), HolidaySettings (display settings, budgets), SeasonalPalette, DecorationSpawner
+               (seeded, navigation-safe, instanced sets), HolidayThemeManager (theme, preview, fireworks)
+  effects/     AmbientParticles (GPU particle fields, ground fog), Snowfall, SnowAccumulation (cover from
+               the weather; snow shader), FallingLeaves, FloatingHearts, Fireworks, Ghosts (and bats)
+  rendering/   SeasonalEnvironment (palettes on land, trees, sky and light; season dressing and life)
   law/         LegalCode (laws, effective dates, lawmaking, debt law), Courts (claims, evidence, judgments)
-  culture/     Festivals, Traditions (emergent traditions, cultural exchange)
+  culture/     Festivals, Traditions (emergent traditions, cultural exchange), Holidays (which holidays the
+               kingdom keeps, celebration records, citizens' choices)
   ui/          HUD (World / People / Kingdoms / Economy / Politics / History / Council), BottomSheet, and the
                panels: City planning, Finance, Guilds, Religion, Military, Region, Cloud save, and the rest
 cloud/         Optional Cloudflare Worker + D1 backup service (not deployed; see cloud/README.md)
@@ -382,7 +488,7 @@ Key design rules:
 
 ### Saves
 
-Saves are checksummed envelopes (format version 6) stored in IndexedDB:
+Saves are checksummed envelopes (format version 7) stored in IndexedDB:
 
 - Every write keeps the previous save in the same transaction.
 - Once per game year, a **recovery snapshot** is also kept, which you can restore from the Council tab.
@@ -390,6 +496,13 @@ Saves are checksummed envelopes (format version 6) stored in IndexedDB:
 - Loading picks the newest valid copy.
 
 Older saves migrate automatically.
+
+- **A Milestone 5 kingdom (version 6)** gains the holiday calendar: every holiday kept, an empty
+  celebration log and no fireworks recorded (so none are replayed). Nothing else changes.
+  `tests/fixtures/m5-save.json` is a real save produced by the v0.5.0 code; a test migrates it and runs it
+  on with money conserved. Decorations are never saved: they are derived from the calendar and seeds.
+  Display settings (preview, density, reduced motion and so on) are kept on the device with the other
+  graphics settings.
 
 - **A Milestone 4 kingdom (version 5)** gains the city planner (its existing districts become named
   districts), weather, the banking system (no bank exists until someone founds one), a belief for every
@@ -429,9 +542,9 @@ instead of the Vite build. **Settings → Pages → Source must be "GitHub Actio
 
 ## Stress test results (200 in-game years)
 
-`npm run test:longevity -- 200 <seed>`, run on seeds 1–4 on the final Milestone 5 code. Every run is the
+`npm run test:longevity -- 200 <seed>`, run on seeds 1–4 on the final Milestone 5.1 code. Every run is the
 whole region together for 200 years: the village and all three kingdoms trading, migrating, allying and going
-to war with each other. The checks:
+to war with each other, now through ten holidays a year. The checks:
 
 - **Every simulated year:** exact money conservation, with banks, guilds, faith communities, armies and the
   three kingdoms all holding real ledger accounts.
@@ -447,7 +560,51 @@ to war with each other. The checks:
   - militia members away at war are real villagers;
   - the town has at most 420 plots, and every kingdom has a named ruler.
 
+The holiday records stay bounded throughout: at most 24 logged celebrations and 8 recorded fireworks
+shows (tested).
+
 All checks held in all four runs. CI runs all four seeds on every pull request.
+
+| Seed | Peak / final pop. | Births | Deaths | Immigrants / emigrants | Generations | Elections | Hunger deaths | Save size | Time |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 131 / 95 | 219 | 299 | 665 / 495 | 9 | 53 | 4 | 2.8 MB | 507 s |
+| 2 | 173 / 137 | 303 | 302 | 862 / 731 | 9 | 52 | 10 | 3.2 MB | 595 s |
+| 3 | 154 / 130 | 286 | 331 | 931 / 761 | 9 | 52 | 9 | 3.2 MB | 600 s |
+| 4 | 147 / 116 | 247 | 303 | 880 / 713 | 9 | 52 | 2 | 3.0 MB | 539 s |
+
+Milestone 5 systems after 200 years:
+
+| Seed | Wars / battles / sieges | Peace treaties | Alliances | Banks open | Loans issued (coins) | Defaults | Guilds | Planned districts / plots | Homes built to sell | Named foreigners |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 9 / 20 / 1 | 18 | 6 | 3 | 22,239 | 21 | 5 | 14 / 100 | 27 | 84 |
+| 2 | 4 / 8 / 1 | 19 | 12 | 3 | 11,653 | 10 | 5 | 14 / 103 | 24 | 84 |
+| 3 | 5 / 12 / 1 | 16 | 8 | 3 | 14,811 | 13 | 5 | 14 / 101 | 21 | 86 |
+| 4 | 4 / 6 / 1 | 18 | 5 | 3 | 12,811 | 20 | 4 | 14 / 103 | 26 | 88 |
+
+Regional metrics after 200 years:
+
+| Seed | Caravan deliveries / failures | Goods moved | Trade value | Treaties / embargoes (ever) | Roads | Judgments | Festival attendance | Kingdom populations (G / I / S) | Wider world's coins |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 2,408 / 14 | 62,983 | 371,795 | 40 / 16 | 45 | 308 | 95% | 368 / 320 / 492 | 210,802 |
+| 2 | 3,045 / 7 | 73,502 | 449,318 | 56 / 14 | 40 | 379 | 82% | 420 / 316 / 499 | 207,951 |
+| 3 | 3,140 / 13 | 74,455 | 425,969 | 45 / 16 | 36 | 376 | 89% | 413 / 315 / 497 | 209,165 |
+| 4 | 2,856 / 3 | 69,875 | 433,284 | 40 / 10 | 42 | 535 | 87% | 420 / 320 / 501 | 207,824 |
+
+- Hunger deaths over the four runs total 25, against 39 on the Milestone 5 code. Changing citizens'
+  choices sends every seed down a different history, so this is not evidence that holidays reduce
+  hunger. What it does show is that celebrating has not made it worse: the hungry eat before they
+  celebrate.
+- Times are for four runs in parallel on one machine that was also running the test suite and browser
+  checks: 1.5–1.7 ms per simulated tick, against about 1.1 ms for the Milestone 5 runs.
+  - Profiling a 40-year run, the holiday code itself takes about 3% of simulation time. That is after
+    caching the current holiday per minute: before, it was 5%.
+  - Per citizen, a tick costs the same as on v0.5.0 (about 0.004 ms).
+- The planner reached its limit of 14 planned districts (100–103 plots) in every seed. After that the town
+  grows by rebuilding and densifying, not outward.
+
+### Milestone 5 results (before the holidays)
+
+The same test on the final Milestone 5 code (v0.5.0 plus its follow-up fixes):
 
 | Seed | Peak / final pop. | Births | Deaths | Immigrants / emigrants | Generations | Elections | Hunger deaths | Save size | Time |
 |---|---|---|---|---|---|---|---|---|---|
@@ -455,32 +612,6 @@ All checks held in all four runs. CI runs all four seeds on every pull request.
 | 2 | 137 / 88 | 287 | 256 | 807 / 755 | 9 | 52 | 3 | 2.7 MB | 347 s |
 | 3 | 148 / 123 | 280 | 273 | 747 / 636 | 9 | 53 | 33 | 3.1 MB | 366 s |
 | 4 | 150 / 150 | 261 | 293 | 837 / 660 | 9 | 54 | 3 | 3.3 MB | 401 s |
-
-Milestone 5 systems after 200 years:
-
-| Seed | Wars / battles / sieges | Peace treaties | Alliances | Banks open (failed) | Loans issued (coins) | Defaults | Guilds | Planned districts / plots | Homes built to sell | Named foreigners |
-|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | 8 / 21 / 0 | 13 | 5 | 3 (0) | 13,942 | 7 | 4 | 14 / 103 | 19 | 83 |
-| 2 | 4 / 8 / 3 | 14 | 4 | 3 (0) | 14,300 | 17 | 4 | 14 / 103 | 24 | 84 |
-| 3 | 6 / 17 / 1 | 16 | 8 | 3 (0) | 18,294 | 29 | 4 | 14 / 103 | 18 | 84 |
-| 4 | 3 / 7 / 2 | 21 | 8 | 3 (0) | 14,303 | 11 | 5 | 14 / 103 | 23 | 86 |
-
-Regional metrics after 200 years:
-
-| Seed | Caravan deliveries / failures | Goods moved | Trade value | Treaties / embargoes (ever) | Roads | Judgments | Festival attendance | Kingdom populations (G / I / S) | Wider world's coins |
-|---|---|---|---|---|---|---|---|---|---|
-| 1 | 2,669 / 9 | 67,009 | 411,524 | 37 / 7 | 45 | 253 | 93% | 420 / 314 / 479 | 204,180 |
-| 2 | 3,357 / 17 | 77,175 | 438,558 | 40 / 20 | 49 | 270 | 91% | 420 / 333 / 480 | 211,671 |
-| 3 | 2,945 / 14 | 73,400 | 441,716 | 46 / 12 | 42 | 837 | 85% | 420 / 320 / 492 | 208,144 |
-| 4 | 3,177 / 9 | 75,740 | 447,228 | 47 / 7 | 47 | 363 | 90% | 420 / 319 / 480 | 204,359 |
-
-- Times are for four runs in parallel on one machine: 1.0–1.16 ms per simulated tick, and a heap of
-  44–95 MB at the end.
-- The planner reached its limit of 14 planned districts (103 plots) by year 50–75 in every seed. After that
-  the town grows by rebuilding and densifying, not outward.
-- Seed 3 is the bad case. It has long spells where 40–65% of adults are out of work and the council's
-  treasury is too poor to restock the pantry. Most of its 33 hunger deaths are jobless adults (17) and their
-  children (11); every death records its cause.
 
 ### What the Milestone 5 stress test changed
 
@@ -558,12 +689,21 @@ system off:
   not hand-made places, and you visit them as an observer.
 - Warfare is resolved at the scale of armies and battles, with explained strength factors and a ±15% roll;
   there is no tactical control of units.
+- Seasons and holidays (Milestone 5.1):
+  - The visuals have been checked in Chromium with an emulated iPhone, using software WebGL. They have
+    not been tried in Safari on a real iPhone.
+  - Kingdom scenes are built when you arrive, so their crop fields show the season of your arrival until
+    you visit again. Their trees take the season's colours but carry no blossom.
+  - *Match my calendar* uses northern-hemisphere seasons.
+  - The bells are synthesised, not recorded.
+  - In the browser, an announced holiday is remembered for this device only, so another device announces
+    it again.
 - The cloud backup has been tested end-to-end only in-process (the Worker running against node:sqlite in
   the test suite). It is **not deployed**, so the shipped game shows cloud backup as "not set up".
 - Unemployment can still run high in some seeds (around half of adults in one run). Emigration is the
   release valve, so migration churn is high: about 750 arrivals and 500 departures over 200 years.
-- Hunger still kills: 0–3 people per 200 years in three of four seeds, but 33 in seed 3, where long spells
-  of mass unemployment meet a treasury too poor to restock the pantry. Each death records its cause.
+- Hunger still kills: 2–10 people per 200 years per seed on the 5.1 code (25 over four seeds), mostly the
+  frail and children of struggling families. Each death records its cause.
 - The council's treasury is often low, so festivals are sometimes scaled down or cancelled.
 - The simulation pauses while the page is closed. There is no offline catch-up.
 - Planned streets are straight dirt streets branching at right angles from existing roads; there are no

@@ -4,8 +4,7 @@ import { holidayNow, ensureHolidays } from '../culture/Holidays.js';
 import { nextHoliday } from '../holidays/HolidayCalendar.js';
 import { snowCover, snowLevel } from '../effects/SnowAccumulation.js';
 import { dateLabel } from '../core/Calendar.js';
-import { clock } from './util.js';
-import { esc } from './util.js';
+import { clock, esc } from './util.js';
 
 // Council → Seasons & celebrations: what is being celebrated, a preview of
 // every season and holiday (visual only), which holidays the kingdom keeps,
@@ -43,10 +42,10 @@ export function celebrationsCard(game) {
   }).join('');
   return `<div class="card celebrations" id="celebrations">
     <h3>🎉 Seasons & celebrations</h3>
-    <dl class="kv"><dt>Kingdom date</dt><dd>${esc(dateLabel(s.day))} · ${clock(s.minute)}</dd>
+    <dl class="kv"><dt>Kingdom date</dt><dd>${esc(dateLabel(s.day))}</dd>
       <dt>Showing</dt><dd>${showing}${source}</dd>
-      <dt>Kingdom holiday</dt><dd>${kingdomNow ? `${kingdomNow.icon} ${esc(kingdomNow.name)}${kingdomNow.minutesToMidnight != null ? ` · ${untilText(kingdomNow.minutesToMidnight)} to midnight` : ''}` : 'none today'}</dd>
-      <dt>Next</dt><dd>${next ? `${next.icon} ${esc(next.name)} in ${untilText(next.minutesUntil)} of kingdom time` : '—'}</dd>
+      <dt>Kingdom holiday</dt><dd>${kingdomNow ? `${kingdomNow.icon} ${esc(kingdomNow.name)}` : 'none right now'}</dd>
+      <dt>Next</dt><dd>${next ? `${next.icon} ${esc(next.name)}, ${esc(dateLabel(Math.floor(next.start / 1440) + 1, { short: true }))} at ${clock(Math.round(next.start % 1440))}` : '—'}</dd>
       <dt>Snow on the ground</dt><dd>${snowLevel(snow.cover)}${snow.frost ? ', frost' : ''}</dd></dl>
     <h4>Holiday preview</h4>
     <p class="muted" style="font-size:12px;margin:0 0 6px">See any season or holiday now. Only the picture changes: time, people, money, the chronicle and your save are untouched.</p>
