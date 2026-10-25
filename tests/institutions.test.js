@@ -54,7 +54,7 @@ test('dues move real coins into the guild fund; an election produces a valid mas
   const members = g.members.length;
   toSeasonStart(s); s.day += 3;
   seasonalGuilds(s);
-  assert.ok(balance(s, g.id) - before >= 2 * Math.min(members, g.members.length), 'dues were paid');
+  assert.ok(balance(s, g.id) - before >= Math.min(members, g.members.length), 'dues were paid');
   assert.equal(totalMoney(s), money, 'no coins created');
   const winner = elect(s, g, 'test');
   assert.ok(g.members.includes(winner.id));

@@ -4,7 +4,7 @@ import { TIME } from '../core/Config.js';
 import { record } from '../society/Chronicle.js';
 import { COMMODITIES, HEARTH, SETTLEMENT_POS, KINGDOMS } from '../region/RegionData.js';
 import { planJourney, routeById, routeClosed, routeSpeed, settlementName } from '../region/RegionManager.js';
-import { routeAllowed, tradeBlocked, transitFee } from '../diplomacy/Diplomacy.js';
+import { routeAllowed, tradeBlocked, transitFee, territoryOf } from '../diplomacy/Diplomacy.js';
 import { ensureTrade, contractById, loadContract, deliverContract, cancelContract, logCargo, possessive, sentence } from './Contracts.js';
 import { spotSale } from './Markets.js';
 
@@ -80,7 +80,7 @@ function startLeg(state, cv, leg) {
   for (const c of live) c.transportCost = (c.transportCost ?? 0) + paid / Math.max(1, live.length);
   if (route.crossing) ensureTrade(state).fordCrossings += 1;
   const fee = transitFee(state, route, cv.home);
-  if (fee && transfer(state, cv.account, KINGDOMS[route.territory].account, Math.min(fee, balance(state, cv.account)), 'tariff', `Transit toll on the ${route.name}`)) cv.costs += fee;
+  if (fee && transfer(state, cv.account, KINGDOMS[territoryOf(state, route)].account, Math.min(fee, balance(state, cv.account)), 'tariff', `Transit toll on the ${route.name}`)) cv.costs += fee;
   note(cv, state, `Set out on the ${route.name} towards ${settlementName(leg.to)}.`);
 }
 

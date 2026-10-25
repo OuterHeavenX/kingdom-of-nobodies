@@ -120,7 +120,9 @@ export function maybeImmigrate(state) {
   state.stats.immigrants += members.length;
   for (const m of members) remember(state, m, 'Arrived in the village to start a new life.', 2, 'milestone');
   const who = size === 1 ? `${members[0].firstName} ${lastName}, a ${members[0].profession.toLowerCase()},` : `The ${lastName} family (${members.map((m) => m.firstName).join(', ')})`;
-  record(state, 'citizen', `${who} arrived${source ? ` from ${KINGDOMS[source].name}` : ''} hoping to ${members[0].dream.text.toLowerCase()}.`, { citizens: members.map((m) => m.id) }, 2);
+  const fleeing = source && (state.region.settlements[source].besieged || state.region.settlements[source].mobilised);
+  record(state, 'citizen', `${who} arrived${source ? ` from ${KINGDOMS[source].name}` : ''}${fleeing ? ', fleeing the war,' : ''} hoping to ${members[0].dream.text.toLowerCase()}.`, { citizens: members.map((m) => m.id) }, 2);
+  if (fleeing) for (const m of members) m.refugee = { from: source, day: state.day };
   return members;
 }
 
@@ -128,7 +130,7 @@ export function maybeImmigrate(state) {
 function sourceKingdom(state) {
   if (!state.region) return null;
   const weights = Object.entries(state.region.settlements).filter(([, k]) => k.population > 60)
-    .map(([id, k]) => [id, 0.3 + k.hunger * 3 + Math.max(0, 1.15 - k.prosperity) + (k.leader.approval < 40 ? 0.4 : 0)]);
+    .map(([id, k]) => [id, 0.3 + k.hunger * 3 + Math.max(0, 1.15 - k.prosperity) + (k.leader.approval < 40 ? 0.4 : 0) + (k.mobilised ? 0.8 : 0) + (k.besieged ? 2 : 0)]);
   const total = weights.reduce((t, [, w]) => t + w, 0);
   if (!total) return null;
   let r = nextRandom(state) * total;

@@ -1,5 +1,12 @@
 import { dailyHooks, hourlyHooks } from './Hooks.js';
 import { financing } from '../city/CityPlanner.js';
+import { ensureForeign, dailyForeign, caravanReturns, succession } from '../region/ForeignCitizenManager.js';
+import { leaderHooks } from '../region/Settlement.js';
+import { ensureWarfare, dailyMilitary, hourlyMilitary } from '../military/index.js';
+import { warBetween, besieged } from '../military/WarManager.js';
+import { casualtyHooks } from '../military/BattleResolver.js';
+import { warHooks } from '../diplomacy/Diplomacy.js';
+import { die } from '../citizens/Lifecycle.js';
 import { municipalLoan } from '../finance/LoanManager.js';
 import { milestone5Setup } from './Setup.js';
 import { saleHooks } from '../property/Ownership.js';
@@ -15,10 +22,16 @@ import { dailyFinance, pledgeNewLand, settleBeforeLeaving, borrowForDevelopment 
 // Wires the Milestone 5 systems into the simulation's schedules and the
 // shared lifecycle hooks. Imported once by Simulation.js.
 
-milestone5Setup.push(ensureFinance, ensureGuilds, ensureFaith);
+milestone5Setup.push(ensureFinance, ensureGuilds, ensureFaith, ensureForeign, ensureWarfare);
+leaderHooks.pick = (state, k, stance, why) => (state.foreign ? succession(state, k.id, why, { stance, apply: false }) : null);
 financing.borrow = municipalLoan;
 
 dailyHooks.early.push(dailyFinance);
+dailyHooks.early.push(dailyForeign, caravanReturns, dailyMilitary);
+hourlyHooks.push(hourlyMilitary);
+warHooks.between = warBetween;
+warHooks.besieged = besieged;
+casualtyHooks.die = (state, c, cause) => die(state, c, cause);
 dailyHooks.late.push(seasonalGuilds, guildEconomy, evolveBeliefs, dailyFaith);
 lifecycleHooks.death.push(onGuildMemberGone, consoleBereaved);
 dailyHooks.developmentFunding = (state) => ({ funds: (c) => spendable(state, c.id), raise: raiseCash, borrow: borrowForDevelopment });

@@ -1,3 +1,4 @@
+import { leadMerchant, merchantSetsOut } from '../region/ForeignCitizenManager.js';
 import { spendable, raiseCash } from '../finance/BankAccounts.js';
 import { balance, transfer } from '../economy/Transactions.js';
 import { removeGoods, qty } from '../economy/Inventory.js';
@@ -149,10 +150,14 @@ function foreignHouses(state) {
     // Merchants invited to the Midsummer Fair accept thinner margins to trade with First Hearth.
     const fair = state.culture?.current?.foreignMerchants?.includes(id) && ['PREPARING', 'ACTIVE'].includes(state.culture.current.phase);
     const trader = { id: 'house:' + id, name: `the ${KINGDOMS[id].name} merchants`, account: KINGDOMS[id].account, home: id, capacity: CARAVAN.capacityHouse, funds: Math.min(funds, 900), minProfit: fair ? 6 : 10, minMargin: k.shortages.food ? 0.04 : fair ? 0.05 : 0.1 };
+    // A named merchant of the house leads the caravan and travels with it.
+    const lead = state.foreign ? leadMerchant(state, id) : null;
+    if (lead) trader.name = `${lead.firstName} ${lead.lastName} of ${KINGDOMS[id].name}`;
     const plan = bestOpportunity(state, trader);
     if (!plan) continue;
     const res = launch(state, trader, plan);
     if (res.error) continue;
+    if (lead) merchantSetsOut(state, lead, res.caravan);
     house.active++;
     house.trips++;
     if (plan.destination === HEARTH || plan.origin === HEARTH) record(state, 'trade', `Merchants of ${KINGDOMS[id].name} contracted to ${plan.destination === HEARTH ? 'bring' : 'buy'} ${plan.qty} ${COMMODITIES[plan.commodity].label.toLowerCase()} ${plan.destination === HEARTH ? 'to' : 'from'} First Hearth.`, {}, 1);

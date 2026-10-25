@@ -90,7 +90,7 @@ function donations(state, f) {
   let total = 0;
   for (const c of membersOf(state, f)) {
     if (ageOf(state, c) < LIFE.adultAge) continue;
-    const share = c.belief.stance === 'devout' ? 0.03 : 0.008;
+    const share = c.belief.stance === 'devout' ? 0.012 : 0.004; // per season (three days)
     const gift = Math.min(15, Math.floor((spendable(state, c.id) - 25) * share));
     if (gift < 1) continue;
     if (balance(state, c.id) < gift) raiseCash(state, c.id, gift);

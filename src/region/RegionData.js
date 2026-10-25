@@ -97,3 +97,11 @@ export const SCENERY = {
   mountains: [[48, 10], [55, 8], [62, 12], [66, 20], [58, 24], [45, 18], [70, 30], [78, 34], [82, 44]],
   forests: [[26, 40, 9], [42, 32, 7], [62, 48, 6], [20, 82, 6]],
 };
+
+// Lands two neighbours both have reason to want. Each lies along a real road;
+// armies contesting it meet at its middle. `controller` holds it at the founding.
+export const DISPUTED_LANDS = [
+  { id: 'mill-corridor', name: 'the Old Mill corridor', route: 'mill-track', claimants: ['greenvale', 'ironhold'], controller: 'greenvale', x: 32, y: 30, resource: 'timber', value: 140, text: 'Forested valleys along the Old Mill Track: timber for Ironhold\'s mines, pasture for Greenvale.' },
+  { id: 'highland-pass', name: 'the Highland Pass', route: 'highland-way', claimants: ['ironhold', 'saltmere'], controller: 'ironhold', x: 78, y: 40, resource: 'stone', value: 110, text: 'The high road between the mines and the sea, and the tolls on it.' },
+  { id: 'river-meadows', name: 'the River Meadows', route: 'river-road', claimants: ['greenvale', 'saltmere'], controller: 'greenvale', x: 43, y: 79, resource: 'grain', value: 120, text: 'Rich water meadows on the River Road, where Greenvale\'s fields meet Saltmere\'s salt pans.' },
+];

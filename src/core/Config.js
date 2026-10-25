@@ -246,7 +246,7 @@ export const FINANCE = {
 
 export const INSTITUTIONS = {
   guildMinMembers: 3,
-  guildDuesPerSeason: 2,
+  guildDuesPerSeason: 1, // a season is three days: about four coins a year
   guildHallCost: 140,
   faithMinMembers: 3,
   charityMealUnits: 3,

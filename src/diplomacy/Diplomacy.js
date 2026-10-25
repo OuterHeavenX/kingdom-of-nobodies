@@ -23,6 +23,10 @@ export const TREATY_KINDS = {
   assistance: { label: 'Mutual assistance', noun: 'mutual assistance treaty', years: 4, effect: 'Each sends food when the other faces famine.' },
   transit: { label: 'Transit rights', noun: 'transit rights treaty', years: 4, effect: 'Caravans cross each other\'s lands without transit fees.' },
   peace: { label: 'Non-aggression pact', noun: 'non-aggression pact', years: 6, effect: 'No embargoes; border quarrels are settled quietly.' },
+  defense: { label: 'Defensive alliance', noun: 'defensive alliance', years: 8, effect: 'Each comes to the other\'s defence if attacked.', military: true },
+  assistance_mil: { label: 'Military assistance', noun: 'military assistance treaty', years: 6, effect: 'Each may call on the other to join a war it fights.', military: true },
+  border: { label: 'Border recognition', noun: 'treaty recognising their border', years: 12, effect: 'The disputed land\'s holder is recognised; neither side presses the claim.' },
+  ceasefire: { label: 'Ceasefire', noun: 'ceasefire', years: 2, effect: 'Hostilities stop; armies go home.' },
 };
 
 export function ensureDiplomacy(state) {
@@ -77,18 +81,32 @@ export function tariffRate(state, destination, fromHome) {
 export function tradeBlocked(state, origin, destination, home) {
   for (const [a, b] of [[destination, origin], [destination, home], [origin, home], [origin, destination]]) {
     if (a === b) continue;
+    const war = warHooks.between?.(state, a, b);
+    if (war) return `${nameOf(a)} and ${nameOf(b)} are at war`;
+    const siege = warHooks.besieged?.(state, a) ?? warHooks.besieged?.(state, b);
+    if (siege) return `${nameOf(siege)} is under siege`;
     const e = embargoBetween(state, a, b);
     if (e) return `${nameOf(e.by)} has an embargo on ${nameOf(e.against)}`;
   }
   return null;
 }
 
-/** Roads through a kingdom are closed to traders from a land it has embargoed. */
-export const routeAllowed = (state, home) => (route) => !route.territory || route.territory === home || !embargoBetween(state, route.territory, home);
+/** Whose land a road runs through now (a settled dispute or a peace treaty can move it). */
+export const territoryOf = (state, route) => state.diplomacy?.territory?.[route.id] ?? route.territory;
+
+/** War tells trade where it cannot go (set by the war system). */
+export const warHooks = { between: null, besieged: null };
+
+/** Roads through a kingdom are closed to traders from a land it has embargoed or is at war with. */
+export const routeAllowed = (state, home) => (route) => {
+  const t = territoryOf(state, route);
+  return !t || t === home || (!embargoBetween(state, t, home) && !warHooks.between?.(state, t, home));
+};
 
 /** Fee for crossing a third party's land without transit rights. */
 export function transitFee(state, route, home) {
-  if (!route.territory || route.territory === home || hasTreaty(state, route.territory, home, 'transit')) return 0;
+  const t = territoryOf(state, route);
+  if (!t || t === home || hasTreaty(state, t, home, 'transit')) return 0;
   return 4;
 }
 
@@ -227,11 +245,12 @@ function seasonalDiplomacy(state) {
   // Border quarrels between neighbours whose roads cross each other's land.
   if (chance(state, 0.25)) {
     const route = pick(state, ROUTES.filter((r) => r.territory && state.region.discovered.routes.includes(r.id)));
-    const other = route.a === route.territory ? route.b : route.a;
-    if (other !== HEARTH) {
-      const calm = hasTreaty(state, route.territory, other, 'peace');
-      adjustRelation(state, route.territory, other, calm ? -2 : -7, `a quarrel over tolls on the ${route.name}`);
-      say(state, `${nameOf(route.territory)} and ${nameOf(other)} quarrelled over tolls on the ${route.name}${calm ? ', but their pact kept it civil' : ''}.`, 1);
+    const holder = territoryOf(state, route);
+    const other = route.a === holder ? route.b : route.a;
+    if (other !== HEARTH && other !== holder) {
+      const calm = hasTreaty(state, holder, other, 'peace');
+      adjustRelation(state, holder, other, calm ? -2 : -7, `a quarrel over tolls on the ${route.name}`);
+      say(state, `${nameOf(holder)} and ${nameOf(other)} quarrelled over tolls on the ${route.name}${calm ? ', but their pact kept it civil' : ''}.`, 1);
     }
   }
   // Treaties: partners who trade and get along formalise it.
@@ -276,4 +295,4 @@ export function noteMigration(state, from, to, n) {
   d.flows[key] = (d.flows[key] ?? 0) + n;
 }
 
-export { nameOf as partyName, pairKey };
+export { nameOf as partyName, pairKey, say as diplomacyNote, willing };

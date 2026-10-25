@@ -63,7 +63,7 @@ test('saving during caravan unloading, a pending court case, road works, a festi
     'the last hour before a new season': () => (s().day - 1) % CALENDAR.daysPerSeason === CALENDAR.daysPerSeason - 1 && s().minute >= 23 * 60,
   };
   const pending = new Set(Object.keys(moments));
-  const limit = 80 * TIME.ticksPerDay;
+  const limit = 140 * TIME.ticksPerDay; // searched for in ordinary play; Milestone 5 changed when the first road works happen
   for (let i = 0; i < limit && pending.size; i++) {
     sim.step();
     for (const what of [...pending]) {
