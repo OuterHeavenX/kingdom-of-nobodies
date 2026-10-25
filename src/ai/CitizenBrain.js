@@ -8,7 +8,8 @@ import { businessById, isTrading, BUSINESS_TYPES, retailPrice } from '../economy
 import { buyRetail, buyFromPantry, businessLocation, sellGathered, isOpenNow } from '../economy/Marketplace.js';
 import { applyForJob, completeShift } from '../economy/Employment.js';
 import { buyPlot, reservePlot } from '../property/Ownership.js';
-import { startProject, projectById, addWork, joinCrew, needsLabour, openBusiness } from '../property/Construction.js';
+import { startProject, projectById, addWork, joinCrew, needsLabour, openBusiness, moveHome } from '../property/Construction.js';
+import { householdOf } from '../population/Housing.js';
 import { plotById, plotHistory, frontOf } from '../property/LandRegistry.js';
 import { socialize, adjust } from '../citizens/Relationships.js';
 import { shareGossip, createFact } from '../society/Gossip.js';
@@ -442,6 +443,11 @@ function finish(state, c) {
       const res = buyPlot(state, a.plotId, c.id);
       if (res.ok) {
         if (a.home) (c.homeVenture ?? (c.homeVenture = {})).plotId = a.plotId;
+        if (a.moveIn) {
+          const plot = plotById(state, a.plotId);
+          for (const m of householdOf(state, c)) moveHome(state, m, plot);
+          record(state, 'property', `${c.firstName} ${c.lastName} moved the household into the cottage on ${plot.name}.`, { citizens: [c.id], plot: plot.id }, 2);
+        }
         else if (c.venture) c.venture.plotId = a.plotId;
       }
       else if (!res.ok) c.decision.reason = `Could not buy: ${res.reason}.`;

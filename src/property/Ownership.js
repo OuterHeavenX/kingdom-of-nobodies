@@ -5,11 +5,12 @@ import { record } from '../society/Chronicle.js';
 import { remember } from '../ai/MemorySystem.js';
 import { createFact } from '../society/Gossip.js';
 import { ownerAccount } from '../economy/Marketplace.js';
+import { institutionName } from '../institutions/Registry.js';
 
 // Property transfers. A sale is one atomic operation: verify the listing and
 // funds, move the money, then move the title. Nothing changes on failure.
 
-const ownerName = (state, id) => (id === 'council' ? 'the council' : byId(state.citizens, id)?.firstName ?? 'nobody');
+const ownerName = (state, id) => (id === 'council' ? 'the council' : byId(state.citizens, id)?.firstName ?? institutionName(state, id) ?? 'nobody');
 
 /** Hold a plot for a buyer while they walk to the land office. */
 export function reservePlot(state, plotId, buyerId, ticks = 60) {
@@ -20,6 +21,9 @@ export function reservePlot(state, plotId, buyerId, ticks = 60) {
   p.reservedUntil = state.tick + ticks;
   return true;
 }
+
+/** Called after every completed sale with (state, plot, sellerId, price): liens are settled here. */
+export const saleHooks = [];
 
 export function buyPlot(state, plotId, buyerId) {
   const p = plotById(state, plotId);
@@ -52,6 +56,7 @@ export function buyPlot(state, plotId, buyerId) {
     createFact(state, 'property_bought', buyer.id, `${buyer.firstName} bought ${what}.`, [buyer.id]);
   }
   if (seller) remember(state, seller, `Sold ${what} for ${price} coins.`, 2, 'property');
+  for (const fn of saleHooks) fn(state, p, sellerId, price);
   return { ok: true, price };
 }
 

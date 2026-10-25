@@ -150,6 +150,13 @@ const PLANNERS = {
         if (!canStart(state, myLand, c.id, 'construction', 'cottage')) actions.push({ kind: 'start_project', plotId: myLand.id, projectKind: 'construction', home: true, score: 72, factors: [[`I own ${myLand.name} and can start my cottage`, 35]] });
         return { goal: 'Start building my cottage', need: 0, steps, actions };
       }
+      // A finished cottage on the market (often built by a developer) can be bought outright.
+      const house = plotsForSale(state, 'cottage', c.id).filter((p) => p.building?.type === 'cottage' && p.constructionStatus === 'COMPLETE' && !p.residents.length && !p.businessId)[0];
+      if (house && money >= house.price) {
+        steps.push(step(`Buy the cottage on ${house.name} (${house.price} coins)`, false));
+        actions.push({ kind: 'buy_plot', plotId: house.id, home: true, moveIn: true, score: 76, factors: [[`a finished cottage on ${house.name} is for sale at ${house.price}, and I can pay`, 38]] });
+        return { goal: `Buy the cottage on ${house.name}`, need: 0, steps, actions, target: house };
+      }
       const land = plotsForSale(state, 'cottage', c.id).filter((p) => !p.building)[0];
       const required = land ? land.price + estimateMaterialsCost(state, 'construction') + 8 : 999;
       steps.push(step(`Save ${required} coins for land and timber (have ${money})`, money >= required), step('Buy a residential plot', false), step('Build a cottage', false));

@@ -15,6 +15,7 @@ import { createCitizen } from '../citizens/Citizen.js';
 import { assignHomes } from '../citizens/CitizenManager.js';
 import { record } from '../society/Chronicle.js';
 import { adjustBoth } from '../citizens/Relationships.js';
+import { ensureCity } from '../city/CityPlanner.js';
 
 // The founding of the kingdom: five original residents, the Hearth Hall,
 // Sunfield Farm, the council's woodlot and an old empty trading stall.
@@ -128,6 +129,20 @@ export function addMilestone4State(state) {
   return state;
 }
 
+/**
+ * Everything Milestone 5 adds: town planning, banks, guilds, faith, foreign
+ * citizens, alliances and armies, weather and cloud-sync metadata. New
+ * kingdoms and migrated saves both go through here.
+ */
+export function addMilestone5State(state) {
+  ensureCity(state);
+  for (const fn of milestone5Setup) fn(state);
+  state.sync = state.sync ?? { revision: 0, lastSyncedAt: null, deviceLabel: null };
+  return state;
+}
+/** Later systems register their own ensure-functions here (they would otherwise import Setup cyclically). */
+export const milestone5Setup = [];
+
 export function createKingdom(seed = 20251024) {
   const state = emptyState(seed);
   state.accounts.treasury = 140;
@@ -178,6 +193,7 @@ export function createKingdom(seed = 20251024) {
 
   createWorks(state);
   addMilestone4State(state);
+  addMilestone5State(state);
 
   const corner = plotByName(state, 'Crossroads Corner');
   setBuilding(state, corner, 'stall', 'Old Trading Stall');
