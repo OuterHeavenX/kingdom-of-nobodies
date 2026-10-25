@@ -374,8 +374,8 @@ Key design rules:
   - *Battery saver* lowers the pixel ratio, turns off shadows and tightens the level of detail.
   - The kingdoms are simulated once a day in aggregate rather than as people. The navigation grid is
     rebuilt only when the layout changes, and routes are cached per layout version.
-  - **Web Worker: evaluated, not adopted.** A 200-year run takes about 1.1 ms per simulated tick at
-    150 villagers in Node (see below). At 20× speed (80 ticks a second) that is about 9% of a second,
+  - **Web Worker: evaluated, not adopted.** A 200-year run takes about 1.0–1.2 ms per simulated tick at
+    about 150 villagers in Node (see below). At 20× speed (80 ticks a second) that is about 10% of a second,
     well within budget even if a phone is several times slower. Moving the simulation into a worker would
     mean copying or proxying the whole state for every panel and pick, and would split saving and
     determinism across two threads. That cost is not worth paying at this scale.
@@ -429,25 +429,77 @@ instead of the Vite build. **Settings → Pages → Source must be "GitHub Actio
 
 ## Stress test results (200 in-game years)
 
-`npm run test:longevity -- 200 <seed>`, run on seeds 1–3 on the final Milestone 4 code. The checks:
+`npm run test:longevity -- 200 <seed>`, run on seeds 1–4 on the final Milestone 5 code. Every run is the
+whole region together for 200 years: the village and all three kingdoms trading, migrating, allying and going
+to war with each other. The checks:
 
-- **Every simulated year:** exact money conservation.
-- **Every decade:**
-  - unique ids;
-  - valid, acyclic families and mutual marriages;
-  - employment only at trading businesses;
-  - plots owned by the living;
-  - valid elections;
-  - no NaN;
-  - no negative inventory anywhere (businesses, set-aside stock, homes, the pantry, kingdoms, caravans,
-    festival stores);
-  - escrow equal to the sum of open contracts;
-  - every caravan's cargo tally balanced (loaded = delivered + sold + spoiled + aboard);
-  - no caravan stuck for more than 40 days;
-  - no judgment transaction executed twice;
-  - state under 6 MB.
+- **Every simulated year:** exact money conservation, with banks, guilds, faith communities, armies and the
+  three kingdoms all holding real ledger accounts.
+- **Every decade**, everything Milestone 4 checked (unique ids; valid, acyclic families; employment only at
+  trading businesses; valid owners; valid elections; no NaN; no negative inventory; escrow equal to open
+  contracts; balanced caravan cargo; no caravan stuck over 40 days; no judgment executed twice; state under
+  6 MB), plus:
+  - every bank's balance sheet reconciles, and no deposit is fractional or negative;
+  - a failed bank holds no money and owes no deposits;
+  - no loan has a negative or impossible balance, and every live loan has a living borrower;
+  - guild rosters list only people still in the village;
+  - no war outlives its time limit, and no army is still in the field long after peace;
+  - militia members away at war are real villagers;
+  - the town has at most 420 plots, and every kingdom has a named ruler.
 
-All checks held in every run. CI runs seed 1 on every pull request.
+All checks held in all four runs. CI runs all four seeds on every pull request.
+
+| Seed | Peak / final pop. | Births | Deaths | Immigrants / emigrants | Generations | Elections | Hunger deaths | Save size | Time |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 138 / 132 | 254 | 273 | 713 / 567 | 9 | 52 | 0 | 3.1 MB | 369 s |
+| 2 | 137 / 88 | 287 | 256 | 807 / 755 | 9 | 52 | 3 | 2.7 MB | 347 s |
+| 3 | 148 / 123 | 280 | 273 | 747 / 636 | 9 | 53 | 33 | 3.1 MB | 366 s |
+| 4 | 150 / 150 | 261 | 293 | 837 / 660 | 9 | 54 | 3 | 3.3 MB | 401 s |
+
+Milestone 5 systems after 200 years:
+
+| Seed | Wars / battles / sieges | Peace treaties | Alliances | Banks open (failed) | Loans issued (coins) | Defaults | Guilds | Planned districts / plots | Homes built to sell | Named foreigners |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 8 / 21 / 0 | 13 | 5 | 3 (0) | 13,942 | 7 | 4 | 14 / 103 | 19 | 83 |
+| 2 | 4 / 8 / 3 | 14 | 4 | 3 (0) | 14,300 | 17 | 4 | 14 / 103 | 24 | 84 |
+| 3 | 6 / 17 / 1 | 16 | 8 | 3 (0) | 18,294 | 29 | 4 | 14 / 103 | 18 | 84 |
+| 4 | 3 / 7 / 2 | 21 | 8 | 3 (0) | 14,303 | 11 | 5 | 14 / 103 | 23 | 86 |
+
+Regional metrics after 200 years:
+
+| Seed | Caravan deliveries / failures | Goods moved | Trade value | Treaties / embargoes (ever) | Roads | Judgments | Festival attendance | Kingdom populations (G / I / S) | Wider world's coins |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 2,669 / 9 | 67,009 | 411,524 | 37 / 7 | 45 | 253 | 93% | 420 / 314 / 479 | 204,180 |
+| 2 | 3,357 / 17 | 77,175 | 438,558 | 40 / 20 | 49 | 270 | 91% | 420 / 333 / 480 | 211,671 |
+| 3 | 2,945 / 14 | 73,400 | 441,716 | 46 / 12 | 42 | 837 | 85% | 420 / 320 / 492 | 208,144 |
+| 4 | 3,177 / 9 | 75,740 | 447,228 | 47 / 7 | 47 | 363 | 90% | 420 / 319 / 480 | 204,359 |
+
+- Times are for four runs in parallel on one machine: 1.0–1.16 ms per simulated tick, and a heap of
+  44–95 MB at the end.
+- The planner reached its limit of 14 planned districts (103 plots) by year 50–75 in every seed. After that
+  the town grows by rebuilding and densifying, not outward.
+- Seed 3 is the bad case. It has long spells where 40–65% of adults are out of work and the council's
+  treasury is too poor to restock the pantry. Most of its 33 hunger deaths are jobless adults (17) and their
+  children (11); every death records its cause.
+
+### What the Milestone 5 stress test changed
+
+- **Bank deposits were misreported.** The first runs showed deposits climbing to 340,000–735,000 coins,
+  more money than the whole economy holds. The banks' books were sound: deposits matched the cash each bank
+  held, and total money stayed fixed. The bug was in `financeSummary`: its running totals overwrote the
+  current deposit figure, so it reported every coin ever deposited. This also made the Economy tab's
+  "Saved in banks" figure wrong. Fixed, with a regression test.
+- **Empty homes drew newcomers into joblessness.** The first runs had 5, 6, 28 and 19 hunger deaths (58 in
+  total). Probes of the worst seeds found the deaths came during long stretches of 40–65% unemployment.
+  Newcomers kept arriving because the planned streets always left beds to spare, and free beds counted in
+  the town's appeal regardless of work. Free beds now attract only while there is work: their pull shrinks
+  as unemployment rises and is gone at 50%. Hunger deaths fell to 0, 3, 33 and 3 (39 in total), and
+  arrivals fell from about 1,000 to 750–840 per run. Seed 3 is worse than before (33 against 28). Changing
+  migration sends each seed down a different history, so this is reported as is, not tuned away.
+
+### Milestone 4 baseline (for comparison)
+
+The same test on the final Milestone 4 code, seeds 1–3:
 
 | Seed | Peak / final pop. | Births | Deaths | Immigrants / emigrants | Generations | Elections | Hunger deaths | Save size | Time |
 |---|---|---|---|---|---|---|---|---|---|
@@ -455,18 +507,9 @@ All checks held in every run. CI runs seed 1 on every pull request.
 | 2 | 181 / 179 | 228 | 346 | 736 / 444 | 8 | 52 | 8 | 2.9 MB | 397 s |
 | 3 | 161 / 148 | 243 | 340 | 788 / 548 | 9 | 52 | 10 | 2.8 MB | 371 s |
 
-Regional metrics after 200 years:
-
-| Seed | Caravan deliveries / failures | Goods moved | Trade value | Treaties / embargoes (ever) | Roads | Judgments | Festival attendance | Kingdom populations (G / I / S) | Wider world's coins |
-|---|---|---|---|---|---|---|---|---|---|
-| 1 | 2,408 / 16 | 65,162 | 425,895 | 29 / 17 | 39 | 459 | 88% | 420 / 313 / 488 | 197,978 |
-| 2 | 1,926 / 5 | 52,140 | 353,031 | 37 / 14 | 40 | 1,233 | 92% | 417 / 276 / 483 | 192,404 |
-| 3 | 2,616 / 25 | 65,445 | 399,213 | 20 / 30 | 40 | 472 | 90% | 420 / 304 / 489 | 210,122 |
-
-- All six discoveries happened and all ten districts opened in every run.
-- Traditions numbered 6–7, and relations moved up and down rather than locking at the extremes.
-- The kingdoms stayed prosperous (0.86–0.98), at or near their population capacity.
-- Times are for three runs in parallel on one machine, about 1.1 ms per simulated tick at 150 villagers.
+Milestone 5 villages peak lower (137–150 against 161–183). The most direct cause is the immigration change
+above: a jobless town no longer attracts newcomers. Savings held in banks, guild dues and faith offerings
+may also contribute, but their effects were not measured separately.
 
 ## Tuning decisions (Milestone 4)
 
@@ -519,12 +562,13 @@ system off:
   the test suite). It is **not deployed**, so the shipped game shows cloud backup as "not set up".
 - Unemployment can still run high in some seeds (around half of adults in one run). Emigration is the
   release valve, so migration churn is high: about 750 arrivals and 500 departures over 200 years.
-- Hunger still occasionally kills: 2–10 people per 200 years, almost all children of jobless families.
-  Each death records its cause.
+- Hunger still kills: 0–3 people per 200 years in three of four seeds, but 33 in seed 3, where long spells
+  of mass unemployment meet a treasury too poor to restock the pantry. Each death records its cause.
 - The council's treasury is often low, so festivals are sometimes scaled down or cancelled.
 - The simulation pauses while the page is closed. There is no offline catch-up.
 - Planned streets are straight dirt streets branching at right angles from existing roads; there are no
-  curved streets, and the planner caps the town at 420 plots.
+  curved streets. The planner stops after 14 planned districts (about 103 plots), which every seed reached
+  by year 50–75.
 
 ## Toward Milestone 6
 
