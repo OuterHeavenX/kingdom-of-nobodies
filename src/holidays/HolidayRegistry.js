@@ -17,6 +17,7 @@ export const HOLIDAYS = [
     id: 'newyear', name: "New Year's Eve", dayName: "New Year's Day", icon: '🎆', season: 3, day: 3, hour: 14, hours: 20,
     midnight: true, fireworks: 'midnight', gather: 'square', effects: ['fireworks', 'confetti'],
     text: 'the whole kingdom counts down to midnight in the square',
+    dayText: 'confetti, lanterns and a fresh start for the kingdom',
     real: [[12, 31], [1, 1]],
   },
   {

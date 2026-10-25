@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { addSnow } from '../effects/SnowAccumulation.js';
 
 // Shared materials and geometries. Everything in the scene draws from these
 // caches so the GPU sees a small, stable set of programs and buffers.
@@ -6,7 +7,12 @@ import * as THREE from 'three';
 const materials = new Map();
 export function mat(color, opts = {}) {
   const key = color + JSON.stringify(opts);
-  if (!materials.has(key)) materials.set(key, new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0, flatShading: true, ...opts }));
+  if (!materials.has(key)) {
+    const m = new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0, flatShading: true, ...opts });
+    // Opaque surfaces can carry snow in winter (see effects/SnowAccumulation).
+    if (!opts.transparent) addSnow(m);
+    materials.set(key, m);
+  }
   return materials.get(key);
 }
 

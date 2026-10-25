@@ -6,6 +6,8 @@ import { World, WebGLUnavailableError } from '../world/World.js';
 import { HUD } from '../ui/HUD.js';
 import { CloudSaveClient } from '../persistence/CloudSaveClient.js';
 import { CloudSync } from '../persistence/CloudSync.js';
+import { normalizeSettings } from '../holidays/HolidaySettings.js';
+import { ringBells, unlockAudio } from '../ui/Bells.js';
 
 /* global __BUILD__ */
 const BUILD = typeof __BUILD__ === 'string' ? __BUILD__ : 'dev';
@@ -19,6 +21,7 @@ export class Game {
     this.build = BUILD;
     this.saves = new SaveManager(BUILD);
     this.settings = { labels: true, quality: null, ...readSettings() };
+    this.settings.holidays = normalizeSettings(this.settings.holidays);
     this.frameTimes = [];
   }
 
@@ -29,6 +32,7 @@ export class Game {
     this.clock = new GameClock(() => this.sim.step());
     this.startWorld();
     this.hud = new HUD(this);
+    if (this.world) this.world.themes.hooks = { announce: (text) => this.hud.toasts.show(text, { ms: 10000, holiday: true }), bell: () => ringBells() };
     if (this.world) this.world.onPick = (kind, id) => (kind === 'memorial' ? this.hud.showMemorial() : this.hud.openDetail(kind, id, { push: false }));
     this.lastChronicle = this.sim.state.nextId.chronicle;
     this.startCloud();
@@ -56,13 +60,13 @@ export class Game {
     await this.save();
     const r = await this.cloud.syncNow();
     const msg = { uploaded: 'Backed up to the cloud.', downloaded: 'Restored the kingdom from the cloud.', 'in-sync': 'Already in step with the cloud.', conflict: 'This device and the cloud hold different kingdoms: choose which to keep in Council.', error: `Cloud sync failed: ${r.error}. Your local save is unchanged.` }[r.action] ?? 'Nothing to sync.';
-    this.hud.toasts.show(msg, { bad: r.action === 'error' || r.action === 'conflict', ms: 6000 });
+    this.hud.toasts.show(msg, { bad: r.action === 'error' || r.action === 'conflict', ms: 10000 });
     this.hud.renderSheet(true);
   }
 
   async cloudResolve(keep) {
     const r = await this.cloud.resolve(keep);
-    this.hud.toasts.show(r.action === 'error' ? `Could not complete: ${r.error}` : `Kept ${keep === 'local' ? "this device's" : "the cloud's"} kingdom; ${r.replaced ?? ''}.`, { bad: r.action === 'error', ms: 6000 });
+    this.hud.toasts.show(r.action === 'error' ? `Could not complete: ${r.error}` : `Kept ${keep === 'local' ? "this device's" : "the cloud's"} kingdom; ${r.replaced ?? ''}.`, { bad: r.action === 'error', ms: 10000 });
     if (r.action === 'downloaded') await this.save();
     this.hud.renderSheet(true);
   }
@@ -70,7 +74,7 @@ export class Game {
   startWorld() {
     const container = document.getElementById('world');
     try {
-      this.world = new World(container, this.sim, { quality: this.settings.quality ?? 'high', labels: this.settings.labels });
+      this.world = new World(container, this.sim, { quality: this.settings.quality ?? 'high', labels: this.settings.labels, holidays: this.settings.holidays });
       this.world.setLabels(this.settings.labels);
     } catch (e) {
       this.world = null;
@@ -96,7 +100,7 @@ export class Game {
       this.hud.update(now);
     } catch (e) {
       console.error(e);
-      if (!this.errorShown) { this.errorShown = true; this.hud?.toasts.show(`Something went wrong: ${e.message}`, { bad: true, ms: 8000 }); }
+      if (!this.errorShown) { this.errorShown = true; this.hud?.toasts.show(`Something went wrong: ${e.message}`, { bad: true, ms: 12000 }); }
     }
     requestAnimationFrame((t) => this.frame(t));
   }
@@ -126,6 +130,14 @@ export class Game {
     if (key === 'quality') this.world?.setQuality(value);
   }
 
+  /** One of the seasons & celebrations display settings (kept on this device). */
+  setHolidaySetting(key, value) {
+    const next = normalizeSettings({ ...this.settings.holidays, [key]: value });
+    if (key === 'sound' && next.sound) unlockAudio();
+    this.setSetting('holidays', next);
+    this.world?.themes.setSettings(next);
+  }
+
   async save(announce = false) {
     const ok = await this.saves.save(this.sim.state);
     if (announce) this.hud.toasts.show(ok ? 'Kingdom saved on this device.' : 'Saving is unavailable in this browser.', { bad: !ok });
@@ -151,7 +163,7 @@ export class Game {
       await this.save();
       this.hud.toasts.show(`Imported a kingdom on day ${state.day}.`);
     } catch (e) {
-      this.hud.toasts.show(`Import failed: ${e.message}`, { bad: true, ms: 7000 });
+      this.hud.toasts.show(`Import failed: ${e.message}`, { bad: true, ms: 11000 });
     }
   }
 
@@ -168,7 +180,7 @@ export class Game {
     state.events = [];
     this.sim.selected = { kind: 'citizen', id: state.citizens[0]?.id ?? null };
     this.lastChronicle = state.nextId.chronicle;
-    if (this.world) { this.world.home(); this.world.syncPlots(true); }
+    if (this.world) { this.world.home(); this.world.syncPlots(true); this.world.themes.resetFireworks(); this.world.themes.check(true); }
     this.hud.setBanner(null);
     this.hud.openTab('citizens');
   }

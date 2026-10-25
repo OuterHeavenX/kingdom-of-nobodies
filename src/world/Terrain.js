@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mat, PALETTE as P, G, part } from './Materials.js';
 import { ROAD_KINDS, RIVER } from '../navigation/RoadNetwork.js';
 import { bridgeModel } from './Models.js';
+import { addSnow } from '../effects/SnowAccumulation.js';
 
 // Ground, roads, the town square and all instanced scenery. The forest north
 // of Timber Edge mirrors the simulation's forest commons: as lumberyards cut
@@ -30,6 +31,7 @@ export function buildTerrain(scene) {
   const ground = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true }));
   ground.receiveShadow = true;
   ground.name = 'ground';
+  addSnow(ground.material);
   scene.add(ground);
 
   // Roads are drawn from simulation state (see syncRoads); the river is fixed geography.
@@ -104,7 +106,7 @@ export function buildTerrain(scene) {
   };
   const roundTrees = crowns.filter((t) => !forest.includes(t));
   instanced(G.cyl(6), mat(P.trunk), trunks.filter((t) => !forest.includes(t)), (e) => { v.set(e.x, 0.9 * e.s, e.z); sc.set(0.4 * e.s, 1.8 * e.s, 0.4 * e.s); });
-  instanced(G.ico(), mat(P.leaf), roundTrees, (e) => { v.set(e.x, 2.5 * e.s, e.z); sc.set(2.6 * e.s, 2.4 * e.s, 2.6 * e.s); });
+  const roundCrowns = instanced(G.ico(), mat(P.leaf), roundTrees, (e) => { v.set(e.x, 2.5 * e.s, e.z); sc.set(2.6 * e.s, 2.4 * e.s, 2.6 * e.s); });
   instanced(G.cone(7), mat(P.pine), pines, (e) => { v.set(e.x, 2.6 * e.s, e.z); sc.set(2.2 * e.s, 3.6 * e.s, 2.2 * e.s); });
   // The commons forest is ordered so trees disappear from the edge nearest the village first.
   forest.sort((a, b) => Math.hypot(b.x - 21, b.z + 11) - Math.hypot(a.x - 21, a.z + 11));
@@ -134,6 +136,8 @@ export function buildTerrain(scene) {
     stone: mat(ROAD_KINDS.stone.color, { roughness: 0.9 }),
     ford: mat('#8fb4c4', { roughness: 0.4 }),
   };
+  // Roads take only a little snow, so they stay readable in winter.
+  for (const m of Object.values(surface)) if (m.userData.snowScale) m.userData.snowScale.value = 0.3;
   const makeRoad = (r) => {
     const g = new THREE.Group();
     if (r.kind === 'bridge') g.add(bridgeModel(r));
@@ -154,6 +158,7 @@ export function buildTerrain(scene) {
   };
   return {
     fire, fireLight, lamps, lampGlass, ground, petals, roadMaterials: surface,
+    roundCrowns, forestCrowns, trees: roundTrees.map((t) => ({ x: t.x, z: t.z, s: t.s })),
     leafMaterials: [mat(P.leaf), mat(P.leafDark), mat(P.pine)],
     /** Match the drawn roads to the simulation's roads (new, paved or removed). */
     syncRoads(list) {

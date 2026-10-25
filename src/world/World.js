@@ -18,16 +18,10 @@ import { KingdomScene, soldierBlock } from './KingdomScene.js';
 import { BattleView } from './BattleView.js';
 import { WeatherLayer } from './WeatherLayer.js';
 import { HEARTH, KINGDOMS } from '../region/RegionData.js';
+import { HolidayThemeManager } from '../holidays/HolidayThemeManager.js';
 
-// Seasonal tints: [ground, leaves, roofs-to-snow]. Ground and leaves multiply
-// their base colour; roofs blend towards snow in winter.
-const SEASON_LOOK = [
-  { ground: '#ffffff', leaf: '#ffffff', snow: 0 },
-  { ground: '#f4ffe8', leaf: '#eef7dc', snow: 0 },
-  { ground: '#f2dcb4', leaf: '#ffb46a', snow: 0 },
-  { ground: '#e8eef4', leaf: '#b9c8bf', snow: 0.72 },
-];
-const ROOFS = [P.roofRed, P.roofBrown, P.roofSlate, P.thatch];
+// Seasons, holidays, snow and their effects are drawn by the HolidayThemeManager
+// (src/holidays) and the SeasonalEnvironment it drives (src/rendering).
 const LABEL_LIMIT = 14;
 
 // The Three.js presentation of the simulation. It only reads simulation state;
@@ -38,7 +32,7 @@ export class WebGLUnavailableError extends Error {}
 const OUTLINE = { FOR_SALE: '#cdb36a', BUILDING: '#ff9a3c', OWNED: '#f4efe2', COUNCIL: '#9fc3e6', SELECTED: '#ffffff' };
 
 export class World {
-  constructor(container, sim, { quality = 'high', labels = true } = {}) {
+  constructor(container, sim, { quality = 'high', labels = true, holidays = {} } = {}) {
     this.container = container;
     this.sim = sim;
     try {
@@ -100,12 +94,8 @@ export class World {
     this.roadWorkLayer = new THREE.Group();
     this.village.add(this.roadWorkLayer);
     this.memorial = null;
-    this.season = -1;
-    this.leafBase = this.terrain.leafMaterials.map((m) => m.color.clone());
-    this.groundBase = this.terrain.ground.material.color.clone();
-    this.roofMats = ROOFS.map((c) => mat(c));
-    this.roofBase = this.roofMats.map((m) => m.color.clone());
     this.followId = null;
+    this.night = 0;
 
     this.labelLayer = document.createElement('div');
     this.labelLayer.className = 'labels';
@@ -124,6 +114,8 @@ export class World {
     el.addEventListener('pointerup', (e) => this.pick(e));
     this.observer = new ResizeObserver(() => this.resize());
     this.observer.observe(container);
+    this.quality = quality;
+    this.themes = new HolidayThemeManager(this, holidays);
     this.setQuality(quality);
     this.syncPlots(true);
     this.resize();
@@ -132,12 +124,15 @@ export class World {
   setQuality(q) {
     this.quality = q;
     const dpr = window.devicePixelRatio || 1;
-    this.renderer.setPixelRatio(Math.min(dpr, q === 'high' ? 2 : 1.25));
-    this.renderer.shadowMap.enabled = q === 'high';
-    this.sun.shadow.mapSize.set(q === 'high' ? 2048 : 512, q === 'high' ? 2048 : 512);
+    // Three levels: high (full resolution, soft 2048 shadows), medium (lighter shadows), low (battery saver: no shadows).
+    this.renderer.setPixelRatio(Math.min(dpr, q === 'high' ? 2 : q === 'medium' ? 1.5 : 1.25));
+    this.renderer.shadowMap.enabled = q !== 'low';
+    const map = q === 'high' ? 2048 : 1024;
+    this.sun.shadow.mapSize.set(map, map);
     if (this.sun.shadow.map) { this.sun.shadow.map.dispose(); this.sun.shadow.map = null; }
     this.scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; });
     this.weather?.setQuality(q);
+    if (this.themes) this.themes.setSettings(this.themes.settings);
     this.resize();
   }
 
@@ -152,6 +147,7 @@ export class World {
     this.village.visible = false;
     this.mode = 'kingdom';
     this.awayId = kid;
+    this.themes.setPlace(kid, this.away);
     this.followId = null; this.followCaravanId = null;
     this.flyTo(0, 4, 85);
   }
@@ -165,6 +161,7 @@ export class World {
     this.village.visible = false;
     this.mode = 'battle';
     this.awayId = battle.id;
+    this.themes.setPlace('battle', null);
     this.flyTo(0, 0, 55);
   }
 
@@ -173,6 +170,7 @@ export class World {
     this.village.visible = true;
     this.mode = 'village';
     this.awayId = null;
+    this.themes.setPlace('hearth');
     this.flyTo(0, 2, 70);
   }
 
@@ -317,20 +315,8 @@ export class World {
     this.village.add(this.festivalDecor);
   }
 
-  /** Seasonal colour of the land, trees and (in winter) snow on roofs. */
-  applySeason(index) {
-    if (index === this.season) return;
-    this.season = index;
-    const look = SEASON_LOOK[index];
-    const t = new THREE.Color();
-    this.terrain.ground.material.color.copy(this.groundBase).multiply(t.set(look.ground));
-    this.terrain.leafMaterials.forEach((m, i) => m.color.copy(this.leafBase[i]).multiply(t.set(look.leaf)));
-    const snow = new THREE.Color('#f4f7fa');
-    this.roofMats.forEach((m, i) => m.color.copy(this.roofBase[i]).lerp(snow, look.snow));
-    // Roads frost over in winter and turn to mud in the spring thaw; meadow flowers bloom in spring and summer.
-    for (const [k, m] of Object.entries(this.terrain.roadMaterials)) m.color.copy(this.roadBase[k]).lerp(index === 3 ? snow : new THREE.Color('#8a6a48'), index === 3 ? 0.45 : index === 0 ? 0.18 : 0);
-    this.terrain.petals.visible = index <= 1;
-  }
+  /** The seasonal festival's own dressing gives way to the holiday's when both would fill the square. */
+  festivalVisibility() { if (this.festivalDecor) this.festivalDecor.visible = !this.themes.set; }
 
   makePlot(plot, project, business, progress, open, status, selected, burning, season) {
     const g = new THREE.Group();
@@ -433,7 +419,9 @@ export class World {
 
   render(dt, time) {
     const s = this.sim.state;
-    const sky = this.weather.update(s.weather?.today, dt, this.controls.target, time);
+    // The theme's weather: the kingdom's own (through each kingdom's climate), or the preview's.
+    const sky = this.weather.update(this.themes.env.weather ?? s.weather?.today, dt, this.controls.target, time);
+    this.themes.update(dt, time, this.controls.target, this.night);
     this.scene.fog.near = sky.fogNear; this.scene.fog.far = sky.fogFar;
     if (this.mode !== 'village') return this.renderAway(dt, time, sky);
     if (time - this.lastSync > 0.4) {
@@ -442,12 +430,12 @@ export class World {
       this.villagers.sync(s.citizens, s.day);
       this.terrain.setForest(s.commons.forest / s.commons.forestCap);
       this.terrain.syncRoads(s.roads ?? []);
-      this.applySeason(seasonIndex(s.day));
       this.caravans.sync(s, navGrid(s).version);
       this.syncFestival();
+      this.festivalVisibility();
       this.lastSync = time;
     }
-    this.updateSky(s.minute / 60, time, sky);
+    this.updateSky(this.visualHour(), time, sky);
     const selected = this.sim.selected.kind === 'citizen' ? this.sim.selected.id : null;
     this.villagers.update(s.citizens, dt, time, selected, s.day, this.controls.target, this.quality);
     this.caravans.update(dt, time);
@@ -472,7 +460,7 @@ export class World {
   renderAway(dt, time, sky) {
     if (this.mode === 'kingdom' && time - this.lastSync > 0.6) { this.away.sync(this.sim.state); this.lastSync = time; }
     this.away.update(dt, time);
-    this.updateSky(this.sim.state.minute / 60, time, sky);
+    this.updateSky(this.visualHour(), time, sky);
     this.moveCamera(dt);
     this.renderer.render(this.scene, this.camera);
     if (this.showLabels && this.mode === 'kingdom') this.updateForeignLabels();
@@ -532,17 +520,24 @@ export class World {
     const ct = this.controls.target;
     this.sun.position.set(ct.x + Math.sin(az) * 60, 12 + elevation * 60, ct.z + 30 + Math.cos(az) * 10);
     // Overcast skies dim the sun and flatten the light; the clear-sky colour depends on where you are.
-    this.sun.intensity = (0.15 + light * 2.3) * weather.light;
+    const look = this.themes.env.sky;
+    this.night = night;
+    this.sun.intensity = (0.15 + light * 2.3) * weather.light * look.sunPower;
     this.hemi.intensity = (0.45 + light * 1.25) * (0.75 + weather.light * 0.25);
+    this.hemi.color.copy(look.hemiSky);
+    this.hemi.groundColor.copy(look.hemiGround);
     const sky = this.scene.background;
-    const day = this.mode === 'kingdom' && this.away?.layout?.sky ? this.tmpColor.set(this.away.layout.sky) : this.dayColor;
+    // The season's sky, shifted towards each kingdom's own (Ironhold's mountain air, Saltmere's sea light).
+    const day = this.tmpColor.copy(look.day);
+    if (this.mode === 'kingdom' && this.away?.layout?.sky) day.lerp(this.dayColor.clone().set(this.away.layout.sky), 0.35);
     sky.copy(this.nightColor).lerp(day, light);
     if (weather.light < 1) sky.lerp(this.greyColor, (1 - weather.light) * 0.8);
     if (light > 0.05 && light < 0.6) sky.lerp(this.duskColor, 0.35 * (1 - Math.abs(light - 0.3) / 0.3));
     this.scene.fog.color.copy(sky);
-    this.sun.color.setHSL(0.1, 0.6, 0.6 + light * 0.3);
+    this.sun.color.copy(look.sun).lerp(this.duskColor, (1 - light) * 0.5);
+    this.scene.fog.near *= look.fog; this.scene.fog.far *= look.fog;
     const glow = Math.max(0, night - 0.25) * 2.2;
-    litWindow.emissiveIntensity = 0.05 + glow;
+    litWindow.emissiveIntensity = 0.05 + glow * look.windows;
     this.terrain.lampGlass.emissiveIntensity = glow * 1.4;
     const flicker = 0.85 + Math.sin(time * 13) * 0.08 + Math.sin(time * 7.3) * 0.07;
     this.terrain.fire.scale.y = 1.5 * flicker;
@@ -552,6 +547,12 @@ export class World {
     if (this.mode === 'village' && this.terrain.treeGroup) this.terrain.treeGroup.rotation.z = Math.sin(time * 1.3) * 0.004 * weather.wind;
     if (this.mode !== 'village') return;
     for (const node of this.plotNodes.values()) for (const child of node.children) if (child.userData.flames) child.scale.y = 0.9 + Math.sin(time * 11 + node.position.x) * 0.12;
+  }
+
+  /** The hour the sky shows: the kingdom's, or the preview's (day or night). Visual only. */
+  visualHour() {
+    const t = this.themes.theme;
+    return t?.source === 'preview' ? t.hour : this.sim.state.minute / 60;
   }
 
   updateLabels(citizens, selected) {
@@ -592,6 +593,7 @@ export class World {
   }
 
   dispose() {
+    this.themes.dispose();
     this.observer.disconnect();
     this.controls.dispose();
     this.renderer.dispose();

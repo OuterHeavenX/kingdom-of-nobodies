@@ -91,12 +91,15 @@ test('23. migration moves real people between settlements and keeps populations 
   // Hard times in Greenvale bring them home as the same person.
   k.hunger = 0.5;
   s.archive[c.id].leftDay -= 20;
-  let back = null;
-  for (let i = 0; i < 400 && !back; i++) back = maybeReturn(s);
+  // Others who emigrated earlier may come home first; wait for this one, and count everyone who came back from Greenvale.
+  const from = Object.fromEntries(Object.entries(s.archive).filter(([, p]) => p.status === 'emigrated').map(([id, p]) => [id, p.destination]));
+  const returned = [];
+  for (let i = 0; i < 400 && !returned.some((m) => m.id === c.id); i++) returned.push(...(maybeReturn(s) ?? []));
+  const back = returned.find((m) => m.id === c.id);
   assert.ok(back, 'they came home');
-  assert.equal(back[0].id, c.id, 'with the same identity');
+  assert.equal(back.id, c.id, 'with the same identity');
   assert.ok(!s.archive[c.id]);
-  assert.equal(k.population, pop);
+  assert.equal(k.population, pop + 1 - returned.filter((m) => from[m.id] === 'greenvale').length);
   assert.equal(checkInvariants(s, 'migration', 0), 0);
   assert.equal(totalMoney(s), money);
 });

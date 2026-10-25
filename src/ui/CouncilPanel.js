@@ -51,7 +51,7 @@ export function councilPanel(sim, ctx) {
   <div class="card">
     <h3>Kingdom & settings</h3>
     <label class="toggle">Name labels <input type="checkbox" data-act="labels" ${ctx.settings.labels ? 'checked' : ''}></label>
-    <div class="segmented" style="margin:6px 0 10px">${['high', 'low'].map((q) => `<button class="${ctx.settings.quality === q ? 'active' : ''}" data-act="quality" data-id="${q}">${q === 'high' ? 'Best graphics' : 'Battery saver'}</button>`).join('')}</div>
+    <div class="segmented" style="margin:6px 0 10px">${[['low', 'Battery saver'], ['medium', 'Balanced'], ['high', 'Best graphics']].map(([q, l]) => `<button class="${(ctx.settings.quality ?? 'high') === q ? 'active' : ''}" data-act="quality" data-id="${q}">${l}</button>`).join('')}</div>
     <div class="grid2">
       <button class="btn" data-act="save">💾 Save now</button>
       <button class="btn" data-act="export">⬇ Export save</button>
@@ -61,7 +61,8 @@ export function councilPanel(sim, ctx) {
     </div>
     <p class="muted" style="font-size:12px;margin-top:8px">Autosaves every minute and when you leave the page; a recovery snapshot is kept once per game year. ${ctx.lastSaved ? `Last saved ${ctx.lastSaved}.` : ''} ${ctx.source ? `Loaded from: ${esc(ctx.source)}.` : ''}</p>
   </div>
+  ${ctx.celebrations ?? ''}
   ${ctx.cloud ?? ''}
-  <p class="version">Kingdom of Nobodies · v0.5.0 The Age of Empires & Prosperity · build ${esc(ctx.build)}</p>`;
+  <p class="version">Kingdom of Nobodies · v0.5.1 Seasons & Celebrations · build ${esc(ctx.build)}</p>`;
   return { title: 'The Council', html };
 }

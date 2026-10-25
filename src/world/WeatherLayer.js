@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 
-// Weather drawn from the simulation's weather of the day: rain streaks, snow
-// flakes, mist and a darker, flatter sky. Particles live in a box that
+// Weather drawn from the simulation's weather of the day: rain streaks, mist
+// and a darker, flatter sky. (Snow is drawn by effects/Snowfall, with snow
+// lying on the ground from effects/SnowAccumulation.) Particles live in a box that
 // follows the camera target, so the cost is fixed (a few hundred points)
 // however large the town grows, and battery-saver mode halves it.
 
@@ -21,7 +22,7 @@ export class WeatherLayer {
   build(kind) {
     if (this.points) { this.scene.remove(this.points); this.points.geometry.dispose(); this.points.material.dispose(); this.points = null; }
     this.kind = kind;
-    if (kind !== 'rain' && kind !== 'snow') return;
+    if (kind !== 'rain') return;
     const n = kind === 'rain' ? this.budget : Math.round(this.budget * 0.7);
     const pos = new Float32Array(n * 3);
     this.speed = new Float32Array(n);
