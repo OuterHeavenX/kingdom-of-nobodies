@@ -1,5 +1,5 @@
 import { STAGES, REFIT_STAGE } from '../core/Config.js';
-import { LAND_TYPES, BUILDING_INFO, plotValue } from '../property/LandRegistry.js';
+import { landInfo, buildingLabel, plotValue } from '../property/LandRegistry.js';
 import { projectProgress } from '../property/Construction.js';
 import { esc, badge, link } from './util.js';
 import { architectureCard } from './EraPanel.js';
@@ -27,7 +27,7 @@ export function buildingsList(sim, filter = 'all') {
   const rows = s.plots.filter(match).map((p) => {
     const b = p.businessId ? s.businesses.find((x) => x.id === p.businessId) : null;
     return `<button class="item" data-act="plot" data-id="${p.id}">
-      <span class="main"><strong>${esc(p.name)}</strong><small>${esc(b?.name ?? (p.building ? p.building.name : 'Vacant ' + LAND_TYPES[p.landType].label.toLowerCase()))} · ${esc(owner(s, p.ownerId))}</small></span>
+      <span class="main"><strong>${esc(p.name)}</strong><small>${esc(b?.name ?? (p.building ? p.building.name : 'Vacant ' + landInfo(p.landType).label.toLowerCase()))} · ${esc(owner(s, p.ownerId))}</small></span>
       <span class="side">${status(p)}</span></button>`;
   }).join('');
   const chips = FILTERS.map(([k, label]) => `<button class="chip ${k === filter ? 'active' : ''}" data-act="plot-filter" data-id="${k}">${label}</button>`).join('');
@@ -48,7 +48,7 @@ export function plotDetail(sim, id) {
     const crew = Object.keys(project.crew).map((cid) => s.citizens.find((c) => c.id === cid)?.firstName).filter(Boolean);
     construction = `<div class="card">
       <h3>${project.kind === 'demolition' ? 'Demolition' : project.kind === 'refit' ? 'Refit' : project.kind === 'rebuild' ? 'Rebuilding' : 'Construction'}</h3>
-      <p>${project.kind === 'demolition' ? 'Taking down the old building' : `Building a ${esc((project.targetEra ? formOf(project.buildingType, project.targetEra).labels[0] : BUILDING_INFO[project.buildingType].label).toLowerCase())}`} for ${esc(owner(s, project.ownerId))}, started day ${project.startedDay}.</p>
+      <p>${project.kind === 'demolition' ? 'Taking down the old building' : `Building a ${esc((project.targetEra ? formOf(project.buildingType, project.targetEra).labels[0] : buildingLabel(project.buildingType)).toLowerCase())}`} for ${esc(owner(s, project.ownerId))}, started day ${project.startedDay}.</p>
       <div class="progress"><i style="width:${Math.round(projectProgress(project) * 100)}%"></i></div>
       <ol class="steps" style="margin-top:8px"><li class="${project.stageIndex >= 0 ? 'done' : 'current'}">Planning & materials</li>${stages.map((st, i) => `<li class="${i < project.stageIndex ? 'done' : i === project.stageIndex ? 'current' : ''}">${esc(st.name.toLowerCase())}</li>`).join('')}</ol>
       <p class="muted" style="margin-top:6px">${project.waiting ? `⚠ ${esc(project.waiting)}` : `Timber on site: ${project.materials}`} · Crew now: ${crew.length ? esc(crew.join(', ')) : 'nobody'}</p>
@@ -59,13 +59,13 @@ export function plotDetail(sim, id) {
   <div class="card">
     <div class="row between"><strong style="font-size:16px">📍 ${esc(p.name)}</strong>${status(p)}</div>
     <dl class="kv" style="margin-top:8px">
-      <dt>Land</dt><dd>${LAND_TYPES[p.landType].label} · ${p.w}×${p.d}</dd>
+      <dt>Land</dt><dd>${esc(landInfo(p.landType).label)} · ${p.w}×${p.d}</dd>
       <dt>Owner</dt><dd>${esc(owner(s, p.ownerId))}</dd>
       <dt>Building</dt><dd>${esc(p.building?.name ?? 'None')}</dd>
       <dt>Status</dt><dd>${esc(p.constructionStatus === 'NONE' ? (p.building ? 'Standing' : 'Vacant') : p.constructionStatus.toLowerCase())}</dd>
       <dt>Value</dt><dd>${plotValue(p)}🪙</dd>
       ${p.marketStatus === 'FOR_SALE' ? `<dt>Asking price</dt><dd>${p.price}🪙</dd>` : ''}
-      <dt>Suitable for</dt><dd>${LAND_TYPES[p.landType].allows.map((t) => BUILDING_INFO[t].label).join(', ')}</dd>
+      <dt>Suitable for</dt><dd>${esc(landInfo(p.landType).allows.map(buildingLabel).join(', ') || '—')}</dd>
     </dl>
     <div class="chips" style="margin-top:9px">${ownerC ? link('citizen', ownerC.id, `👤 ${ownerC.firstName}`) : ''}${b ? link('business', b.id, `🏪 ${b.name}`) : ''}${residents.map((r) => link('citizen', r.id, `🏠 ${r.firstName}`)).join('')}</div>
   </div>
