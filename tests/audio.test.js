@@ -191,8 +191,28 @@ test('audio: heavy rain is a soft bed under the music, not a hiss that drowns it
   const ctx = new FakeAudioContext();
   const amb = new AmbientSoundscape(ctx, ctx.createGain());
   amb.update(ambienceMix({ hour: 12, season: 1, era: 1, weather: 'rain', intensity: 1, zoom: 40 }));
-  // Measured in Chromium through the real mixer: music -22.6 dB, rain -32.2 dB (was -17.6 dB).
-  assert.ok(amb.beds.rain.gain.value > 0.05, 'rain is still heard');
-  assert.ok(amb.beds.rain.gain.value <= 0.14, `rain bed gain ${amb.beds.rain.gain.value}`);
+  // Measured in Chromium through the real mixer: music -23 dB, rain -39 dB (was -17.6 dB);
+  // through a phone-speaker filter (450 Hz high-pass) music -31 dB, rain -38 dB.
+  assert.ok(amb.beds.rain.gain.value > 0.03, 'rain is still heard');
+  assert.ok(amb.beds.rain.gain.value <= 0.07, `rain bed gain ${amb.beds.rain.gain.value}`);
   assert.ok(amb.beds.rain.gain.value < amb.beds.wind.gain.value * 2, 'no louder than the wind it comes with');
+});
+
+test('audio: the town\'s background stays well under the music, even on a phone speaker', () => {
+  // Phone speakers drop the music's bass but not a noise bed's midrange, so the beds are kept low.
+  // Measured (phone filter): music -31 dB; a Year 1 town -44 to -49 dB; a Year 400 city centre -38 dB.
+  const ctx = new FakeAudioContext();
+  const amb = new AmbientSoundscape(ctx, ctx.createGain());
+  const views = [
+    { hour: 12, season: 1, era: 1, zoom: 160, forest: 1, shops: 4, homes: 10, crowd: 20 },
+    { hour: 12, season: 1, era: 4, zoom: 60, shops: 4, homes: 10, crowd: 20, towers: 4, vehicles: 8, industrial: 2 },
+  ];
+  for (const v of views) {
+    amb.update(ambienceMix(v));
+    // Wind and crowds are the noise a phone plays at full strength (traffic and machinery are mostly bass).
+    const g = (k) => amb.beds[k].gain.value;
+    assert.ok(g('wind') <= 0.16 && g('crowd') <= 0.1, `wind ${g('wind')}, crowd ${g('crowd')} in era ${v.era}`);
+    assert.ok(g('wind') + g('crowd') < 0.25, `wind + crowd ${(g('wind') + g('crowd')).toFixed(2)} in era ${v.era}`);
+    assert.ok(g('traffic') <= 0.38 && g('machine') <= 0.4, `traffic ${g('traffic')}, machine ${g('machine')}`);
+  }
 });
