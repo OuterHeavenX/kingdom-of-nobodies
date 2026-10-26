@@ -53,7 +53,12 @@ const fromDir = option('from-dir');
 const playerMode = option('player') ?? 'auto';
 let failures = 0;
 const LISTED = new WeakMap(); // listed buildings as first seen, per world
-const fail = (seed, year, msg) => { failures++; console.error(`  ✗ seed ${seed} year ${year}: ${msg}`); };
+const fail = (seed, year, msg) => {
+  failures++;
+  console.error(`  ✗ seed ${seed} year ${year}: ${msg}`);
+  // On CI, the first few violations also become annotations (readable without the raw log).
+  if (process.env.GITHUB_ACTIONS && failures <= 10) console.log(`::error title=longevity seed ${seed} year ${year}::${String(msg).replace(/\n/g, ' ')}`);
+};
 
 /** Check every multigenerational invariant; returns the number of violations found. */
 export function checkInvariants(s, seed, year) {
