@@ -29,7 +29,7 @@
 @media (min-width: 900px), (orientation: landscape) and (max-height: 540px) { .unseen-eye { bottom: 18px; } }
 
 /* ---------- The Year 200 notice ---------- */
-.whisper-notice { position: absolute; z-index: 9; left: 50%; top: 9%; transform: translateX(-50%); width: min(92%, 360px); animation: hh-rise .9s ease-out; }
+.whisper-notice { position: absolute; z-index: 9; left: 50%; top: 14%; transform: translateX(-50%); width: min(92%, 360px); animation: hh-rise .9s ease-out; }
 .wn-card { position: relative; padding: 18px 18px 14px; border-radius: 18px; text-align: center; color: var(--hh-ink);
   background: radial-gradient(120% 90% at 50% 0%, #1b5a46f2, #0b2e24f5 70%); border: 1px solid var(--hh-gold); box-shadow: 0 0 0 6px #d9b45a14, 0 18px 40px #000a; }
 .wn-card h3 { margin: 6px 0 8px; font: 700 18px/1.25 Georgia, serif; color: var(--hh-gold-2); letter-spacing: .3px; }

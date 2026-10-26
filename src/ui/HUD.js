@@ -395,5 +395,5 @@ export class HUD {
   }
 }
 
-/** Prepend the Unseen Influence entry to a panel (the Council tab), so it is reachable from the main navigation. */
-const withEntry = (card, inner) => ({ title: inner.title, html: card + inner.html });
+/** Add the Unseen Influence entry to a panel (the Council tab), so it is reachable from the main navigation. */
+const withEntry = (card, inner) => ({ title: inner.title, html: inner.html + card });

@@ -70,7 +70,8 @@ function hourlyDivine(state) {
 
 // --- Wiring -----------------------------------------------------------------------------
 
-milestone5Setup.push(ensureDivine);
+// New kingdoms and migrated saves: the divine layer, and a worldview for everyone already living.
+milestone5Setup.push((state) => { ensureDivine(state); for (const c of state.citizens) worldviewOf(state, c); });
 dailyHooks.late.push(dailyDivine);
 hourlyHooks.push(hourlyDivine);
 

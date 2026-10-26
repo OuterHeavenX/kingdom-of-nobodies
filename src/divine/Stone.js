@@ -111,7 +111,7 @@ export function placeStone(state, { x, z, inscription = 'glyphs' } = {}) {
   const problem = siteProblem(state, x, z);
   if (problem) return { ok: false, message: problem };
   d.stone = {
-    id: 'stone-1', x, z, inscription, placedDay: state.day, rotation: r2(roll(state, 'stone-rot') * Math.PI * 2),
+    id: 'stone-1', x, z, inscription, placedDay: state.day, rotation: r2(0.58 + (roll(state, 'stone-rot') - 0.5) * 0.6), // a carved face turned towards the usual view
     discovered: false, discoveredDay: null, discovererId: null, discovererName: null, known: 0, visits: 0, reported: false, public: false,
     investigations: 0, progress: 0, findings: {}, studies: [], site: {}, firsts: {}, history: [], anniversaries: [],
   };

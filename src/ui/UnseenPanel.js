@@ -204,9 +204,8 @@ export function unseenPanel(sim, view) {
 export function unseenEntryCard(sim, settings = {}) {
   const d = ensureDivine(sim.state);
   const where = settings.unseenEye ?? 'right';
-  const open = openPrayers(sim.state).length;
   return `<div class="card hh-card hh-entry-card"><div class="row between"><strong><span class="hh-eye-inline">${eyeSvg(18)}</span> The Unseen Influence</strong><span class="muted">${Math.floor(d.whispers)} Whispers</span></div>
-    <p>Blessings, signs, prayers and mysteries. ${open ? `${open} prayer${open === 1 ? '' : 's'} waiting.` : ''}${d.unlocked && !d.stone ? ' The stone may be raised.' : ''}</p>
+    <p>Blessings, signs, prayers and mysteries.${d.unlocked && !d.stone ? ' The stone may be raised.' : ''}</p>
     <button class="btn hh-gold" data-act="hh-open">Open</button>
     <div class="row between" style="margin-top:8px"><small class="muted">Eye button</small><div class="segmented">${[['right', 'Right'], ['left', 'Left'], ['hidden', 'Hidden']].map(([k, l]) => `<button class="${where === k ? 'active' : ''}" data-act="hh-eye" data-id="${k}">${l}</button>`).join('')}</div></div></div>`;
 }

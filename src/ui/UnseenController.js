@@ -52,9 +52,13 @@ export class UnseenController {
     eye.classList.toggle('left', where === 'left');
   }
 
+  /** Keep the chosen section's button in view on the scrolling section bar. */
+  revealSection() { setTimeout(() => document.querySelector('.hh-seg button.active')?.scrollIntoView?.({ inline: 'center', block: 'nearest' }), 0); }
+
   open(section = null) {
     if (section) this.hud.view.unseen = section;
     this.hud.openTab('unseen');
+    this.revealSection();
     this.game.audio.hiddenHand?.('motif');
   }
 
@@ -86,7 +90,7 @@ export class UnseenController {
     const refresh = () => this.hud.renderSheet(true);
     switch (act) {
       case 'hh-open': this.open(); return true;
-      case 'hh-mode': v.unseen = id; v.unseenBlessing = null; v.unseenPrayer = null; refresh(); $('sheet-body').scrollTop = 0; return true;
+      case 'hh-mode': v.unseen = id; v.unseenBlessing = null; v.unseenPrayer = null; refresh(); $('sheet-body').scrollTop = 0; this.revealSection(); return true;
       case 'hh-pick': v.unseenBlessing = v.unseenBlessing === id ? null : id; refresh(); return true;
       case 'hh-bless': this.result(bestow(s, id, el.dataset.target), el.dataset.target); v.unseenBlessing = null; refresh(); return true;
       case 'hh-answer-open': v.unseenPrayer = v.unseenPrayer === id ? null : id; refresh(); return true;
@@ -112,7 +116,7 @@ export class UnseenController {
       case 'hh-place-map': this.beginPlacing(null, null); return true;
       case 'hh-show-stone': { const st = s.divine?.stone; if (st) { this.game.world?.focusOn(st.x, st.z, 26); this.hud.sheet.set('peek'); } return true; }
       case 'hh-filter': v.unseenFilter = id; refresh(); return true;
-      case 'hh-eye': this.game.setSetting('unseenEye', el.value ?? id); this.applyEyeSetting(); refresh(); return true;
+      case 'hh-eye': this.game.setSetting('unseenEye', id); this.applyEyeSetting(); refresh(); return true;
       default: return false;
     }
   }

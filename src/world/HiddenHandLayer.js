@@ -48,7 +48,7 @@ function stoneBody(seed) {
     v.multiplyScalar(k);
     // Tall, slightly tapering, with a flattened carving face towards +z.
     const taper = 1 - (v.y + 1) * 0.12;
-    v.set(v.x * 0.62 * taper, v.y * 1.45 + 1.45, Math.min(v.z, 0.82) * 0.38 * taper);
+    v.set(v.x * 0.82 * taper, v.y * 1.75 + 1.75, Math.min(v.z, 0.82) * 0.52 * taper);
     pos.setXYZ(i, v.x, v.y, v.z);
   }
   const flat = geo.toNonIndexed();
@@ -56,12 +56,12 @@ function stoneBody(seed) {
   // Weathered grey with moss creeping up from the ground and lichen flecks.
   const p = flat.attributes.position;
   const colors = new Float32Array(p.count * 3);
-  const c = new THREE.Color(), moss = new THREE.Color('#5d7a43'), grey = new THREE.Color('#8d8a80'), dark = new THREE.Color('#5f5c55');
+  const c = new THREE.Color(), moss = new THREE.Color('#5d7a43'), grey = new THREE.Color('#aaa699'), dark = new THREE.Color('#77736a');
   for (let i = 0; i < p.count; i += 3) {
     const y = (p.getY(i) + p.getY(i + 1) + p.getY(i + 2)) / 3;
     const r = rand();
-    c.copy(grey).lerp(dark, r * 0.5);
-    if (y < 0.7 + r * 0.6) c.lerp(moss, 0.55 + r * 0.3);
+    c.copy(grey).lerp(dark, r * 0.55);
+    if (y < 0.45 + r * 0.5) c.lerp(moss, 0.45 + r * 0.25);
     else if (r > 0.86) c.lerp(new THREE.Color('#b9b48f'), 0.5);
     for (let k = 0; k < 3; k++) { colors[(i + k) * 3] = c.r; colors[(i + k) * 3 + 1] = c.g; colors[(i + k) * 3 + 2] = c.b; }
   }
@@ -70,19 +70,25 @@ function stoneBody(seed) {
   return flat;
 }
 
-/** The carved script as thin quads on the stone's face (one geometry, one material). */
+/** Where the dressed, carved panel sits on each face of the stone. */
+const PANEL = { w: 1.12, h: 1.62, d: 0.18, y: 2.42, z: 0.3 };
+
+/** The carved script as thin quads on both dressed faces (one geometry, one material). */
 function carving(inscription) {
   const seq = glyphsFor(inscription);
   const verts = [];
-  const cols = 4, cell = 0.2, w = 0.022, x0 = -cols * cell / 2, y0 = 2.55, z = 0.335;
-  seq.forEach((g, i) => {
-    const ox = x0 + (i % cols) * cell, oy = y0 - Math.floor(i / cols) * cell * 1.05;
-    for (const [ax, ay, bx, by] of GLYPHS[g]) {
-      const x1 = ox + ax * cell * 0.8, y1 = oy - ay * cell * 0.8, x2 = ox + bx * cell * 0.8, y2 = oy - by * cell * 0.8;
-      const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1, nx = (-dy / len) * w, ny = (dx / len) * w;
-      verts.push(x1 + nx, y1 + ny, z, x1 - nx, y1 - ny, z, x2 + nx, y2 + ny, z, x2 + nx, y2 + ny, z, x1 - nx, y1 - ny, z, x2 - nx, y2 - ny, z);
-    }
-  });
+  const cols = 4, cell = 0.25, w = 0.028, x0 = -cols * cell / 2 + 0.02, y0 = PANEL.y + PANEL.h / 2 - 0.08;
+  for (const side of [1, -1]) {
+    const z = side * (PANEL.z + PANEL.d / 2 + 0.012);
+    seq.forEach((g, i) => {
+      const ox = x0 + (i % cols) * cell, oy = y0 - Math.floor(i / cols) * cell * 1.2;
+      for (const [ax, ay, bx, by] of GLYPHS[g]) {
+        const x1 = side * (ox + ax * cell * 0.8), y1 = oy - ay * cell * 0.8, x2 = side * (ox + bx * cell * 0.8), y2 = oy - by * cell * 0.8;
+        const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1, nx = (-dy / len) * w, ny = (dx / len) * w;
+        verts.push(x1 + nx, y1 + ny, z, x1 - nx, y1 - ny, z, x2 + nx, y2 + ny, z, x2 + nx, y2 + ny, z, x1 - nx, y1 - ny, z, x2 - nx, y2 - ny, z);
+      }
+    });
+  }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
   return g;
@@ -93,11 +99,11 @@ function cracks(seed) {
   const rand = seeded(seed + 99);
   const verts = [];
   for (let k = 0; k < 4; k++) {
-    let x = (rand() - 0.5) * 0.7, y = 0.6 + rand() * 2.2;
+    let x = (rand() - 0.5) * 0.9, y = 0.7 + rand() * 2.6;
     for (let s = 0; s < 4; s++) {
       const nx = x + (rand() - 0.5) * 0.18, ny = y - 0.08 - rand() * 0.14;
       const w = 0.012;
-      verts.push(x - w, y, 0.33, x + w, y, 0.33, nx + w, ny, 0.33, nx + w, ny, 0.33, x - w, y, 0.33, nx - w, ny, 0.33);
+      verts.push(x - w, y, 0.44, x + w, y, 0.44, nx + w, ny, 0.44, nx + w, ny, 0.44, x - w, y, 0.44, nx - w, ny, 0.44);
       x = nx; y = ny;
     }
   }
@@ -118,7 +124,7 @@ export class HiddenHandLayer {
     this.seen = new Set();
     this.placing = null;
     this.preview = null;
-    this.glyphMat = new THREE.MeshBasicMaterial({ color: '#f1d991', transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide });
+    this.glyphMat = new THREE.MeshBasicMaterial({ color: '#ffe7a3', transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide });
     this.crackMat = new THREE.MeshBasicMaterial({ color: '#2e2b27', side: THREE.DoubleSide });
     this.bodyMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.96, metalness: 0 });
     this.lanternMat = new THREE.MeshStandardMaterial({ color: '#fff0c0', emissive: '#ffd27a', emissiveIntensity: 0.2, roughness: 0.4 });
@@ -148,18 +154,20 @@ export class HiddenHandLayer {
     carved.position.y = raise; carved.userData.own = true;
     const crack = new THREE.Mesh(cracks(seed), this.crackMat);
     crack.position.y = raise; crack.userData.own = true;
+    // A dressed face on each side carries the inscription.
+    for (const side of [1, -1]) part(g, G.box(), mat('#b9b5a8'), [PANEL.w, PANEL.h, PANEL.d], [0, PANEL.y + raise, side * PANEL.z], null, true);
     g.add(body, carved, crack);
     // Rubble and moss at the foot.
     const rand = seeded(seed + 7);
-    for (let i = 0; i < 7; i++) { const a = rand() * Math.PI * 2, r = 0.55 + rand() * 0.5; part(g, G.dodeca(), mat(i % 3 ? P.stoneDark : '#6d7a52'), [0.22 + rand() * 0.2, 0.12 + rand() * 0.1, 0.2 + rand() * 0.2], [Math.cos(a) * r, 0.06 + raise, Math.sin(a) * r], [rand(), rand(), rand()], false); }
+    for (let i = 0; i < 7; i++) { const a = rand() * Math.PI * 2, r = 0.75 + rand() * 0.5; part(g, G.dodeca(), mat(i % 3 ? P.stoneDark : '#6d7a52'), [0.22 + rand() * 0.2, 0.12 + rand() * 0.1, 0.2 + rand() * 0.2], [Math.cos(a) * r, 0.06 + raise, Math.sin(a) * r], [rand(), rand(), rand()], false); }
     part(g, G.disc(), mat('#5f7d45'), [2.2, 1, 1.8], [0, 0.02, 0], null, false);
     this.site(g, st.site, raise);
     // A soft glow around the carving at night, and a few rising motes.
-    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: dot(), color: '#f1d991', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
-    glow.scale.set(3.6, 4.6, 1); glow.position.set(0, 2 + raise, 0.25);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: dot(), color: '#ffe08a', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+    glow.scale.set(4.2, 5.6, 1); glow.position.set(0, 2.4 + raise, 0.3);
     g.add(glow);
     this.glow = glow;
-    this.motes = this.moteCloud(REDUCED ? 6 : 18, 0.9, 3.2 + raise);
+    this.motes = this.moteCloud(REDUCED ? 6 : 18, 1.1, 3.9 + raise);
     g.add(this.motes.points);
     g.traverse((o) => { o.userData.stone = true; });
     this.root.add(g);
@@ -216,7 +224,7 @@ export class HiddenHandLayer {
     if (this.stone) {
       this.pulse = Math.max(0, this.pulse - dt * 0.08);
       const glow = Math.min(1, 0.08 + night * 0.5 + this.pulse);
-      this.glyphMat.opacity = 0.22 + glow * 0.7 + (REDUCED ? 0 : Math.sin(time * 0.9) * 0.04);
+      this.glyphMat.opacity = Math.min(1, 0.3 + glow * 0.75 + (REDUCED ? 0 : Math.sin(time * 0.9) * 0.04));
       this.glow.material.opacity = glow * 0.42;
       this.lanternMat.emissiveIntensity = 0.15 + night * 1.6;
       this.stepMotes(this.motes, dt);
@@ -303,13 +311,14 @@ const OMEN_FX = {
   skylights(layer, o) {
     const g = new THREE.Group();
     const target = layer.world.controls.target;
-    g.position.set(target.x, 0, target.z - 30);
+    // Ribbons of light hung over the view, low enough to be seen from the usual high camera.
+    g.position.set(target.x, 0, target.z);
     const ribbons = [];
     for (let i = 0; i < 3; i++) {
-      const geo = new THREE.PlaneGeometry(80, 10, 40, 1);
+      const geo = new THREE.PlaneGeometry(90, 9, 40, 1);
       const m = own(new THREE.Mesh(geo, glowMat(['#5ee6a0', '#8fb6ff', '#b48bff'][i], 0)));
-      m.position.set((i - 1) * 10, 42 + i * 5, -i * 8);
-      m.rotation.x = -0.3;
+      m.position.set((i - 1) * 6, 18 + i * 4, -10 - i * 7);
+      m.rotation.set(-1.1, 0.25 * (i - 1), 0);
       g.add(m);
       ribbons.push({ m, base: geo.attributes.position.array.slice() });
     }
@@ -363,7 +372,7 @@ const OMEN_FX = {
     for (let i = 0; i < 9; i++) {
       const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(-3.5, -1.4, 0)]);
       const line = own(new THREE.Line(geo, new THREE.LineBasicMaterial({ color: '#fff6d8', transparent: true, opacity: 0, blending: THREE.AdditiveBlending })));
-      const from = new THREE.Vector3((rand() - 0.3) * 80, 45 + rand() * 20, -30 - rand() * 40);
+      const from = new THREE.Vector3((rand() - 0.3) * 60, 22 + rand() * 12, -10 - rand() * 25);
       line.position.copy(from);
       g.add(line);
       streaks.push({ line, from, delay: rand() * 0.7 });
@@ -373,7 +382,7 @@ const OMEN_FX = {
   clouds(layer, o) {
     const g = new THREE.Group();
     const target = layer.world.controls.target;
-    g.position.set(target.x + 10, 34, target.z - 25);
+    g.position.set(target.x + 6, 22, target.z - 14);
     const puffs = [];
     for (let i = 0; i < 16; i++) { const a = i * 0.7, r = 1.5 + i * 0.75; const m = own(new THREE.Mesh(G.sphere(8).clone(), new THREE.MeshStandardMaterial({ color: '#f4f4f0', transparent: true, opacity: 0, roughness: 1 }))); m.scale.setScalar(2.4 + (i % 3)); m.position.set(Math.cos(a) * r, Math.sin(i) * 0.6, Math.sin(a) * r); g.add(m); puffs.push(m); }
     return { group: g, dur: 22, update: (t, dt) => { for (const m of puffs) m.material.opacity = fade(t) * 0.75; if (!REDUCED) g.rotation.y += dt * 0.05; } };

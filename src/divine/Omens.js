@@ -88,8 +88,8 @@ export function sendOmen(state, id, { x = 0, z = 0 } = {}) {
   });
   if (seen.length >= 3) record(state, 'culture', `${seen.length} villagers saw ${def.seen}. ${named.length ? named.join('; ') + '.' : 'Nobody made much of it.'}`, { citizens: Object.values(voices).map((l) => l[0].id) }, 1);
   const views = Object.entries(omen.views).map(([k, n]) => `${n} ${k}`).join(', ') || 'nobody';
-  hiddenRecord(state, 'omen', `You sent ${def.name.toLowerCase()}. ${seen.length} saw it (${views}).`, { omen: omen.id }, 2).actual = true;
-  return { ok: true, message: `${def.icon} ${def.name} — ${seen.length} saw it.`, omen };
+  hiddenRecord(state, 'omen', `You sent ${def.name.toLowerCase()}. ${seen.length} saw the sign (${views}).`, { omen: omen.id }, 2).actual = true;
+  return { ok: true, message: `${def.icon} ${def.name} — ${seen.length} saw the sign.`, omen };
 }
 
 /** Omens still worth drawing (the renderer plays each for a while once it appears). */
