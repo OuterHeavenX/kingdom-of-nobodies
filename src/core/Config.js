@@ -9,7 +9,8 @@ export const TIME = {
   minutesPerTick: 10,
   ticksPerDay: 144,
   realSecondsPerTick: 0.25, // at 1× speed one in-game day lasts 36 seconds
-  speeds: [1, 3, 6, 20],
+  // ¼× is a stroll: a tick a second, so villagers walk at a natural pace (a day lasts 2.4 minutes).
+  speeds: [0.25, 1, 3, 6, 20],
   maxTicksPerFrame: 12,
   dayStartHour: 6,
   workStartHour: 6,

@@ -588,7 +588,8 @@ the state behind it changed.
    - **Council**: actions, region & roads, settings and the optional **cloud backup**.
 4. Tap anyone, anywhere, to read their story. *Follow in village* keeps the camera on them until you drag the
    view. 🌳 opens a family tree centred on that person, and 📖 opens a biography.
-5. Use ⏸ and **1× / 3× / 6× / 20×** in the top bar. 20× is for watching generations pass.
+5. Use ⏸ and **1× / 3× / 6× / 20× / ¼×** in the top bar (tap to cycle). 20× is for watching generations pass; ¼× is a
+   stroll, with villagers walking at a natural pace (a day lasts 2.4 minutes).
 6. Council → *Kingdom & settings* has the name label toggle, *Battery saver* graphics, Save, Export, Import,
    *Restore yearly snapshot* and New kingdom.
 
@@ -680,7 +681,8 @@ Key design rules:
 - **Systems change state, then record it.** Achievements, biographies and eras are derived from recorded
   facts.
 - **Deterministic**: the RNG lives in the saved state. A reloaded world continues exactly, including mid-birth,
-  mid-election and mid-fire (this is tested), and a 20× run is identical to a 1× run.
+  mid-election and mid-fire (this is tested), and ¼×, 6× and 20× runs are identical to a 1× run. Between ticks, villagers
+  and vehicles glide at a steady pace to their next position (`src/world/Glide.js`), so slow speeds don't stutter.
 - **Bounded growth**: each year, compaction keeps each person's 24 most significant relationships, reduces
   closed businesses to compact records, and trims archive records to their identity, family, career highlights
   and achievements. The archive keeps every person who ever lived.

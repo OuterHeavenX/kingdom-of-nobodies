@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { buildTerrain } from './Terrain.js';
+import { TIME } from '../core/Config.js';
 import { buildingModel, constructionModel, forSaleSign, litWindow, forgeGlow, memorialModel, fireModel } from './Models.js';
 import { Villagers } from './Villagers.js';
 import { CaravanLayer } from './Caravans.js';
@@ -656,7 +657,8 @@ export class World {
     }
   }
 
-  render(dt, time) {
+  /** `tickSeconds` is the real time one simulation tick takes at the current game speed. */
+  render(dt, time, tickSeconds = TIME.realSecondsPerTick) {
     const s = this.sim.state;
     // The theme's weather: the kingdom's own (through each kingdom's climate), or the preview's.
     const sky = this.weather.update(this.themes.env.weather ?? s.weather?.today, dt, this.controls.target, time);
@@ -677,8 +679,8 @@ export class World {
     }
     this.updateSky(this.visualHour(), time, sky);
     const selected = this.sim.selected.kind === 'citizen' ? this.sim.selected.id : null;
-    this.villagers.update(s.citizens, dt, time, selected, s.day, this.controls.target, this.quality);
-    this.vehicles.update(s.citizens, dt);
+    this.villagers.update(s.citizens, dt, time, selected, s.day, this.controls.target, this.quality, tickSeconds);
+    this.vehicles.update(s.citizens, dt, tickSeconds);
     for (let i = 0; i < this.cranes.length; i++) this.cranes[i].rotation.y = Math.sin(time * 0.15 + i * 1.7) * 1.4;
     this.caravans.update(dt, time);
     if (this.followCaravanId) {

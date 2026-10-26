@@ -289,7 +289,7 @@ export class HUD {
     $('pause').textContent = clockState.paused ? '▶' : '⏸';
     $('pause').classList.toggle('active', clockState.paused);
     $('pause').setAttribute('aria-label', clockState.paused ? 'Resume' : 'Pause');
-    $('speed').textContent = `${clockState.speed}×`;
+    $('speed').textContent = `${clockState.speed === 0.25 ? '¼' : clockState.speed}×`;
     const snd = $('sound');
     if (snd) { const on = this.game.audio.enabled; const icon = on ? (this.game.audio.running ? '🔊' : '🔈') : '🔇'; if (snd.textContent !== icon) snd.textContent = icon; snd.setAttribute('aria-label', on ? 'Turn sound off' : 'Enable sound'); snd.classList.toggle('active', on); }
   }
