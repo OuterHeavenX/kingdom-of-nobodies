@@ -74,6 +74,23 @@ test('13. the simulation is identical at 1× and 6× speed', () => {
   assert.equal(JSON.stringify(a.state), JSON.stringify(b.state));
 });
 
+test('the simulation is identical at ¼× and 1× speed, and the speed button cycles through ¼×', () => {
+  const a = new Simulation(createKingdom(12));
+  const b = new Simulation(createKingdom(12));
+  const ca = new GameClock(() => a.step());
+  const cb = new GameClock(() => b.step());
+  cb.speed = 0.25;
+  // ¼× for 60 seconds of frames == 1× for 15 seconds of frames.
+  for (let i = 0; i < 960; i++) cb.advance(1 / 16);
+  for (let i = 0; i < 240; i++) ca.advance(1 / 16);
+  assert.equal(b.state.tick, 60, 'one tick a second at ¼×');
+  assert.equal(JSON.stringify(a.state), JSON.stringify(b.state));
+  const clock = new GameClock(() => {});
+  const seen = [];
+  for (let i = 0; i < 5; i++) { clock.cycleSpeed(); seen.push(clock.speed); }
+  assert.deepEqual(seen, [3, 6, 20, 0.25, 1], 'starts at 1×, and ¼× comes after 20×');
+});
+
 test('the clock pauses and never silently fast-forwards after a stall', () => {
   let ticks = 0;
   const clock = new GameClock(() => ticks++);

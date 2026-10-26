@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { mat, G, part, PALETTE as P } from './Materials.js';
+import { TIME } from '../core/Config.js';
+import { glide } from './Glide.js';
 
 // Vehicles. A villager whose trip the simulation made by car, bus, rapid
 // transit or autonomous pod is drawn in that vehicle, on the route the
@@ -73,7 +75,7 @@ export class VehicleLayer {
   }
 
   /** Citizens who are travelling by vehicle right now. */
-  update(citizens, dt) {
+  update(citizens, dt, tickSeconds = TIME.realSecondsPerTick) {
     const seen = new Set();
     for (const c of citizens) {
       const a = c.activity;
@@ -92,8 +94,7 @@ export class VehicleLayer {
       }
       const dx = c.x - n.position.x, dz = c.z - n.position.z;
       const dist = Math.hypot(dx, dz);
-      if (dist > 14) n.position.set(c.x, 0, c.z);
-      else { n.position.x += dx * Math.min(1, dt * 6); n.position.z += dz * Math.min(1, dt * 6); }
+      glide(n, n.userData, c.x, c.z, dt, tickSeconds, 14);
       if (dist > 0.05) {
         const want = Math.atan2(dx, dz);
         let d = want - n.rotation.y;

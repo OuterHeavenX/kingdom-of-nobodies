@@ -1,6 +1,7 @@
 import { Simulation } from '../sim/Simulation.js';
 import { createKingdom } from '../sim/Setup.js';
 import { GameClock } from './GameClock.js';
+import { TIME } from './Config.js';
 import { SaveManager } from './SaveManager.js';
 import { World, WebGLUnavailableError } from '../world/World.js';
 import { HUD } from '../ui/HUD.js';
@@ -120,7 +121,7 @@ export class Game {
       if (this.started) this.clock.advance(dt);
       this.announce();
       if (this.world) {
-        this.world.render(dt, now / 1000);
+        this.world.render(dt, now / 1000, TIME.realSecondsPerTick / this.clock.speed);
         this.autoQuality(dt);
         this.adaptResolution(dt);
       }

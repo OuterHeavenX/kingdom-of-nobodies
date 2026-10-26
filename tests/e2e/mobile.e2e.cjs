@@ -62,8 +62,9 @@ const BASE = process.env.BASE_URL ?? 'http://localhost:4173/kingdom-of-nobodies/
   await page.waitForSelector('#sheet[data-state=closed]', { timeout: 3000 });
   step('swipe down dismisses the sheet');
 
-  await page.tap('#speed');
-  assert.equal(await page.textContent('#speed'), '3×');
+  const speeds = [];
+  for (let i = 0; i < 5; i++) { await page.tap('#speed'); speeds.push(await page.textContent('#speed')); }
+  assert.deepEqual(speeds, ['3×', '6×', '20×', '¼×', '1×'], 'the speed button cycles through ¼× back to 1×');
   await page.tap('#pause');
   assert.equal(await page.evaluate(() => kingdom.clock.paused), true);
   await page.tap('#pause');

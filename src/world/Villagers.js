@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { mat, G, part } from './Materials.js';
 import { ageOn, stageForAge } from '../core/Calendar.js';
+import { TIME } from '../core/Config.js';
+import { glide } from './Glide.js';
 
 // Body scale by life stage; elders also stoop a little and go grey.
 const STAGE_SCALE = { infant: 0.4, child: 0.62, teen: 0.86, young: 1, adult: 1, elder: 0.96 };
@@ -97,7 +99,6 @@ export class Villagers {
     this.ring.position.y = 0.05;
     this.ring.visible = false;
     scene.add(this.ring);
-    this.tmp = new THREE.Vector3();
   }
 
   sync(citizens, day) {
@@ -122,7 +123,7 @@ export class Villagers {
    * Level of detail: villagers far from the view centre are hidden, and those
    * at middle distance only move (no limb animation). Low quality tightens both.
    */
-  update(citizens, dt, time, selectedId, day, target, quality = 'high') {
+  update(citizens, dt, time, selectedId, day, target, quality = 'high', tickSeconds = TIME.realSecondsPerTick) {
     const far = (quality === 'high' ? 95 : quality === 'medium' ? 62 : 46) ** 2, animate = (quality === 'high' ? 55 : 38) ** 2;
     for (const c of citizens) {
       const node = this.nodes.get(c.id);
@@ -135,13 +136,12 @@ export class Villagers {
       const riding = a?.phase === 'travel' && !!a.vehicle;
       node.visible = !asleep && !riding && (d2 < far || c.id === selectedId);
       if (!node.visible) { node.position.set(c.x, 0, c.z); continue; }
-      this.tmp.set(c.x, 0, c.z);
       const dx = c.x - node.position.x, dz = c.z - node.position.z;
       const dist = Math.hypot(dx, dz);
-      const moving = dist > 0.05;
-      if (dist > 12) node.position.copy(this.tmp);
-      else node.position.lerp(this.tmp, Math.min(1, dt * 7));
-      if (moving) node.rotation.y = lerpAngle(node.rotation.y, Math.atan2(dx, dz), Math.min(1, dt * 10));
+      // Between ticks a walker may briefly reach its drawn target; keep the stride going while on the way.
+      const moving = dist > 0.05 || a?.phase === 'travel';
+      glide(node, u, c.x, c.z, dt, tickSeconds, 12);
+      if (dist > 0.05) node.rotation.y = lerpAngle(node.rotation.y, Math.atan2(dx, dz), Math.min(1, dt * 10));
       const base = STAGE_SCALE[u.stage] ?? 1;
       node.scale.setScalar(c.id === selectedId ? base * 1.12 : base);
       if (d2 > animate && c.id !== selectedId) continue;
