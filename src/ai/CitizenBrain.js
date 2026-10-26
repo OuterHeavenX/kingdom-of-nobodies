@@ -102,6 +102,14 @@ const r2 = (v) => Math.round(v * 100) / 100;
 /** Later transport (cars, buses, pods) speeds up long trips; set by civilization/Transport. */
 export const travelHooks = { plan: null };
 
+/**
+ * Later systems add their own activities without editing this file: `begin`
+ * turns a chosen candidate of that kind into { label, loc, duration, extra }
+ * (or null), `finish` applies its consequences, and every `chat` hook hears a
+ * conversation between two villagers.
+ */
+export const activityHooks = { begin: {}, finish: {}, chat: [] };
+
 function travel(state, c, act) {
   const grid = navGrid(state);
   if (act.path && act.navV !== grid.version) {
@@ -235,7 +243,8 @@ function begin(state, c, k) {
       return activity('buy_food', `Buying ${GOODS[k.good].label.toLowerCase()} at ${b.name}`, businessLocation(state, b), 2, { businessId: b.id, good: k.good, payer: k.payer });
     }
     case 'court': {
-      const court = state.plots.find((p) => p.building?.type === 'courthouse') ?? state.plots.find((p) => p.building?.type === 'townhall' || p.building?.type === 'hall');
+      // With the hall lost to fire (and no courthouse yet), cases are heard on the hall's old site.
+      const court = state.plots.find((p) => p.building?.type === 'courthouse') ?? state.plots.find((p) => p.building?.type === 'townhall' || p.building?.type === 'hall') ?? state.plots[0];
       return activity('court', state.law?.judgeId === c.id ? 'Hearing cases' : 'At court', frontOf(court, range(state, -1.6, 1.6), range(state, 0.2, 1)), 8, { caseId: k.caseId });
     }
     case 'see_caravan': return activity('see_caravan', 'Overseeing the caravan', { x: 9 + range(state, -1, 1), z: 4.5 + range(state, -0.5, 0.5) }, 6, { caravanId: k.caravanId });
@@ -321,7 +330,11 @@ function begin(state, c, k) {
     case 'govern': return activity('govern', `Governing as ${state.government.title}`, hallDoor(state), 18);
     case 'family_time': return activity('family_time', 'Time with the family', homeOf(state, c), 8);
     case 'explore': return activity('explore', 'Wandering the village', { x: range(state, -26, 30), z: range(state, -20, 24) }, 4);
-    default: return activity('idle', 'Taking a moment', { x: c.x, z: c.z }, 3);
+    default: {
+      const hook = activityHooks.begin[k.kind];
+      if (hook) { const spec = hook(state, c, k); return spec ? activity(k.kind, spec.label, spec.loc, spec.duration, spec.extra ?? {}) : null; }
+      return activity('idle', 'Taking a moment', { x: c.x, z: c.z }, 3);
+    }
   }
 }
 
@@ -342,6 +355,7 @@ function chat(state, c, others, intensity = 1) {
     socialize(state, c, o, intensity);
     shareGossip(state, c, o);
     shareGossip(state, o, c);
+    for (const fn of activityHooks.chat) fn(state, c, o, intensity);
     o.needs.social = clamp(o.needs.social + 10 * intensity);
   }
 }
@@ -517,7 +531,7 @@ function finish(state, c) {
       if (chance(state, 0.15) && state.commons.berries > 1) { state.commons.berries -= 1; addGoods(c.inventory, 'berries', 1); }
       break;
     }
-    default: break;
+    default: activityHooks.finish[a.kind]?.(state, c, a); break;
   }
 }
 

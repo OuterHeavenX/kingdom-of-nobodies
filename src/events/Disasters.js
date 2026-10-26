@@ -14,7 +14,8 @@ import { achieve } from '../citizens/Citizen.js';
 
 
 /** Later medicine and sanitation lower disease and infant deaths; set by civilization/. */
-export const healthHooks = { disease: null, infant: null };
+// `illness` scales the extra risk of dying while ill and `protect` the whole day's risk, per citizen (both optional).
+export const healthHooks = { disease: null, infant: null, illness: null, protect: null };
 // Rare, condition-driven hardships. Every disaster changes real state: fires
 // damage or destroy buildings (then repaired or rebuilt through ordinary
 // construction), crop failures cut farm output, harsh winters raise hunger and

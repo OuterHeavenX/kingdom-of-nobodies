@@ -105,6 +105,20 @@ export function migrateV7(s) {
   return s;
 }
 
+/**
+ * v0.5.2 (v8) → v0.5.3 (v9): the Hidden Hand. Every villager gains a
+ * worldview drawn from who they already are (their tradition and stance are
+ * kept exactly), the player gains a store of Whispers, and a world that has
+ * already reached Year 200 may now place the Mysterious Stone. Nothing about
+ * families, property, coins, politics, diplomacy or history changes.
+ */
+export function migrateV8(s) {
+  addMilestone5State(s);
+  s.version = 9;
+  s.migrationNotes = [...(s.migrationNotes ?? []), { version: 9, day: s.day, note: 'Added worldviews, prayers, the Unseen Influence and (from Year 200) the Mysterious Stone. Traditions, families, coins and history are unchanged.' }];
+  return s;
+}
+
 export function migrateV5(s) {
   addMilestone5State(s);
   s.version = 6;
@@ -185,6 +199,7 @@ export function migrate(s) {
     s.events = [];
     return s;
   }
+  if (s.version === 8) return migrate(migrateV8(s));
   if (s.version === 7) return migrate(migrateV7(s));
   if (s.version === 6) return migrate(migrateV6(s));
   if (s.version === 5) return migrate(migrateV5(s));

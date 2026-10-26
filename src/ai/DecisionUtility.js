@@ -35,6 +35,13 @@ function candidate(kind, score, factors, extra = {}) {
   return { kind, score: Math.round(score * 10) / 10, factors, ...extra };
 }
 
+/**
+ * Later systems propose their own candidates (`propose(state, c, { minor, h })`
+ * returns a list of { kind, score, factors, ...extra }) and may `adjust` the
+ * finished list. Both are optional; neither may choose for the citizen.
+ */
+export const candidateHooks = { propose: [], adjust: [] };
+
 /** Coins the citizen is trying to save, as a 0..1 pressure. */
 export function moneyPressure(state, c) {
   const money = balance(state, c.id);
@@ -291,6 +298,8 @@ export function generateCandidates(state, c, plan) {
     out.push(candidate('explore', 8 + trait(c, 'curious') * 18, [['nothing pressing, so I can wander', 8], ...(trait(c, 'curious') > 0.4 ? [['I am curious about everything', trait(c, 'curious') * 18]] : [])]));
   }
   out.push(candidate('idle', 4, [['taking a moment', 4]]));
+  for (const fn of candidateHooks.propose) for (const k of fn(state, c, { minor, h, sick }) ?? []) out.push(candidate(k.kind, k.score, k.factors, k));
+  for (const fn of candidateHooks.adjust) fn(state, c, out);
   return out;
 }
 
