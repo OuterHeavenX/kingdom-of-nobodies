@@ -325,7 +325,7 @@ async function runParallel(files = null) {
   const worker = async () => {
     while (queue.length) {
       const seed = queue.shift();
-      const args = files ? [process.argv[1], String(years), '0', '--jobs', '1', '--from', seed] : [process.argv[1], String(years), String(seed), '--jobs', '1', '--player', playerMode, ...(checkpointDir ? ['--checkpoints', checkpointDir] : [])];
+      const args = files ? [process.argv[1], String(years), '0', '--jobs', '1', '--player', playerMode, '--from', seed] : [process.argv[1], String(years), String(seed), '--jobs', '1', '--player', playerMode, ...(checkpointDir ? ['--checkpoints', checkpointDir] : [])];
       const code = await new Promise((resolve) => {
         const child = spawn(process.execPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
         let out = '';

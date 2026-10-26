@@ -46,7 +46,9 @@ export function scriptedPlayer(state, mode, seed) {
     if (b && bestow(state, b, prayerTarget(state, p, b), { prayerId: p.id }).ok) acted++;
   }
   if (yearOf(state.day) % 3 === 0) {
-    const id = OMEN_IDS.find((o) => !omenProblem(state, o));
+    // A different sign each time, among those the hour and weather allow.
+    const ok = OMEN_IDS.filter((o) => !omenProblem(state, o));
+    const id = ok[(yearOf(state.day) / 3 + seed) % Math.max(1, ok.length)];
     if (id) sendOmen(state, id, { x: d.stone?.x ?? 0, z: d.stone?.z ?? 0 });
   }
 }

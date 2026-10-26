@@ -113,7 +113,7 @@ export function weigh(state, c, ctx = {}) {
 
   add('cosmic', 0.1 + wv.cur * 0.25, 'the carvings look like nothing ever made here');
   add('cosmic', trait(c, 'creative') * 0.15, 'I can imagine people beyond the sky');
-  add('cosmic', (civAge - 1) * 0.04, civAge >= 3 ? 'we know now how much lies beyond our world' : '');
+  add('cosmic', (civAge - 1) * 0.02, civAge >= 3 ? 'we know now how much lies beyond our world' : '');
   add('cosmic', -(adherent ? b.devotion * 0.1 : 0), '');
   add('cosmic', Math.min(0.24, recentExp(state, wv, 'cosmic') * 0.06), 'I have seen things in the sky that I cannot explain');
 
@@ -132,6 +132,7 @@ export function weigh(state, c, ctx = {}) {
   if (wv.outlook === 'reason') add('natural', 0.15, 'reason asks for evidence, not stories');
   if (wv.outlook === 'agnostic') add('natural', 0.12, 'I am not sure of anything unseen');
   add('natural', Math.min(0.24, recentExp(state, wv, 'natural') * 0.05), 'the odd things I have seen had ordinary explanations');
+  add('natural', (civAge - 1) * 0.02, civAge >= 3 ? 'science explains more with every generation' : '');
 
   add('indifferent', 0.16 + (1 - wv.cur) * 0.35, 'I have more pressing things to think about');
   add('indifferent', trait(c, 'lazy') * 0.15, '');
@@ -141,7 +142,7 @@ export function weigh(state, c, ctx = {}) {
   // Interest that fades leaves people not caring either way.
   if (ctx.interest !== undefined) add('indifferent', (0.45 - ctx.interest) * 0.4, ctx.interest < 0.3 ? 'I have stopped thinking about it' : '');
 
-  for (const k of ['ancient', 'cosmic', 'natural', 'prank']) if (findings[k]) add(k, Math.min(0.2, findings[k] * 0.25), `the scholars' findings point that way`);
+  for (const k of ['ancient', 'cosmic', 'natural', 'prank']) if (findings[k]) add(k, Math.min(0.14, findings[k] * 0.2), `the scholars' findings point that way`);
   if (ctx.fromInterp && ctx.fromInterp !== 'indifferent') add(ctx.fromInterp, 0.12 * ((ctx.trust ?? 45) / 100) * (0.5 + wv.open), 'someone I trust told me so');
   for (const [k, w] of Object.entries(ctx.social ?? {})) if (w > 0 && F[k]) add(k, Math.min(0.22, w), 'people close to me see it this way');
   // Each mind has its own leanings no reason captures.
