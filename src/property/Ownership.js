@@ -1,6 +1,6 @@
 import { byId } from '../core/EntityRegistry.js';
 import { transfer, balance } from '../economy/Transactions.js';
-import { plotById, plotValue, plotHistory, BUILDING_INFO } from './LandRegistry.js';
+import { plotById, plotValue, plotHistory, buildingLabel } from './LandRegistry.js';
 import { record } from '../society/Chronicle.js';
 import { remember } from '../ai/MemorySystem.js';
 import { createFact } from '../society/Gossip.js';
@@ -81,4 +81,4 @@ export function softenListings(state) {
 }
 
 export const ownedPlots = (state, ownerId) => state.plots.filter((p) => p.ownerId === ownerId);
-export const describeBuilding = (p) => (p.building ? BUILDING_INFO[p.building.type].label : 'Vacant land');
+export const describeBuilding = (p) => (p.building ? buildingLabel(p.building.type) : 'Vacant land');

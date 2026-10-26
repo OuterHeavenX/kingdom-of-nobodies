@@ -9,7 +9,7 @@ export const LAND_TYPES = {
   commercial: { label: 'Commercial', base: 38, allows: ['bakery', 'general_store', 'tavern', 'blacksmith', 'bank', 'guildhall', 'apartment', 'tower', 'grounds', 'hospital'] },
   workshop: { label: 'Workshop land', base: 34, allows: ['lumberyard', 'blacksmith', 'general_store', 'guildhall', 'barracks', 'station', 'grounds'] },
   residential: { label: 'Residential', base: 22, allows: ['cottage', 'shrine', 'apartment', 'tower', 'mansion', 'grounds'] },
-  civic: { label: 'Civic', base: 50, allows: ['hall', 'market', 'school', 'granary', 'well', 'townhall', 'memorial', 'courthouse', 'shrine', 'chapel', 'temple', 'barracks', 'station', 'hospital', 'grounds'] },
+  civic: { label: 'Civic', base: 50, allows: ['hall', 'market', 'school', 'granary', 'well', 'townhall', 'courthouse', 'shrine', 'chapel', 'temple', 'barracks', 'station', 'hospital', 'grounds'] },
 };
 
 export const BUILDING_INFO = {
@@ -106,12 +106,20 @@ export function frontOf(plot, offset = 0, extra = 0.8) {
 export const plotById = (state, id) => byId(state.plots, id);
 export const plotByName = (state, name) => state.plots.find((p) => p.name === name) ?? null;
 export const buildingClass = (type) => BUILDING_INFO[type]?.class ?? null;
-export const allows = (plot, buildingType) => LAND_TYPES[plot.landType].allows.includes(buildingType);
+
+// Display lookups that tolerate an unknown key (a damaged or hand-edited save, or
+// a type from a newer version) instead of breaking the panel that shows it.
+const UNKNOWN_LAND = { label: 'Land', base: 30, allows: [] };
+export const landInfo = (landType) => LAND_TYPES[landType] ?? UNKNOWN_LAND;
+export const buildingLabel = (type) => BUILDING_INFO[type]?.label ?? (type ? String(type).replace(/_/g, ' ').replace(/^./, (ch) => ch.toUpperCase()) : 'Building');
+
+export const allows = (plot, buildingType) => landInfo(plot.landType).allows.includes(buildingType);
 
 export function plotValue(plot) {
-  const land = Math.round(LAND_TYPES[plot.landType].base * (buildingHooks.landFactor?.(plot) ?? 1));
+  const land = Math.round(landInfo(plot.landType).base * (buildingHooks.landFactor?.(plot) ?? 1));
   const b = plot.building;
-  if (!b || plot.constructionStatus !== 'COMPLETE') return land;
+  // An unknown type (a damaged save, or a type from a newer version) is valued as bare land.
+  if (!b || plot.constructionStatus !== 'COMPLETE' || !BUILDING_INFO[b.type]) return land;
   // A building's worth grows with its architecture and falls with neglect.
   const era = b.era ?? 1;
   const worth = era <= 1 && !b.floors ? BUILDING_INFO[b.type].value : Math.round(BUILDING_INFO[b.type].value * formOf(b.type, era).value * (0.55 + 0.45 * Math.min(100, b.condition ?? 100) / 100));
