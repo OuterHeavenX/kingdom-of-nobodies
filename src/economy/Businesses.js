@@ -55,6 +55,8 @@ export const staffCap = (b) => BUSINESS_TYPES[b.type].maxStaff + ((b.level ?? 1)
 
 /** Systems that change how productive premises are (architecture, technology, utilities) register here. */
 export const productionHooks = [];
+/** Told how much a shift produced (after every multiplier), e.g. to account for a bounded bonus. */
+export const producedHooks = [];
 
 export const businessById = (state, id) => byId(state.businesses, id);
 export const isTrading = (b) => b.status === 'OPEN' || b.status === 'STRUGGLING';
@@ -138,6 +140,7 @@ export function produce(state, b, productivity) {
   }
   b.today.produced += made;
   b.totals.produced += made;
+  for (const fn of producedHooks) fn(state, b, made, plot);
   return made;
 }
 

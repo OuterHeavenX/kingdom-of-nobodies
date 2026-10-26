@@ -1,6 +1,9 @@
 // Multigenerational stress test: advances kingdoms by many years without
 // rendering and checks every invariant along the way. Usage:
-//   node tests/longevity.mjs [years=200] [seeds=1,2,3] [--jobs N] [--checkpoints DIR] [--from FILE]
+//   node tests/longevity.mjs [years=200] [seeds=1,2,3] [--jobs N] [--checkpoints DIR] [--from FILE] [--player auto|none|stone|active]
+// --player scripts the Hidden Hand (v0.5.3): `none` never intervenes, `stone`
+// only places the stone at Year 200, `active` also blesses and sends signs;
+// `auto` (default) gives odd seeds an active player and even seeds none.
 // Tiers (package.json): test:longevity:quick (25 years), test:longevity:century
 // (100 years) for routine work, test:longevity:full (500 years) for releases.
 // Seeds run in parallel child processes (--jobs, default: one per CPU core);
@@ -34,6 +37,7 @@ import { frontOf, plotValue } from '../src/property/LandRegistry.js';
 import { yearOf } from '../src/core/Calendar.js';
 import { serialize, deserialize } from '../src/core/Serialization.js';
 import { holidayNow } from '../src/culture/Holidays.js';
+import { playerFor, scriptedPlayer, divineInvariants, divineStats } from './divine-longrun.js';
 import { cpus } from 'node:os';
 import { spawn } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 'node:fs';
@@ -46,9 +50,15 @@ const jobs = Number(option('jobs') ?? cpus().length);
 const checkpointDir = option('checkpoints');
 const fromFile = option('from');
 const fromDir = option('from-dir');
+const playerMode = option('player') ?? 'auto';
 let failures = 0;
 const LISTED = new WeakMap(); // listed buildings as first seen, per world
-const fail = (seed, year, msg) => { failures++; console.error(`  ✗ seed ${seed} year ${year}: ${msg}`); };
+const fail = (seed, year, msg) => {
+  failures++;
+  console.error(`  ✗ seed ${seed} year ${year}: ${msg}`);
+  // On CI, the first few violations also become annotations (readable without the raw log).
+  if (process.env.GITHUB_ACTIONS && failures <= 10) console.log(`::error title=longevity seed ${seed} year ${year}::${String(msg).replace(/\n/g, ' ')}`);
+};
 
 /** Check every multigenerational invariant; returns the number of violations found. */
 export function checkInvariants(s, seed, year) {
@@ -171,6 +181,7 @@ export function checkInvariants(s, seed, year) {
       if (p?.building?.type !== 'ruins') listedSeen[id] = now;
     }
   }
+  divineInvariants(s, (msg) => fail(seed, year, msg));
   const kb = JSON.stringify(s).length / 1024;
   if (kb > 6000) fail(seed, year, `state has grown to ${Math.round(kb)} KB`);
   if (JSON.stringify(s).match(/NaN|Infinity/)) fail(seed, year, 'NaN or Infinity in state');
@@ -197,6 +208,7 @@ export function regional(s, year) {
     treasury: balance(s, 'treasury'), widerWorld: balance(s, 'outside'),
     ...milestone5(s),
     civilization: civilization(s),
+    hiddenHand: divineStats(s),
   };
 }
 
@@ -248,6 +260,7 @@ function runSeed(seed) {
   const t0 = Date.now();
   const state = fromFile ? deserialize(readFileSync(fromFile, 'utf8')) : createKingdom(seed);
   if (fromFile) seed = state.seed ?? seed;
+  const player = playerFor(playerMode, seed);
   const sim = new Simulation(state);
   const money = totalMoney(sim.state);
   const startYear = yearOf(sim.state.day) - 1; // whole years already lived
@@ -257,6 +270,7 @@ function runSeed(seed) {
   for (let rel = 1; rel <= years; rel++) {
     const y = startYear + rel; // the calendar year just completed
     sim.runDays(DAYS_PER_YEAR);
+    scriptedPlayer(sim.state, player, seed);
     ageTicks += DAYS_PER_YEAR * TIME.ticksPerDay;
     const s = sim.state;
     peak = Math.max(peak, s.citizens.length);
@@ -284,7 +298,7 @@ function runSeed(seed) {
   const dead = Object.values(s.archive).filter((p) => p.status === 'dead');
   const chron = s.chronicle;
   console.log(JSON.stringify({
-    seed, years, from: fromFile ?? undefined, endYear: startYear + years, seconds: Math.round((Date.now() - t0) / 1000),
+    seed, years, player, from: fromFile ?? undefined, endYear: startYear + years, seconds: Math.round((Date.now() - t0) / 1000),
     peakPopulation: peak, minPopulation: minPop, finalPopulation: s.citizens.length,
     births: s.stats.births, deaths: s.stats.deaths, immigrants: s.stats.immigrants, emigrants: s.stats.emigrants, marriages: s.stats.marriages,
     generations, elections: s.stats.elections,
@@ -311,7 +325,7 @@ async function runParallel(files = null) {
   const worker = async () => {
     while (queue.length) {
       const seed = queue.shift();
-      const args = files ? [process.argv[1], String(years), '0', '--jobs', '1', '--from', seed] : [process.argv[1], String(years), String(seed), '--jobs', '1', ...(checkpointDir ? ['--checkpoints', checkpointDir] : [])];
+      const args = files ? [process.argv[1], String(years), '0', '--jobs', '1', '--player', playerMode, '--from', seed] : [process.argv[1], String(years), String(seed), '--jobs', '1', '--player', playerMode, ...(checkpointDir ? ['--checkpoints', checkpointDir] : [])];
       const code = await new Promise((resolve) => {
         const child = spawn(process.execPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
         let out = '';

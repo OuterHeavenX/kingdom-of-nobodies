@@ -20,10 +20,13 @@ const inBounds = (r) => r[0] > -BOUND && r[2] < BOUND && r[1] > -BOUND && r[3] <
 const crossesRiver = (r) => r[1] < RIVER.zMax + 1 && r[3] > RIVER.zMin - 1;
 const plotRect = (p) => [p.x - p.w / 2, p.z - p.d / 2, p.x + p.w / 2, p.z + p.d / 2];
 
+/** Rectangles from later systems that streets and plots must also keep clear of (monuments off any plot). */
+export const obstacleHooks = [];
+
 /** Rectangles that new streets and plots must keep clear of. */
 export function obstacles(state) {
   const plots = state.plots.map(plotRect);
-  const solids = state.plots.flatMap((p) => solidRects(p));
+  const solids = [...state.plots.flatMap((p) => solidRects(p)), ...obstacleHooks.flatMap((fn) => fn(state) ?? [])];
   const roads = state.roads.map(roadRect);
   const reserved = (state.city?.proposals ?? []).filter((p) => p.status === 'PROPOSED' || p.status === 'APPROVED' || p.status === 'BUILDING')
     .flatMap((p) => [roadRect(p.road), ...p.plots.map(plotRect)]);

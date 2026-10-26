@@ -31,6 +31,8 @@ import { thenNowView } from './EraPanel.js';
 import { audioCard, graphicsCard } from './SettingsPanel.js';
 import { ageDef } from '../civilization/Ages.js';
 import { appearances } from '../civilization/PropertyHistory.js';
+import { unseenPanel, unseenEntryCard } from './UnseenPanel.js';
+import { UnseenController } from './UnseenController.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -45,13 +47,14 @@ export class HUD {
     this.toasts = new Notifications($('toasts'));
     this.sheet = new BottomSheet($('sheet'), { onClose: () => { if (this.game.world?.thenNow) { this.game.world.exitThenNow(false); this.setBanner(this.awayBanner ?? null); } this.view.detail = null; this.stack = []; } });
     this.sheet.onChange = () => setTimeout(() => this.renderTabs(), 300);
-    this.view = { tab: 'citizens', worldMode: 'overview', peopleMode: 'people', detail: null, plotFilter: 'all', chronicle: {}, econMode: 'business', historyMode: 'eras', historyYear: null, historyQuery: '', citizenQuery: '', regionMode: 'map', polMode: 'government' };
+    this.view = { unseen: 'blessings', tab: 'citizens', worldMode: 'overview', peopleMode: 'people', detail: null, plotFilter: 'all', chronicle: {}, econMode: 'business', historyMode: 'eras', historyYear: null, historyQuery: '', citizenQuery: '', regionMode: 'map', polMode: 'government' };
     this.stack = [];
     this.lastTop = 0;
     this.lastBody = 0;
     this.bodyHtml = '';
     this.interacting = false;
     this.bind();
+    this.unseen = new UnseenController(this);
     this.renderTop(true);
     this.renderSheet(true);
   }
@@ -137,6 +140,7 @@ export class HUD {
     if (!el) return;
     const { act, id } = el.dataset;
     const g = this.game;
+    if (act.startsWith('hh-') && this.unseen.onAction(act, el, e)) return;
     switch (act) {
       case 'citizen': case 'business': case 'plot': case 'house': case 'tree': case 'bio': case 'kingdom': case 'caravan': case 'case': case 'landmark':
       case 'foreign': case 'war': case 'army': case 'bank': case 'guild': case 'faith': this.openDetail(act, id); break;
@@ -265,7 +269,7 @@ export class HUD {
 
   /** Called every animation frame; throttles DOM work. */
   update(now) {
-    if (now - this.lastTop > 250) this.renderTop();
+    if (now - this.lastTop > 250) { this.renderTop(); this.unseen.update(now); }
     if (now - this.lastBody > 900 && !this.interacting && (this.sheet.state !== 'closed' || this.sheet.docked)) this.renderSheet();
   }
 
@@ -322,6 +326,9 @@ export class HUD {
   renderTabs() {
     this.syncInset();
     for (const b of $('tabbar').querySelectorAll('button')) b.classList.toggle('active', b.dataset.tab === this.view.tab && (this.sheet.state !== 'closed' || this.sheet.docked));
+    const unseen = this.view.tab === 'unseen' && !this.view.detail;
+    $('sheet').classList.toggle('unseen', unseen);
+    $('unseen-eye')?.classList.toggle('active', unseen && this.sheet.state !== 'closed');
   }
 
   content() {
@@ -343,6 +350,7 @@ export class HUD {
     if (detail?.kind === 'guild') return guildDetail(this.sim, detail.id);
     if (detail?.kind === 'faith') return faithDetail(this.sim, detail.id);
     if (detail?.kind === 'thennow') return thenNowView(this.sim, detail.id, this.view);
+    if (tab === 'unseen') return unseenPanel(this.sim, this.view);
     if (tab === 'world') return worldPanel(this.sim, this.view);
     if (tab === 'region') return regionPanel(this.sim, this.view);
     if (tab === 'economy') {
@@ -362,7 +370,7 @@ export class HUD {
       return { title: inner.title, html: seg + inner.html };
     }
     if (tab === 'history') return historyPanel(this.sim, this.view);
-    if (tab === 'council') return councilPanel(this.sim, { settings: this.game.settings, build: this.game.build, lastSaved: this.game.lastSavedText(), source: this.game.loadSource, cloud: cloudCard(this.game), celebrations: celebrationsCard(this.game), sound: audioCard(this.game), graphics: graphicsCard(this.game), backup: !!this.game.saves.backupKey });
+    if (tab === 'council') return withEntry(unseenEntryCard(this.sim, this.game.settings), councilPanel(this.sim, { settings: this.game.settings, build: this.game.build, lastSaved: this.game.lastSavedText(), source: this.game.loadSource, cloud: cloudCard(this.game), celebrations: celebrationsCard(this.game), sound: audioCard(this.game), graphics: graphicsCard(this.game), backup: !!this.game.saves.backupKey }));
     const inner = citizenList(this.sim, this.view);
     return { title: inner.title, html: this.peopleSeg() + inner.html };
   }
@@ -386,3 +394,6 @@ export class HUD {
     this.bodyHtml = html;
   }
 }
+
+/** Add the Unseen Influence entry to a panel (the Council tab), so it is reachable from the main navigation. */
+const withEntry = (card, inner) => ({ title: inner.title, html: inner.html + card });

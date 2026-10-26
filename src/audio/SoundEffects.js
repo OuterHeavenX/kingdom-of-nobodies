@@ -82,6 +82,29 @@ export const SFX = {
     e.connect(out);
     for (let i = 0; i < 12; i++) { const tt = t + 0.25 + r() * 1.2; const c = env(ctx, tt, { a: 0.001, peak: 0.07, decay: 0.02 }); noise(ctx, tt, tt + 0.03).connect(filter(ctx, 'highpass', 4000)).connect(c).connect(out); }
   },
+  // --- v0.5.3: the Hidden Hand ------------------------------------------------------------------
+  /** A soft breath of whispering air (near the stone at night). */
+  whisper(ctx, out, t) {
+    const e = ctx.createGain(); e.gain.setValueAtTime(0.0001, t); e.gain.linearRampToValueAtTime(0.06, t + 1.1); e.gain.exponentialRampToValueAtTime(0.0001, t + 3.2);
+    const bp = filter(ctx, 'bandpass', 900 + r() * 500, 3);
+    bp.frequency.linearRampToValueAtTime(1500 + r() * 400, t + 2.8);
+    noise(ctx, t, t + 3.3).connect(bp).connect(e).connect(out);
+  },
+  /** Distant chimes. */
+  chime(ctx, out, t) { [84, 88, 91].forEach((m, i) => VOICES.bell(ctx, out, t + i * 0.35 + r() * 0.05, midiHz(m), 1.4, 0.18)); },
+  /** A deep temple bell. */
+  templebell(ctx, out, t) { VOICES.bell(ctx, out, t, midiHz(50), 2.4, 0.5); VOICES.bell(ctx, out, t + 0.01, midiHz(62), 2, 0.18); },
+  /** The mysterious tone of an omen: a slow, pure chord that swells and fades. */
+  omen(ctx, out, t) {
+    for (const [m, d] of [[69, 0], [76, 3], [81, -4]]) {
+      const e = ctx.createGain(); e.gain.setValueAtTime(0.0001, t); e.gain.linearRampToValueAtTime(0.07, t + 1.4); e.gain.exponentialRampToValueAtTime(0.0001, t + 4.6);
+      osc(ctx, 'sine', midiHz(m), t, t + 4.7, d).connect(e).connect(out);
+    }
+  },
+  /** Discovery: a rising harp figure over a chime. */
+  discovery(ctx, out, t) { [62, 65, 69, 74, 77].forEach((m, i) => VOICES.harp(ctx, out, t + i * 0.16, midiHz(m), 1.6, 0.32)); VOICES.bell(ctx, out, t + 0.9, midiHz(86), 1.6, 0.2); },
+  /** A blessing given: a few soft rising notes (the player alone hears it). */
+  blessing(ctx, out, t) { [74, 79, 83, 86].forEach((m, i) => VOICES.harp(ctx, out, t + i * 0.11, midiHz(m), 1.2, 0.18)); },
 };
 
 export const SFX_KINDS = Object.keys(SFX);

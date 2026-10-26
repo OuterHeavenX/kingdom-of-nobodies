@@ -4,6 +4,7 @@
 const { chromium, devices } = require('playwright');
 const assert = require('node:assert/strict');
 const BASE = process.env.BASE_URL ?? 'http://localhost:4173/kingdom-of-nobodies/';
+let lastStep = 'start';
 
 (async () => {
   const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
@@ -11,7 +12,7 @@ const BASE = process.env.BASE_URL ?? 'http://localhost:4173/kingdom-of-nobodies/
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  const step = (name) => console.log('✓', name);
+  const step = (name) => { lastStep = name; console.log('✓', name); };
 
   await page.goto(BASE);
   await page.waitForFunction(() => window.__konStarted === true, null, { timeout: 20000 });
@@ -246,4 +247,9 @@ const BASE = process.env.BASE_URL ?? 'http://localhost:4173/kingdom-of-nobodies/
   assert.deepEqual(errors, [], 'no page errors');
   await browser.close();
   console.log('mobile e2e: all checks passed');
-})().catch((e) => { console.error(e); process.exit(1); });
+})().catch((e) => {
+  console.error(e);
+  // On CI, surface the failure as an annotation (readable without the raw log).
+  if (process.env.GITHUB_ACTIONS) console.log(`::error title=mobile e2e failed after "${lastStep}"::${String(e.message ?? e).split('\n').slice(0, 3).join(' | ').replace(/\x1b\[[0-9;]*m/g, '')}`);
+  process.exit(1);
+});

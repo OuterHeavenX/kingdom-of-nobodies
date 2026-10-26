@@ -20,15 +20,22 @@ export const TRADITIONS = {
   dawn: { name: 'The Dawnlight', theme: 'light and renewal', season: 0, rite: 'the First Light vigil', color: '#f2d38a', community: 'Dawnlight Assembly', interests: { trust: 0.1 } },
   openhand: { name: 'The Open Hand', theme: 'service and charity', season: 3, rite: 'the Winter Table', color: '#e58f9e', community: 'Brotherhood of the Open Hand', interests: { welfare: 0.25 } },
   lantern: { name: 'The Quiet Lantern', theme: 'scholarship and contemplation', season: 1, rite: 'the Long Reading', color: '#88a4e0', community: 'Order of the Quiet Lantern', interests: { education: 0.25 } },
+  // v0.5.3: traditions that can only grow out of what villagers make of the Mysterious Stone.
+  // Nobody is born into one before it exists, and nobody is assigned one: see divine/Worldview.js.
+  hand: { name: 'The Hidden Hand', theme: 'an unseen presence that may move through history', season: 0, rite: 'the Vigil of the Stone', color: '#d9b45a', community: 'Keepers of the Stone', interests: { trust: 0.1 }, emergent: true },
+  light: { name: 'The Children of the Light', theme: 'a benevolent unseen presence', season: 1, rite: 'the Feast of Lamps', color: '#f5e6a8', community: 'Children of the Light', interests: { welfare: 0.15 }, emergent: true, parent: 'hand' },
+  silence: { name: 'The Keepers of the Silence', theme: 'patience, humility and contemplation', season: 3, rite: 'the Long Silence', color: '#8fa7a0', community: 'Keepers of the Silence', interests: { education: 0.1 }, emergent: true, parent: 'hand' },
 };
 export const TRADITION_IDS = Object.keys(TRADITIONS);
+/** The valley's old traditions, which founders, newcomers and children of no tradition may hold. */
+export const FOUNDING_TRADITIONS = TRADITION_IDS.filter((t) => !TRADITIONS[t].emergent);
 export const STANCES = { devout: 'Devout', casual: 'Casually affiliated', skeptical: 'Sceptical', none: 'Holds to no tradition' };
 
 /** A newcomer's (or founder's) belief: leanings from temperament, chance from identity. */
 function initialBelief(state, c) {
   const leaning = { furrow: trait(c, 'hardworking') + (c.profession === 'Farmer' ? 0.5 : 0), hearthkin: trait(c, 'loyal') + trait(c, 'stubborn') * 0.3, dawn: trait(c, 'creative') + trait(c, 'friendly') * 0.3, openhand: trait(c, 'generous'), lantern: trait(c, 'curious') };
   const h = (k) => pairHash(c.id, k);
-  const tradition = [...TRADITION_IDS].sort((a, b) => (leaning[b] + h(b)) - (leaning[a] + h(a)))[0];
+  const tradition = [...FOUNDING_TRADITIONS].sort((a, b) => (leaning[b] + h(b)) - (leaning[a] + h(a)))[0];
   const r = pairHash(c.id, 'belief');
   const stance = r < 0.28 ? 'devout' : r < 0.7 ? 'casual' : r < 0.86 ? 'skeptical' : 'none';
   return { tradition: stance === 'none' ? null : tradition, stance, devotion: stance === 'devout' ? 0.8 : stance === 'casual' ? 0.45 : stance === 'skeptical' ? 0.15 : 0, since: state.day };

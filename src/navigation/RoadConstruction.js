@@ -31,8 +31,12 @@ export const activeRoadProject = (state) => (state.roadProjects ?? []).find((p) 
 
 function overlapsRect(a, b) { return a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1]; }
 
+/** Solid rectangles off any plot (monuments) that roads must go around; filled by later systems. */
+export const roadObstacleHooks = [];
+
 function blocked(state, rect) {
   if (rect[1] < RIVER.zMax && rect[3] > RIVER.zMin) return true;
+  if (roadObstacleHooks.some((fn) => (fn(state) ?? []).some((s) => overlapsRect(rect, s)))) return true;
   return state.plots.some((p) => solidRects(p).some((s) => overlapsRect(rect, s)));
 }
 

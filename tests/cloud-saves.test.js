@@ -9,6 +9,7 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { handle } from '../cloud/worker/src/index.js';
 import { serialize, deserialize } from '../src/core/Serialization.js';
+import { SAVE_VERSION } from '../src/core/Config.js';
 import { createKingdom } from '../src/sim/Setup.js';
 import { Simulation } from '../src/sim/Simulation.js';
 import { validateEnvelope } from '../src/persistence/SaveValidation.js';
@@ -193,7 +194,28 @@ test('v0.5.2: a game still on an older save format cannot overwrite a kingdom sa
   old.checksum = checksum(old.data);
   const res = await call(e, 'PUT', '/api/saves/main', t, { envelope: JSON.stringify(old), baseRevision: rev });
   assert.equal(res.status, 409);
-  assert.match((await res.json()).error, /format 8/);
+  assert.match((await res.json()).error, new RegExp(`format ${SAVE_VERSION}`));
   // And an old format downloaded by this build is upgraded, not refused.
-  assert.equal(deserialize(JSON.stringify(old)).version, 8);
+  assert.equal(deserialize(JSON.stringify(old)).version, SAVE_VERSION);
+});
+
+test('v0.5.3: an older game whose save lacks worldviews and the Hidden Hand cannot overwrite a newer cloud kingdom', async () => {
+  const e = env();
+  const t = await signIn(e);
+  const first = await call(e, 'PUT', '/api/saves/main', t, { envelope: serialize(createKingdom(8)), baseRevision: 0 });
+  assert.equal(first.status, 200);
+  const rev = (await first.json()).meta.revision;
+  const old = JSON.parse(serialize(createKingdom(8)));
+  const data = JSON.parse(old.data);
+  data.version = 8; delete data.divine; for (const c of data.citizens) delete c.worldview;
+  old.data = JSON.stringify(data); old.version = 8;
+  const { checksum } = await import('../src/persistence/SaveValidation.js');
+  old.checksum = checksum(old.data);
+  const res = await call(e, 'PUT', '/api/saves/main', t, { envelope: JSON.stringify(old), baseRevision: rev });
+  assert.equal(res.status, 409, 'the religious state in the cloud is not replaced by a save that never had it');
+  const kept = await (await call(e, 'GET', '/api/saves/main', t)).json();
+  assert.equal(kept.meta.version, SAVE_VERSION);
+  // Downloaded by this build, the old save gains worldviews without losing anything.
+  const up = deserialize(JSON.stringify(old));
+  assert.ok(up.divine && up.citizens.every((c) => c.worldview));
 });

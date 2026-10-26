@@ -274,7 +274,10 @@ export function hearCase(state, c) {
   } else if (c.kind === 'estate') {
     const estate = state.estates.find((e) => e.id === c.details.estateId);
     const heirPlots = (estate?.plots ?? []).filter((p) => p.to === D.id).map((p) => plotById(state, p.id)).filter((p) => p && p.ownerId === D.id && !p.projectId);
-    if (heirPlots.length >= 2) {
+    if (heirPlots.length >= 2 && !state.citizens.some((x) => x.id === P.id)) {
+      // A claimant who has since left the kingdom cannot be given land here.
+      j.reason = `${P.name} has left the kingdom; the estate stays with the lawful heir under the Property Registry Act`;
+    } else if (heirPlots.length >= 2) {
       // The law favours the main heir, but not to the exclusion of every sibling.
       const plot = heirPlots.sort((a, b) => a.price - b.price)[0];
       plot.ownerId = P.id;

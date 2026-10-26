@@ -89,6 +89,8 @@ export function makeVillager(c, stage = 'adult') {
 
 const WORKING = new Set(['work', 'build', 'forage']);
 const SOCIAL = new Set(['socialize', 'tavern', 'festival', 'help', 'court', 'see_caravan']);
+// v0.5.3: belief made visible. Each pose matches a real activity the villager chose.
+const ORATING = new Set(['preach', 'debate']);
 
 export class Villagers {
   constructor(scene) {
@@ -163,6 +165,22 @@ export class Villagers {
         bob = Math.abs(Math.sin(time * 4 + phase)) * 0.03;
       } else if (a?.phase === 'perform' && (a.kind === 'eat_own' || a.kind === 'eat_stock' || a.kind === 'buy_food')) {
         armR = -2.1 + Math.sin(time * 5) * 0.2;
+      } else if (a?.phase === 'perform' && (a.kind === 'pray' || a.kind === 'vigil')) {
+        // Kneeling in prayer (a vigil stands, hands joined), head bowed.
+        armL = -1.15; armR = -1.15;
+        bob = a.kind === 'pray' ? -0.24 : Math.sin(time * 1.2 + phase) * 0.01;
+        legSwing = a.kind === 'pray' ? 1.2 : 0;
+        headTilt = 0.45;
+      } else if (a?.phase === 'perform' && a.kind === 'visit_stone') {
+        // Reading the inscription: chin up, one hand tracing the carving.
+        armR = -1.7 + Math.sin(time * 1.5 + phase) * 0.25;
+        headTilt = a.study ? 0.3 : -0.25;
+        armL = a.study ? -0.9 : -0.1;
+      } else if (a?.phase === 'perform' && ORATING.has(a.kind)) {
+        // Speaking to a gathering: both arms gesturing in turn.
+        armR = -1.3 - Math.max(0, Math.sin(time * 2.2 + phase)) * 1.1;
+        armL = -0.6 - Math.max(0, Math.sin(time * 2.2 + phase + 2)) * 0.7;
+        headTilt = Math.sin(time * 1.4 + phase) * 0.12;
       } else {
         bob = Math.sin(time * 1.6 + phase) * 0.015;
       }

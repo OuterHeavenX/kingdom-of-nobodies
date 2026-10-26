@@ -28,6 +28,7 @@ import { bakeGroup, disposeBaked } from './Bake.js';
 import { massingModel } from './ProceduralArchitecture.js';
 import { setFacadeGlow, setGlassEnvironment } from './Facades.js';
 import { VehicleLayer } from './Vehicles.js';
+import { HiddenHandLayer } from './HiddenHandLayer.js';
 
 /** Buildings taller than this get a distant stand-in (level of detail) and may fade when they hide a villager. */
 const TALL = 18;
@@ -114,6 +115,7 @@ export class World {
     this.roadWorkLayer = new THREE.Group();
     this.village.add(this.roadWorkLayer);
     this.memorial = null;
+    this.hand = new HiddenHandLayer(this);
     this.followId = null;
     this.night = 0;
 
@@ -620,6 +622,7 @@ export class World {
     this.raycaster.setFromCamera(this.pointer, this.camera);
     if (this.mode === 'kingdom') { const hit = this.away.pick(this.raycaster); if (hit) this.onPick?.(hit.kind, hit.id); return; }
     if (this.mode === 'battle') return;
+    if (this.hand.pickPlacement(this.raycaster)) return;
     if (this.militia) { const m = this.raycaster.intersectObject(this.militia, true)[0]; if (m?.object.userData.armyId) { this.onPick?.('army', m.object.userData.armyId); return; } }
     const riders = this.raycaster.intersectObjects(this.vehicles.root.children, true);
     if (riders.length && riders[0].object.userData.citizenId) { const id = riders[0].object.userData.citizenId; this.sim.select('citizen', id); this.onPick?.('citizen', id); return; }
@@ -629,6 +632,7 @@ export class World {
       if (id) { this.sim.select('citizen', id); this.onPick?.('citizen', id); return; }
     }
     if (this.memorial && this.raycaster.intersectObject(this.memorial, true).length) { this.onPick?.('memorial', 'founders'); return; }
+    if (this.hand.pick(this.raycaster)) { this.onPick?.('stone', 'stone-1'); return; }
     const carts = this.raycaster.intersectObjects(this.caravans.root.children, true);
     if (carts.length && carts[0].object.userData.caravanId) { this.onPick?.('caravan', carts[0].object.userData.caravanId); return; }
     const plots = this.raycaster.intersectObjects(this.plotLayer.children, true);
@@ -678,6 +682,7 @@ export class World {
       this.lastSync = time;
     }
     this.updateSky(this.visualHour(), time, sky);
+    this.hand.update(dt, time, this.night);
     const selected = this.sim.selected.kind === 'citizen' ? this.sim.selected.id : null;
     this.villagers.update(s.citizens, dt, time, selected, s.day, this.controls.target, this.quality, tickSeconds);
     this.vehicles.update(s.citizens, dt, tickSeconds);
