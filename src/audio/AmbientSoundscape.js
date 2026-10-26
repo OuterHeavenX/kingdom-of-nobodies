@@ -62,13 +62,30 @@ const BED_FILTERS = {
   crowd: (ctx) => { const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 700; f.Q.value = 1.1; return f; },
   traffic: (ctx) => { const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 230; return f; },
   machine: (ctx) => { const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 160; f.Q.value = 2; return f; },
-  rain: (ctx) => { const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 1600; return f; },
+  // Rain is two layers: a soft, band-limited wash, and a patter of drops whose
+  // density flickers. (A plain high-passed hiss read as far louder than its level
+  // and held the master limiter down, pushing the music under it.)
+  rain: (ctx) => {
+    const input = ctx.createGain(), output = ctx.createGain();
+    const lo = ctx.createBiquadFilter(); lo.type = 'highpass'; lo.frequency.value = 380;
+    const hi = ctx.createBiquadFilter(); hi.type = 'lowpass'; hi.frequency.value = 3200; hi.Q.value = 0.5;
+    input.connect(lo).connect(hi).connect(output);
+    const band = ctx.createBiquadFilter(); band.type = 'bandpass'; band.frequency.value = 2400; band.Q.value = 1.2;
+    const patter = ctx.createGain(); patter.gain.value = 0.35;
+    for (const [hz, depth] of [[5.3, 0.14], [8.9, 0.11], [13.7, 0.08]]) {
+      const lfo = ctx.createOscillator(); lfo.frequency.value = hz; lfo.start(ctx.currentTime);
+      const g = ctx.createGain(); g.gain.value = depth;
+      lfo.connect(g).connect(patter.gain);
+    }
+    input.connect(band).connect(patter).connect(output);
+    return { input, output };
+  },
   snowwind: (ctx) => { const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 0.8; return f; },
   crickets: (ctx) => { const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 4300; f.Q.value = 9; return f; },
 };
-const BED_LEVEL = { wind: 0.5, crowd: 0.35, traffic: 0.7, machine: 0.6, hum: 0.05, shimmer: 0.04, rain: 0.35, snowwind: 0.45, crickets: 0.25 };
+const BED_LEVEL = { wind: 0.5, crowd: 0.35, traffic: 0.7, machine: 0.6, hum: 0.05, shimmer: 0.04, rain: 0.14, snowwind: 0.45, crickets: 0.25 };
 // Slow swells that make a bed breathe (Hz, depth).
-const BED_LFO = { wind: [0.13, 0.5], crowd: [0.4, 0.3], traffic: [0.08, 0.35], machine: [2.2, 0.6], snowwind: [0.2, 0.6], crickets: [11, 0.9] };
+const BED_LFO = { rain: [0.07, 0.3], wind: [0.13, 0.5], crowd: [0.4, 0.3], traffic: [0.08, 0.35], machine: [2.2, 0.6], snowwind: [0.2, 0.6], crickets: [11, 0.9] };
 
 export class AmbientSoundscape {
   constructor(ctx, bus) {
@@ -91,8 +108,10 @@ export class AmbientSoundscape {
         n.buffer = noiseBuffer(ctx);
         n.loop = true;
         n.start(t, Math.random());
-        src = BED_FILTERS[name](ctx);
-        n.connect(src);
+        // A bed's filter is one node, or an { input, output } chain.
+        const f = BED_FILTERS[name](ctx);
+        n.connect(f.input ?? f);
+        src = f.output ?? f;
       }
       const shape = ctx.createGain();
       shape.gain.value = 1;
