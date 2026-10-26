@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { glide } from '../src/world/Glide.js';
+import { glide, place } from '../src/world/Glide.js';
 
 const node = () => ({ position: { x: 0, z: 0, set(x, _y, z) { this.x = x; this.z = z; } } });
 
@@ -22,4 +22,12 @@ test('glide: long jumps snap, and fast speeds keep up within a frame', () => {
   assert.equal(n.position.x, 40, 'teleports are not animated');
   glide(n, u, 42, 0, 1 / 60, 0.25 / 20, 12);
   assert.equal(n.position.x, 42, 'at 20× a tick is shorter than a frame');
+});
+
+test('glide: a walker placed while hidden does not jump back and replay its glide when shown again', () => {
+  const n = node(), u = {};
+  glide(n, u, 3, 0, 0.1, 1, 12); // 10% of the way from 0 to 3
+  place(n, u, 3, 0); // hidden by the camera: drawn straight at the target
+  glide(n, u, 3, 0, 0.1, 1, 12); // shown again before the next tick
+  assert.equal(n.position.x, 3);
 });

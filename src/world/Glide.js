@@ -3,6 +3,12 @@
 // real time to get there. At slow game speeds a tick lasts a second or more,
 // so chasing the target exponentially would look like hurry, stop, hurry.
 
+/** Put `node` straight at (x, z) and end any glide in progress (used while it is hidden). */
+export function place(node, u, x, z) {
+  node.position.set(x, 0, z);
+  u.gx = x; u.gz = z; u.gt = 1;
+}
+
 /**
  * Move `node` toward (x, z). `u` holds the glide state (usually node.userData),
  * `tickSeconds` is the real time one simulation tick takes at the current speed.

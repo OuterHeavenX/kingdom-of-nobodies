@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mat, G, part } from './Materials.js';
 import { ageOn, stageForAge } from '../core/Calendar.js';
 import { TIME } from '../core/Config.js';
-import { glide } from './Glide.js';
+import { glide, place } from './Glide.js';
 
 // Body scale by life stage; elders also stoop a little and go grey.
 const STAGE_SCALE = { infant: 0.4, child: 0.62, teen: 0.86, young: 1, adult: 1, elder: 0.96 };
@@ -135,7 +135,7 @@ export class Villagers {
       // Riders are drawn as their car, bus or pod (see Vehicles.js).
       const riding = a?.phase === 'travel' && !!a.vehicle;
       node.visible = !asleep && !riding && (d2 < far || c.id === selectedId);
-      if (!node.visible) { node.position.set(c.x, 0, c.z); continue; }
+      if (!node.visible) { place(node, u, c.x, c.z); continue; }
       const dx = c.x - node.position.x, dz = c.z - node.position.z;
       const dist = Math.hypot(dx, dz);
       // Between ticks a walker may briefly reach its drawn target; keep the stride going while on the way.
