@@ -81,7 +81,7 @@ export function divineInvariants(s, fail) {
   const active = new Set(activeSocieties(s).map((x) => x.id));
   for (const c of s.citizens) {
     const wv = c.worldview;
-    if (!wv) { fail(`${c.firstName} has no worldview`); continue; }
+    if (!wv) continue; // created lazily the first time the person reflects (worldviewOf)
     if (wv.outlook && !OUTLOOKS[wv.outlook]) fail(`${c.firstName} has unknown outlook ${wv.outlook}`);
     if (c.belief?.tradition && !TRADITIONS[c.belief.tradition]) fail(`${c.firstName} has unknown tradition ${c.belief.tradition}`);
     if (wv.stone) {

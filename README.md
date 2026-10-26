@@ -1,13 +1,145 @@
-# Kingdom of Nobodies — v0.5.2: The Evolution of Civilization
+# Kingdom of Nobodies — v0.5.3: The Hidden Hand
 
 A mobile-first, low-poly 3D settlement that lives for five hundred years. Five strangers light a hearth.
 Their descendants lay out streets, borrow from banks, join guilds, keep their faiths, trade with
 neighbouring kingdoms — and, century by century, rebuild their timber village into brick, concrete,
 steel and glass, while the old town they grew up in is kept. You are the council: you can nudge the
-society, but you can't control anyone.
+society, but you can't control anyone. And from Year 200 you are something else too: an unseen
+presence who may leave a single carved stone, and let them make of it what they will.
 
-**Play:** https://outerheavenx.github.io/kingdom-of-nobodies/ · version 0.5.2 · add it to your iPhone's
+**Play:** https://outerheavenx.github.io/kingdom-of-nobodies/ · version 0.5.3 · add it to your iPhone's
 Home Screen to play it as an app.
+
+## The Hidden Hand (v0.5.3)
+
+You were always outside the kingdom. Now you can reach into it, a little. Nobody knows you are
+there: you can't speak, appear, give orders or prove anything. What the villagers make of what
+happens is up to them.
+
+The rule from every earlier milestone still holds. The chronicle only reports what the simulation
+did, and every coin moves through the ledger. Faith, doubt, missions, shrines and societies all come
+from people's own reasoning, relationships and money. You never need the Hidden Hand to keep the
+kingdom alive, and **doing nothing is never punished.**
+
+### The Unseen Influence
+
+The floating **eye** (bottom right) opens a dark emerald and gold panel. It is also in **Council →
+The Unseen Influence**, where you can move the eye to the left or hide it. The panel has six sections:
+
+- **Blessings**, **Signs & Omens**, **Prayers**, **Mysteries**, **Sacred Places** and the
+  **Hidden Chronicle**. The Hidden Chronicle is your private record of what you actually did,
+  next to what people saw and what they made of it.
+- **Whispers** are what you spend. You start with 4 and can hold at most 12. They come back only
+  with time (one every four days). Worship, prayer and temples never give you more.
+
+### The Mysterious Stone (from Year 200)
+
+At the start of Year 200 a private notice appears: *A Whisper Across the Ages*. You can choose
+**Place the Mysterious Stone** or **Not Yet**. The offer never expires, and a save from after Year
+200 offers it as soon as it loads.
+
+- **Choose an inscription.** There are four in English (*Someone has always been watching.*, a
+  question, light, silence) and one in glyphs only, written in an original invented script that
+  nobody in the world can read.
+- **Choose a place.** Pick one of six suggested sites (hilltop, forest clearing, meadow, market
+  square, valley, beside history) or tap open land. A live preview shows where it will stand. It
+  can't go on a road, a plot, water or the edge of the map. There is only ever one stone. Roads,
+  plots and decorations keep clear of it afterwards, and it is saved with the kingdom.
+- **No one is told.** Someone has to come across it: a forager, a traveller, someone who was told,
+  or someone who read about it. After that, word spreads in conversation, in families, in
+  newspapers (once communications technology exists) and through missions abroad.
+- **Interpretations come from people.** Each person weighs what they saw, who told them, how
+  sceptical, open and educated they are, and what their friends think. The views are: the work of
+  an unseen god, a sign from the cosmos, the work of an ancient people, a prank, a natural or
+  undecided puzzle, or not worth caring about. **Belief is never tied to intelligence or morality.**
+  Education only makes indifference less likely, and honesty and generosity play no part. People
+  change their minds slowly, and their interest fades if nothing happens.
+- **What follows is earned.** Visits and gatherings turn into pilgrimages. Scholars run studies
+  that move through eight findings. There are anniversaries every 25 years. The stone can become a
+  landmark, and the council can pass a protection law. Works at the site cost real coin from a
+  community, a society or the treasury, and wait for the right age: offerings, a fence, lanterns, a
+  plinth, a pavilion, an observatory, a museum and a garden.
+
+### Worldviews and faiths
+
+Every person has a worldview: one of the existing traditions, a faith of the stone, the Path of
+Reason, a cosmic view, agnostic, atheist or personal. The religion system from Milestone 5 was
+extended, not duplicated:
+
+- **The Way of the Hidden Hand** can form when convinced, interested people come together. A
+  devout follower of an old tradition can keep it and honour the stone as well. Once it is large, it
+  can split into the **Keepers of the Silence** and the **Children of the Light**.
+- **Societies** form when enough people share an outlook and one of them organises: the **Rational
+  Inquiry Society**, the **Seekers Beyond** and the **Ancestral Circle**. They collect dues, debate,
+  watch the sky, keep rites, fund a scholar and run winter charity. Charity is never only
+  religious.
+- **Missionaries** travel only on real, open routes, never while there is a war, and need their
+  provisions paid for. Named foreigners decide for themselves, and circles of believers can grow
+  abroad. Journeys can go wrong. **No one is ever converted by force.**
+- **Shrines, chapels and temples** are still built through the ordinary construction system, with
+  real money and builders. In later ages they take later architectural forms, and a faith of the
+  stone carries its emblem.
+- **Politics:** a **Freedom of Belief Act** and a **Protection of the Carved Stone Act** can be
+  proposed, debated and voted on like any other law. Societies can endorse candidates. This is
+  advisory only: it doesn't directly change any votes.
+
+### Prayers, blessings and signs
+
+People pray about real circumstances: illness, a journey, a harvest, work, a business, grief, war,
+needing courage, a companion, learning, gratitude and protection. You can answer with a blessing,
+send a sign, or do nothing.
+
+| Blessing | Whispers | Lasts | Effect (bounded) |
+|---|---|---|---|
+| 🍀 Gentle Fortune | 3 | 6 days | Slightly better odds of being hired, of a better yield from their own fields, or of trade at a struggling business |
+| 🌿 The Healing Whisper | 4 | 5 days | A sick person is more likely to recover, and the illness is less dangerous. It can't cure everything |
+| 🌾 Favorable Harvest | 5 | 6 days | Farms in a small area yield about a quarter more grain, and every extra sheaf is recorded |
+| 🔥 A Moment of Courage | 2 | 3 days | Someone facing a hard choice feels bolder. What they decide is still theirs |
+| 🧭 Safe Passage | 3 | 8 days | Slightly lower danger on a militia march or a missionary's road |
+| 💡 Inspiration | 3 | 6 days | An apprentice, teacher, pupil or scholar learns faster |
+| 🕊 Comfort | 2 | 4 days | Grief or low spirits weigh slightly less |
+| ✨ A Chance Encounter | 3 | 2 days | Two strangers cross paths. What comes of it is up to them |
+| 🌬 Peaceful Winds | 6 | 8 days | Tempers cool with a quarrelling kingdom. No ruler is made to sign anything |
+| 🛡 Unseen Protection | 4 | 8 days | Slightly better odds against one present danger: illness, battle, hunger, fire or a bitter winter |
+
+Each blessing also has a cooldown and its own rules about who can receive it. **People never learn
+that a blessing happened.** They only notice what changed, and they explain it in their own ways:
+the doctor, luck, prayer, or nothing at all.
+
+**Signs** are visible in the 3D world: lights in the night sky, a glow around the stone, a double
+rainbow (only after rain), a sudden field of flowers (not in winter), a musical tone, falling stars,
+a strange cloud, or calm in a storm. Only the people who are nearby see a sign, and each of them
+interprets it differently.
+
+### Sights and sound
+
+- **The stone** is procedurally carved. Its glyphs glow faintly at night, and it has cracks, moss,
+  drifting motes and the site works around it. A placement preview shows before you confirm.
+- **Signs** have their own effects, and blessed people show a faint shimmer that only you can see.
+  Villagers pray, keep vigils, preach, debate and visit the stone.
+- **Sound:** a short motif changes with the age, with a whisper, a chime, a temple bell and cues for
+  omens, discovery and blessings. They play on the music and effects buses and follow the mixer, the
+  reduced audio setting and the iPhone tap-to-enable rule. **Reduced motion** turns off the eye's
+  motes and the notice animation.
+
+### Saves (format 9)
+
+A version 8 kingdom (v0.5.2) upgrades on load. It gains an empty divine layer, and every person is
+given a worldview based on the faith they already hold. Nothing else changes. A save from after Year
+200 offers the stone straight away. The cloud service accepts format 9, and it still refuses to let
+an older game version overwrite a newer save.
+
+### Known limitations (v0.5.3)
+
+- The production build and the mobile end-to-end test run only in CI. This environment can't
+  install Vite. The local browser check used a small development server and Playwright on an
+  emulated iPhone 13, not a physical iPhone.
+- A society's endorsement of a candidate is recorded and reported, but it doesn't change how anyone
+  votes.
+- The scripted player in the long-run test only places the stone, answers some prayers and sends
+  the occasional sign. It doesn't use every blessing in every situation.
+- The other kingdoms hold missions, named believers and circles, but their faiths aren't simulated
+  in the same detail as the home kingdom's.
 
 ## The Evolution of Civilization (v0.5.2)
 
@@ -704,7 +836,7 @@ Key design rules:
 
 ### Saves
 
-Saves are checksummed envelopes (format version 7) stored in IndexedDB:
+Saves are checksummed envelopes (format version 9) stored in IndexedDB:
 
 - Every write keeps the previous save in the same transaction.
 - Once per game year, a **recovery snapshot** is also kept, which you can restore from the Council tab.
