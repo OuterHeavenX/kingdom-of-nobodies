@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { PROPS, DECOR_MATERIALS, FLAG_SETS, geometryFor, strand, skeleton, paradeFloat } from '../world/HolidayProps.js';
-import { solidRects, widthOf, depthOf } from '../property/Footprints.js';
+import { solidRects, buildingDims } from '../property/Footprints.js';
 import { roadRect, RIVER } from '../navigation/RoadNetwork.js';
 import { SWEETHEART_SPOTS } from './HolidayRegistry.js';
 import { buildingModel } from '../world/Models.js';
@@ -44,7 +44,7 @@ const facingYaw = (plot) => ({ south: 0, north: Math.PI, west: -Math.PI / 2, eas
 /** A signature of everything that moves decorations: when it changes, sites are recomputed. */
 export function siteSignature(state) {
   let sig = `${state.roads?.length ?? 0}:${state.council?.marketplace ? 'm' : ''}:`;
-  for (const p of state.plots) sig += `${p.building?.type ?? ''}${p.projectId ? '*' : ''}${p.facing?.[0] ?? ''}|`;
+  for (const p of state.plots) sig += `${p.building?.type ?? ''}${p.building?.era ?? ''}${p.projectId ? '*' : ''}${p.facing?.[0] ?? ''}|`;
   return sig;
 }
 
@@ -56,7 +56,7 @@ export function villageSites(state) {
     if (p.projectId) solids.push([p.x - p.w / 2, p.z - p.d / 2, p.x + p.w / 2, p.z + p.d / 2]);
     if (p.building && p.building.type !== 'farm' && p.building.type !== 'ruins') {
       // The doorway corridor: from the front wall out past the plot edge to the street.
-      const d = depthOf(p.building.type);
+      const d = buildingDims(p).d;
       const [ax, az] = plotPoint(p, -0.9, d / 2 - 0.2), [bx, bz] = plotPoint(p, 0.9, (FACING[p.facing ?? 'south'][1] ? p.d : p.w) / 2 + 1.6);
       doors.push([Math.min(ax, bx), Math.min(az, bz), Math.max(ax, bx), Math.max(az, bz)]);
     }
@@ -87,8 +87,8 @@ export function villageSites(state) {
       }
       continue;
     }
-    if (b.type === 'ruins') continue;
-    const w = widthOf(b.type), d = depthOf(b.type);
+    if (b.type === 'ruins' || b.type === 'grounds') continue;
+    const { w, d } = buildingDims(p);
     const yaw = facingYaw(p);
     // Wreaths hang on the door itself.
     const [dx, dz] = plotPoint(p, 0, d / 2 + 0.02);

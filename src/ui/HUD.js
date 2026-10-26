@@ -27,6 +27,10 @@ import { KINGDOMS } from '../region/RegionData.js';
 import { celebrationsCard, untilText } from './CelebrationsPanel.js';
 import { setHolidayEnabled, holidayNow } from '../culture/Holidays.js';
 import { HOLIDAY_BY_ID, SEASON_THEMES } from '../holidays/HolidayRegistry.js';
+import { thenNowView } from './EraPanel.js';
+import { audioCard, graphicsCard } from './SettingsPanel.js';
+import { ageDef } from '../civilization/Ages.js';
+import { appearances } from '../civilization/PropertyHistory.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -39,7 +43,7 @@ export class HUD {
     this.game = game;
     this.sim = game.sim;
     this.toasts = new Notifications($('toasts'));
-    this.sheet = new BottomSheet($('sheet'), { onClose: () => { this.view.detail = null; this.stack = []; } });
+    this.sheet = new BottomSheet($('sheet'), { onClose: () => { if (this.game.world?.thenNow) { this.game.world.exitThenNow(false); this.setBanner(this.awayBanner ?? null); } this.view.detail = null; this.stack = []; } });
     this.sheet.onChange = () => setTimeout(() => this.renderTabs(), 300);
     this.view = { tab: 'citizens', worldMode: 'overview', peopleMode: 'people', detail: null, plotFilter: 'all', chronicle: {}, econMode: 'business', historyMode: 'eras', historyYear: null, historyQuery: '', citizenQuery: '', regionMode: 'map', polMode: 'government' };
     this.stack = [];
@@ -54,6 +58,12 @@ export class HUD {
 
   bind() {
     $('pause').onclick = () => { this.game.clock.togglePause(); this.renderTop(true); };
+    const eraChip = $('era-chip');
+    if (eraChip) eraChip.onclick = () => { this.view.worldMode = 'era'; this.openTab('world'); };
+    const sound = $('sound');
+    if (sound) sound.onclick = () => { const a = this.game.audio; if (a.enabled) a.disable(); else a.enable(); this.renderTop(true); if (this.view.tab === 'council') this.renderSheet(true); };
+    // Interface sounds: a soft tap for every button.
+    document.addEventListener('click', (e) => { if (e.target.closest('button, .chip, .item')) this.game.audio.ui('tap'); }, true);
     $('speed').onclick = () => { this.game.clock.cycleSpeed(); this.renderTop(true); };
     $('tabbar').addEventListener('click', (e) => {
       const b = e.target.closest('button[data-tab]');
@@ -68,6 +78,12 @@ export class HUD {
     body.addEventListener('click', (e) => this.onAction(e));
     body.addEventListener('change', (e) => this.onAction(e));
     body.addEventListener('input', (e) => {
+      const range = e.target.closest('input[type=range]');
+      if (range) {
+        if (range.dataset.act === 'then-split') { this.view.thenSplit = Number(range.value) / 100; this.game.world?.setThenNowSplit(this.view.thenSplit); }
+        if (range.dataset.act === 'audio-vol') this.game.audio.set(range.dataset.key, Number(range.value) / 100);
+        return;
+      }
       const el = e.target.closest('input.search');
       if (!el) return;
       if (el.dataset.act === 'citizen-search') this.view.citizenQuery = el.value;
@@ -80,6 +96,7 @@ export class HUD {
   }
 
   openTab(tab, opts = {}) {
+    this.leaveThenNow();
     this.view.tab = tab;
     this.view.detail = null;
     this.stack = [];
@@ -95,8 +112,13 @@ export class HUD {
     this.openTab('history');
   }
 
+  /** Then & Now is visual only; leaving its sheet returns the 3D view to the present. */
+  leaveThenNow() { if (this.game.world?.thenNow) this.game.world.exitThenNow(); if (this.view.detail?.kind !== 'thennow') this.setBanner(this.awayBanner ?? null); }
+
   openDetail(kind, id, { push = true } = {}) {
+    if (kind !== 'thennow' && this.game.world?.thenNow) { this.game.world.exitThenNow(false); this.setBanner(this.awayBanner ?? null); }
     if (push && this.view.detail) this.stack.push(this.view.detail);
+    if (this.sheet.state === 'closed') this.game.audio.ui('panel');
     this.view.detail = { kind, id };
     if (kind === 'citizen' || kind === 'plot') this.sim.select(kind, id);
     this.sheet.open('peek');
@@ -105,6 +127,7 @@ export class HUD {
   }
 
   back() {
+    if (this.view.detail?.kind === 'thennow') { this.game.world?.exitThenNow(); this.setBanner(this.awayBanner ?? null); }
     this.view.detail = this.stack.pop() ?? null;
     this.renderSheet(true);
   }
@@ -118,6 +141,15 @@ export class HUD {
       case 'citizen': case 'business': case 'plot': case 'house': case 'tree': case 'bio': case 'kingdom': case 'caravan': case 'case': case 'landmark':
       case 'foreign': case 'war': case 'army': case 'bank': case 'guild': case 'faith': this.openDetail(act, id); break;
       case 'world-mode': this.view.worldMode = id; this.renderSheet(true); break;
+      case 'thennow': this.openThenNow(id); break;
+      case 'then-year': this.view.thenDay = Number(id); g.world?.showThenNow(this.view.detail.id, this.view.thenDay, this.view.thenSplit ?? 0.5); this.renderSheet(true); break;
+      case 'then-show': g.world?.showThenNow(id, this.view.thenDay, this.view.thenSplit ?? 0.5); this.sheet.set('peek'); break;
+      case 'then-exit': g.world?.exitThenNow(); this.setBanner(this.awayBanner ?? null); this.back(); break;
+      case 'audio-toggle': if (g.audio.enabled) g.audio.disable(); else g.audio.enable(); this.renderSheet(true); this.renderTop(true); break;
+      case 'audio-mute': case 'audio-opt': if (e.type === 'change') { g.audio.set(el.dataset.key, el.checked); this.renderSheet(true); } break;
+      case 'audio-test-cue': if (!g.audio.running) g.audio.enable(); g.audio.director.play(id); if (id === 'triumph') g.audio.director.stinger(id); break;
+      case 'audio-test-sfx': if (!g.audio.running) g.audio.enable(); g.audio.sfx(id); break;
+      case 'gfx': if (e.type === 'change') { g.setSetting(el.dataset.key, el.checked); this.renderSheet(true); } break;
       case 'people-mode': this.view.peopleMode = id; this.renderSheet(true); $('sheet-body').scrollTop = 0; break;
       case 'overview': g.world?.overview(); this.sheet.set('peek'); break;
       case 'visit': this.visit(id); break;
@@ -175,11 +207,22 @@ export class HUD {
       case 'quality': g.setSetting('quality', id); this.renderSheet(true); break;
       case 'save': g.save(true); break;
       case 'export': g.saves.exportFile(this.sim.state); this.toasts.show('Save file downloaded.'); break;
+      case 'export-backup': g.saves.exportBackup().then((ok) => this.toasts.show(ok ? 'Downloaded the copy kept from before the upgrade.' : 'No pre-upgrade copy is stored on this device.', { bad: !ok })); break;
       case 'import': $('import-file').click(); break;
       case 'restore': if (confirm('Roll back to the recovery snapshot taken at the start of the latest saved year? Progress since then will be lost.')) g.restoreSnapshot(); break;
       case 'new': if (confirm('Start a new kingdom? Your current village will be replaced. (Export it first if you want to keep it.)')) g.newKingdom(); break;
       default: break;
     }
+  }
+
+  /** Then & Now for a property: the sheet shows its history, the 3D view shows a chosen year beside today. */
+  openThenNow(plotId) {
+    const stops = appearances(this.sim.state, plotId);
+    this.view.thenDay = stops[0]?.d ?? 1;
+    this.view.thenSplit = 0.5;
+    this.openDetail('thennow', plotId);
+    const ok = this.game.world?.showThenNow(plotId, this.view.thenDay, 0.5);
+    if (ok) this.setBanner('🕰 Then & Now: history view (the kingdom keeps living)', { label: '✓ Present', action: () => { this.game.world.exitThenNow(); this.setBanner(this.awayBanner ?? null); if (this.view.detail?.kind === 'thennow') this.back(); } });
   }
 
   /** Switch the 3D view to another kingdom (or back home). The simulation is unaffected. */
@@ -231,6 +274,10 @@ export class HUD {
     const s = this.sim.state;
     const clockEl = $('clock');
     const text = `${dateLabel(s.day, { short: true })} · ${clock(s.minute)} · ${settlementStage(s.citizens.length)}`;
+    const age = ageDef(s.civ?.age ?? 1);
+    const eraChip = $('era-chip');
+    const eraText = `${age.icon} ${age.short}`;
+    if (eraChip && eraChip.textContent !== eraText) { eraChip.textContent = eraText; eraChip.className = `era-chip era-${age.id}`; eraChip.title = age.name; }
     const name = 'Kingdom of Nobodies';
     if ($('kingdom-name').textContent !== name) $('kingdom-name').textContent = name;
     if (clockEl.textContent !== text) clockEl.textContent = text;
@@ -243,6 +290,8 @@ export class HUD {
     $('pause').classList.toggle('active', clockState.paused);
     $('pause').setAttribute('aria-label', clockState.paused ? 'Resume' : 'Pause');
     $('speed').textContent = `${clockState.speed}×`;
+    const snd = $('sound');
+    if (snd) { const on = this.game.audio.enabled; const icon = on ? (this.game.audio.running ? '🔊' : '🔈') : '🔇'; if (snd.textContent !== icon) snd.textContent = icon; snd.setAttribute('aria-label', on ? 'Turn sound off' : 'Enable sound'); snd.classList.toggle('active', on); }
   }
 
   /** The holiday under the date: what the village shows, with the countdown to midnight on New Year's Eve. */
@@ -293,6 +342,7 @@ export class HUD {
     if (detail?.kind === 'bank') return bankDetail(this.sim, detail.id);
     if (detail?.kind === 'guild') return guildDetail(this.sim, detail.id);
     if (detail?.kind === 'faith') return faithDetail(this.sim, detail.id);
+    if (detail?.kind === 'thennow') return thenNowView(this.sim, detail.id, this.view);
     if (tab === 'world') return worldPanel(this.sim, this.view);
     if (tab === 'region') return regionPanel(this.sim, this.view);
     if (tab === 'economy') {
@@ -312,7 +362,7 @@ export class HUD {
       return { title: inner.title, html: seg + inner.html };
     }
     if (tab === 'history') return historyPanel(this.sim, this.view);
-    if (tab === 'council') return councilPanel(this.sim, { settings: this.game.settings, build: this.game.build, lastSaved: this.game.lastSavedText(), source: this.game.loadSource, cloud: cloudCard(this.game), celebrations: celebrationsCard(this.game) });
+    if (tab === 'council') return councilPanel(this.sim, { settings: this.game.settings, build: this.game.build, lastSaved: this.game.lastSavedText(), source: this.game.loadSource, cloud: cloudCard(this.game), celebrations: celebrationsCard(this.game), sound: audioCard(this.game), graphics: graphicsCard(this.game), backup: !!this.game.saves.backupKey });
     const inner = citizenList(this.sim, this.view);
     return { title: inner.title, html: this.peopleSeg() + inner.html };
   }

@@ -12,6 +12,9 @@ import { record } from '../society/Chronicle.js';
 import { remember } from '../ai/MemorySystem.js';
 import { achieve } from '../citizens/Citizen.js';
 
+
+/** Later medicine and sanitation lower disease and infant deaths; set by civilization/. */
+export const healthHooks = { disease: null, infant: null };
 // Rare, condition-driven hardships. Every disaster changes real state: fires
 // damage or destroy buildings (then repaired or rebuilt through ordinary
 // construction), crop failures cut farm output, harsh winters raise hunger and
@@ -50,7 +53,8 @@ export function dailyDisasters(state) {
   const winter = seasonOf(state.day) === 'Winter';
   for (const p of state.plots) {
     if (!p.building || p.building.type === 'ruins' || p.building.type === 'well' || p.projectId || state.fires.some((f) => f.plotId === p.id)) continue;
-    let risk = EVENTS.fireDailyPerBuilding * (FLAMMABLE[p.building.type] ?? 1) * (winter ? 1.6 : 1) * (s.harshWinter ? 1.3 : 1) * (nearWell(state, p) ? 0.6 : 1) * ((p.building.condition ?? 100) < 50 ? 1.5 : 1) * (lawInForce(state, 'safety') ? 0.8 : 1) * fireWeather(state);
+    // Brick, concrete and steel burn far less readily than timber and thatch.
+    let risk = EVENTS.fireDailyPerBuilding * (FLAMMABLE[p.building.type] ?? 1) * ([1, 1, 0.6, 0.3, 0.18, 0.12][p.building.era ?? 1] ?? 1) * (winter ? 1.6 : 1) * (s.harshWinter ? 1.3 : 1) * (nearWell(state, p) ? 0.6 : 1) * ((p.building.condition ?? 100) < 50 ? 1.5 : 1) * (lawInForce(state, 'safety') ? 0.8 : 1) * fireWeather(state);
     if (chance(state, risk)) igniteFire(state, p);
   }
   maybeOutbreak(state);
@@ -146,7 +150,7 @@ function maybeOutbreak(state) {
   if (s.outbreak) return;
   const beds = state.plots.reduce((t, p) => t + bedsAt(state, p), 0);
   const crowding = state.citizens.length / Math.max(1, beds);
-  const risk = EVENTS.diseaseDailyChance * (0.5 + crowding) * (wells(state).length ? 0.6 : 1.2) * (state.discoveries?.sanitation ? 0.5 : 1) * (seasonOf(state.day) === 'Winter' ? 1.5 : 1);
+  const risk = EVENTS.diseaseDailyChance * (0.5 + crowding) * (wells(state).length ? 0.6 : 1.2) * (state.discoveries?.sanitation ? 0.5 : 1) * (healthHooks.disease?.(state) ?? 1) * (seasonOf(state.day) === 'Winter' ? 1.5 : 1);
   if (state.citizens.length < 8 || !chance(state, risk)) return;
   const victims = state.citizens.filter((c) => c.health.immuneUntil <= state.day).sort(() => nextRandom(state) - 0.5).slice(0, 2);
   if (!victims.length) return;

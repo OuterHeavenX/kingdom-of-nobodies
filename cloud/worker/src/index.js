@@ -159,6 +159,8 @@ async function putSave(env, user, slot, req) {
   // Never silently overwrite: the client must say which revision it is replacing.
   if (current && base !== current.revision) return json({ conflict: true, meta: metaOf(current) }, 409);
   if (!current && base !== null && base !== 0) return json({ conflict: true, meta: null }, 409);
+  // An older game version may not replace a world saved in a newer format (it could not have read it).
+  if (current && Number(current.version) > check.meta.version) return json({ error: `rejected: this kingdom is saved in format ${current.version}; update the game before syncing`, meta: metaOf(current) }, 409);
   const revision = (current?.revision ?? 0) + 1;
   const m = check.meta;
   const sealed = await seal(env, body.envelope);

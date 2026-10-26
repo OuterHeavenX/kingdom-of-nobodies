@@ -1,6 +1,13 @@
 // Multigenerational stress test: advances kingdoms by many years without
 // rendering and checks every invariant along the way. Usage:
-//   node tests/longevity.mjs [years=200] [seeds=1,2,3]
+//   node tests/longevity.mjs [years=200] [seeds=1,2,3] [--jobs N] [--checkpoints DIR] [--from FILE]
+// Tiers (package.json): test:longevity:quick (25 years), test:longevity:century
+// (100 years) for routine work, test:longevity:full (500 years) for releases.
+// Seeds run in parallel child processes (--jobs, default: one per CPU core);
+// each seed is deterministic, so a failure reproduces exactly. --checkpoints
+// saves each seed's world at the start of every age (Years 101, 201, 301, 401)
+// and --from resumes from such a file, so a late-age problem can be studied
+// without re-running the centuries before it.
 import { Simulation } from '../src/sim/Simulation.js';
 import { createKingdom } from '../src/sim/Setup.js';
 import { totalMoney, balance } from '../src/economy/Transactions.js';
@@ -15,10 +22,32 @@ import { validOwner } from '../src/institutions/Registry.js';
 import { balanceSheet, financeSummary } from '../src/finance/BankManager.js';
 import { MILITARY } from '../src/core/Config.js';
 import { affiliationCounts } from '../src/institutions/FaithManager.js';
+import { ageForYear } from '../src/civilization/Ages.js';
+import { ARCH_TECH, formOf } from '../src/civilization/ArchitectureData.js';
+import { hasTech } from '../src/civilization/Technology.js';
+import { architectureStats } from '../src/civilization/Architecture.js';
+import { densityStats } from '../src/civilization/Density.js';
+import { propertyOn } from '../src/civilization/PropertyHistory.js';
+import { unmetNeeds } from '../src/civilization/Infrastructure.js';
+import { navGrid, cellOf, walkable } from '../src/navigation/NavigationGrid.js';
+import { frontOf, plotValue } from '../src/property/LandRegistry.js';
+import { yearOf } from '../src/core/Calendar.js';
+import { serialize, deserialize } from '../src/core/Serialization.js';
+import { holidayNow } from '../src/culture/Holidays.js';
+import { cpus } from 'node:os';
+import { spawn } from 'node:child_process';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 'node:fs';
 
-const years = Number(process.argv[2] ?? 200);
-const seeds = (process.argv[3] ?? '1,2,3').split(',').map(Number);
+const positional = process.argv.slice(2).filter((a, i, all) => !a.startsWith('--') && !all[i - 1]?.startsWith('--'));
+const option = (k) => { const i = process.argv.indexOf(`--${k}`); return i > 0 ? process.argv[i + 1] : null; };
+const years = Number(positional[0] ?? 200);
+const seeds = (positional[1] ?? '1,2,3').split(',').map(Number);
+const jobs = Number(option('jobs') ?? cpus().length);
+const checkpointDir = option('checkpoints');
+const fromFile = option('from');
+const fromDir = option('from-dir');
 let failures = 0;
+const LISTED = new WeakMap(); // listed buildings as first seen, per world
 const fail = (seed, year, msg) => { failures++; console.error(`  ✗ seed ${seed} year ${year}: ${msg}`); };
 
 /** Check every multigenerational invariant; returns the number of violations found. */
@@ -115,6 +144,33 @@ export function checkInvariants(s, seed, year) {
     const r = s.foreign?.people[s.region.settlements[kid].leader.citizenId];
     if (s.foreign && (!r || `${r.firstName} ${r.lastName}` !== s.region.settlements[kid].leader.name)) fail(seed, year, `${kid}'s ruler is not a living named citizen`);
   }
+  // v0.5.2: ages, architecture, heritage, access and Then & Now.
+  if (s.civ) {
+    if (s.civ.age !== ageForYear(yearOf(s.day))) fail(seed, year, `age ${s.civ.age} in year ${yearOf(s.day)}`);
+    const grid = navGrid(s);
+    for (const p of s.plots) {
+      const b = p.building;
+      if (!b) continue;
+      const era = b.era ?? 1;
+      if (era > s.civ.age) fail(seed, year, `${p.name} has architecture from a future age (${era})`);
+      if (era >= 2 && !hasTech(s, ARCH_TECH[era]) && b.type !== 'station' && b.type !== 'hospital') fail(seed, year, `${p.name} built in era ${era} without ${ARCH_TECH[era]}`);
+      const rec = propertyOn(s, p.id, s.day);
+      if (!p.projectId && rec && (rec.t !== b.type || rec.s !== (b.seed ?? 0))) fail(seed, year, `${p.name}'s Then & Now record does not match what stands there`);
+      if (era >= 2 && !['farm', 'grounds', 'ruins'].includes(b.type) && !p.projectId) {
+        const door = frontOf(p, 0, 1.2);
+        if (!walkable(grid, cellOf(door.x, door.z)) && !walkable(grid, cellOf(frontOf(p, 0, 2.2).x, frontOf(p, 0, 2.2).z))) fail(seed, year, `${p.name}'s ${b.style} has no way in`);
+      }
+    }
+    // A listed building is never pulled down or rebuilt (only fire can take it).
+    if (!LISTED.has(s)) LISTED.set(s, {});
+    const listedSeen = LISTED.get(s);
+    for (const id of Object.keys(s.civ.heritage?.listed ?? {})) {
+      const p = s.plots.find((x) => x.id === id);
+      const now = p?.building ? `${p.building.type}:${p.building.seed}` : 'none';
+      if (listedSeen[id] && listedSeen[id] !== now && p?.building?.type !== 'ruins' && listedSeen[id] !== 'none') fail(seed, year, `listed ${p?.name} changed from ${listedSeen[id]} to ${now}`);
+      if (p?.building?.type !== 'ruins') listedSeen[id] = now;
+    }
+  }
   const kb = JSON.stringify(s).length / 1024;
   if (kb > 6000) fail(seed, year, `state has grown to ${Math.round(kb)} KB`);
   if (JSON.stringify(s).match(/NaN|Infinity/)) fail(seed, year, 'NaN or Infinity in state');
@@ -140,6 +196,31 @@ export function regional(s, year) {
     traditions: (s.culture?.traditions ?? []).filter((x) => x.active).length,
     treasury: balance(s, 'treasury'), widerWorld: balance(s, 'outside'),
     ...milestone5(s),
+    civilization: civilization(s),
+  };
+}
+
+/** v0.5.2 metrics: the city's architecture, density, heritage, technology and transport. */
+export function civilization(s) {
+  if (!s.civ) return null;
+  const a = architectureStats(s);
+  const d = densityStats(s);
+  const built = s.plots.filter((p) => p.building);
+  const tall = built.filter((p) => formOf(p.building.type, p.building.era ?? 1).tall && (p.building.floors ?? 1) >= 7);
+  const roads = {};
+  for (const r of s.roads) roads[r.kind] = (roads[r.kind] ?? 0) + 1;
+  const ageYears = built.map((p) => (s.day - (p.building.rebuiltDay ?? p.building.builtDay ?? 1)) / DAYS_PER_YEAR);
+  return {
+    age: s.civ.age, technologies: Object.keys(s.civ.tech).length, byEra: a.byEra.slice(1), modernPct: a.modernPct,
+    buildingAgeAvg: Math.round(ageYears.reduce((x, y) => x + y, 0) / Math.max(1, ageYears.length)), oldestBuilding: Math.round(Math.max(0, ...ageYears)),
+    built: s.civ.stats.built, rebuilt: s.civ.stats.rebuilt, demolitions: (s.civ.stats.rebuilt ?? 0) + Object.values(s.civ.archive).flat().filter((r) => r.k === 'demolished').length,
+    skyscrapers: tall.length, tallestFloors: Math.max(0, ...built.map((p) => p.building.floors ?? 1)), apartments: d.apartments, towers: d.towers, mansions: d.mansions,
+    rentalBeds: d.rentalBeds, renters: d.renters, evictions: s.civ.stats.evictions,
+    listed: Object.keys(s.civ.heritage?.listed ?? {}).length, conservation: s.civ.heritage?.conservation ?? [], disputes: s.civ.heritage?.disputes.length ?? 0,
+    landValueAvg: Math.round(built.reduce((x, p) => x + plotValue(p), 0) / Math.max(1, built.length)),
+    utilities: Object.fromEntries(Object.entries(s.civ.infra).map(([k, m]) => [k, Math.max(0, ...Object.values(m))])), utilityWorks: s.civ.stats.utilityWorks, upkeep: s.civ.stats.upkeepPaid,
+    roads, trips: s.civ.transport.trips, archiveRecords: Object.values(s.civ.archive).reduce((x, l) => x + l.length, 0),
+    unservedTall: tall.filter((p) => unmetNeeds(s, p, p.building.type, p.building.era).length).length,
   };
 }
 
@@ -162,46 +243,102 @@ export function milestone5(s) {
   };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
-  for (const seed of seeds) {
-    const t0 = Date.now();
-    const sim = new Simulation(createKingdom(seed));
-    const money = totalMoney(sim.state);
-    let peak = 0, generations = 1, minPop = Infinity;
-    const series = [];
-    for (let y = 1; y <= years; y++) {
-      sim.runDays(DAYS_PER_YEAR);
-      const s = sim.state;
-      peak = Math.max(peak, s.citizens.length);
-      minPop = Math.min(minPop, s.citizens.length);
-      for (const c of s.citizens) generations = Math.max(generations, c.generation);
-      if (totalMoney(s) !== money) fail(seed, y, `money not conserved (${totalMoney(s)} vs ${money})`);
-      if (y % 10 === 0) checkInvariants(s, seed, y);
-      if (y % 25 === 0) series.push(regional(s, y));
-      if (y % 25 === 0) console.log(`  seed ${seed} year ${y}: population ${s.citizens.length}, archive ${Object.keys(s.archive).length}, state ${(JSON.stringify(s).length / 1024).toFixed(0)} KB, ${((Date.now() - t0) / 1000).toFixed(0)}s`);
-    }
+/** Run one seed in this process. */
+function runSeed(seed) {
+  const t0 = Date.now();
+  const state = fromFile ? deserialize(readFileSync(fromFile, 'utf8')) : createKingdom(seed);
+  if (fromFile) seed = state.seed ?? seed;
+  const sim = new Simulation(state);
+  const money = totalMoney(sim.state);
+  const startYear = yearOf(sim.state.day) - 1; // whole years already lived
+  let peak = 0, generations = 1, minPop = Infinity;
+  const series = [], perAge = {};
+  let ageT = Date.now(), ageTicks = 0;
+  for (let rel = 1; rel <= years; rel++) {
+    const y = startYear + rel; // the calendar year just completed
+    sim.runDays(DAYS_PER_YEAR);
+    ageTicks += DAYS_PER_YEAR * TIME.ticksPerDay;
     const s = sim.state;
-    const dead = Object.values(s.archive).filter((p) => p.status === 'dead');
-    const chron = s.chronicle;
-    console.log(JSON.stringify({
-      seed, years, seconds: Math.round((Date.now() - t0) / 1000),
-      peakPopulation: peak, minPopulation: minPop, finalPopulation: s.citizens.length,
-      births: s.stats.births, deaths: s.stats.deaths, immigrants: s.stats.immigrants, emigrants: s.stats.emigrants, marriages: s.stats.marriages,
-      generations, elections: s.stats.elections,
-      businessesCreated: s.businesses.length, businessesClosed: s.businesses.filter((b) => !isTrading(b)).length,
-      propertyTransfers: chron.filter((e) => /purchased|Inherited|passed to/.test(e.text)).length + s.estates.length,
-      buildingsDestroyed: (s.eventLog ?? []).filter((e) => e.type === 'buildingDestroyed').length + chron.filter((e) => /burned to the ground/.test(e.text)).length,
-      fires: s.stats.fires, discoveries: Object.keys(s.discoveries ?? {}).length,
-      eras: s.eras.map((e) => e.name), hungerDeaths: dead.filter((p) => p.cause === 'hunger').length,
-      founderBiographiesKept: ['Ada', 'Bram', 'Cora', 'Dain', 'Elin'].every((n) => [...s.citizens, ...Object.values(s.archive)].some((p) => p.firstName === n && p.founder)),
-      stateKB: Math.round(JSON.stringify(s).length / 1024), heapMB: Math.round(process.memoryUsage().heapUsed / 1048576),
-      msPerTick: Math.round(((Date.now() - t0) / (years * DAYS_PER_YEAR * TIME.ticksPerDay)) * 1000) / 1000,
-      hungerCauses: dead.filter((p) => p.cause === 'hunger').reduce((m, p) => ({ ...m, [p.hungerCause ?? 'unrecorded']: (m[p.hungerCause ?? 'unrecorded'] ?? 0) + 1 }), {}),
-      regional: regional(s, years), every25Years: series,
-    }));
-    if (s.citizens.length < 5) fail(seed, years, 'population collapsed');
-    if (s.stats.births < years / 4) fail(seed, years, `too few births (${s.stats.births})`);
+    peak = Math.max(peak, s.citizens.length);
+    minPop = Math.min(minPop, s.citizens.length);
+    for (const c of s.citizens) generations = Math.max(generations, c.generation);
+    if (totalMoney(s) !== money) fail(seed, y, `money not conserved (${totalMoney(s)} vs ${money})`);
+    if (y % 10 === 0) checkInvariants(s, seed, y);
+    // Holidays keep happening in every age (checked mid-century).
+    if (y % 100 === 50) { const h = s.holidays?.log?.filter((e) => e.year >= yearOf(s.day) - 5) ?? []; if (!h.length) fail(seed, y, 'no holiday celebrated in the last five years'); }
+    if (y % 100 === 0) {
+      // Cost of each century of simulation (it grows as the town becomes a city).
+      perAge[`Y${y - 99}-${y}`] = Math.round(((Date.now() - ageT) / ageTicks) * 1000) / 1000;
+      ageT = Date.now(); ageTicks = 0;
+      // Save and reload as each age opens: the architecture and history survive exactly.
+      const text = serialize(s, 'longevity');
+      const loaded = deserialize(text);
+      if (JSON.stringify(loaded.civ) !== JSON.stringify(s.civ)) fail(seed, y, 'civilization state changed across a save and reload');
+      if (JSON.stringify(loaded.plots) !== JSON.stringify(s.plots)) fail(seed, y, 'plots changed across a save and reload');
+      if (checkpointDir && y < 500) { mkdirSync(checkpointDir, { recursive: true }); writeFileSync(`${checkpointDir}/seed-${seed}-year-${y + 1}.json`, text); }
+    }
+    if (rel % 25 === 0) series.push(regional(s, y));
+    if (rel % 25 === 0) { const c = civilization(s); console.log(`  seed ${seed} year ${y}: population ${s.citizens.length}, age ${c?.age}, eras ${c?.byEra.join('/')}, towers ${c?.skyscrapers}, listed ${c?.listed}, state ${(JSON.stringify(s).length / 1024).toFixed(0)} KB, heap ${Math.round(process.memoryUsage().heapUsed / 1048576)} MB, ${((Date.now() - t0) / 1000).toFixed(0)}s`); }
   }
-  console.log(failures ? `${failures} failure(s)` : 'longevity: all invariants held');
-  process.exit(failures ? 1 : 0);
+  const s = sim.state;
+  const dead = Object.values(s.archive).filter((p) => p.status === 'dead');
+  const chron = s.chronicle;
+  console.log(JSON.stringify({
+    seed, years, from: fromFile ?? undefined, endYear: startYear + years, seconds: Math.round((Date.now() - t0) / 1000),
+    peakPopulation: peak, minPopulation: minPop, finalPopulation: s.citizens.length,
+    births: s.stats.births, deaths: s.stats.deaths, immigrants: s.stats.immigrants, emigrants: s.stats.emigrants, marriages: s.stats.marriages,
+    generations, elections: s.stats.elections,
+    businessesCreated: s.businesses.length, businessesClosed: s.businesses.filter((b) => !isTrading(b)).length,
+    propertyTransfers: chron.filter((e) => /purchased|Inherited|passed to/.test(e.text)).length + s.estates.length,
+    buildingsDestroyed: (s.eventLog ?? []).filter((e) => e.type === 'buildingDestroyed').length + chron.filter((e) => /burned to the ground/.test(e.text)).length,
+    fires: s.stats.fires, discoveries: Object.keys(s.discoveries ?? {}).length,
+    eras: s.eras.map((e) => e.name), hungerDeaths: dead.filter((p) => p.cause === 'hunger').length,
+    founderBiographiesKept: ['Ada', 'Bram', 'Cora', 'Dain', 'Elin'].every((n) => [...s.citizens, ...Object.values(s.archive)].some((p) => p.firstName === n && p.founder)),
+    stateKB: Math.round(JSON.stringify(s).length / 1024), heapMB: Math.round(process.memoryUsage().heapUsed / 1048576),
+    msPerTick: Math.round(((Date.now() - t0) / (years * DAYS_PER_YEAR * TIME.ticksPerDay)) * 1000) / 1000, msPerTickByCentury: perAge,
+    hungerCauses: dead.filter((p) => p.cause === 'hunger').reduce((m, p) => ({ ...m, [p.hungerCause ?? 'unrecorded']: (m[p.hungerCause ?? 'unrecorded'] ?? 0) + 1 }), {}),
+    regional: regional(s, startYear + years), every25Years: series,
+  }));
+  if (s.citizens.length < 5) fail(seed, startYear + years, 'population collapsed');
+  if (!fromFile && s.stats.births < years / 4) fail(seed, years, `too few births (${s.stats.births})`);
+}
+
+/** Run several seeds as parallel child processes; output is passed through with each seed's lines kept together. */
+async function runParallel(files = null) {
+  const t0 = Date.now();
+  const queue = files ? [...files] : [...seeds];
+  const results = [];
+  const worker = async () => {
+    while (queue.length) {
+      const seed = queue.shift();
+      const args = files ? [process.argv[1], String(years), '0', '--jobs', '1', '--from', seed] : [process.argv[1], String(years), String(seed), '--jobs', '1', ...(checkpointDir ? ['--checkpoints', checkpointDir] : [])];
+      const code = await new Promise((resolve) => {
+        const child = spawn(process.execPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+        let out = '';
+        child.stdout.on('data', (d) => { out += d; });
+        child.stderr.on('data', (d) => { out += d; });
+        child.on('close', (c) => { process.stdout.write(out); resolve(c); });
+      });
+      results.push({ seed, code });
+    }
+  };
+  const n = files ? files.length : seeds.length;
+  await Promise.all(Array.from({ length: Math.min(jobs, n) }, worker));
+  const failed = results.filter((r) => r.code !== 0).map((r) => r.seed);
+  console.log(`longevity: ${n} ${files ? 'checkpoint' : 'seed'}(s) × ${years} years in ${Math.round((Date.now() - t0) / 1000)}s wall time with ${Math.min(jobs, n)} parallel job(s); ${failed.length ? `FAILED ${failed.join(', ')}` : 'all invariants held'}`);
+  process.exit(failed.length ? 1 : 0);
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  if (fromDir) {
+    // Resume every saved checkpoint (one per seed and age) for a short run each.
+    const files = existsSync(fromDir) ? readdirSync(fromDir).filter((f) => f.endsWith('.json')).sort().map((f) => `${fromDir}/${f}`) : [];
+    if (!files.length) { console.error(`No checkpoints in ${fromDir}. Create them once with: npm run test:longevity:full (or node tests/longevity.mjs 500 1 --checkpoints ${fromDir}).`); process.exit(1); }
+    await runParallel(files);
+  } else if (seeds.length > 1 && jobs > 1 && !fromFile) await runParallel();
+  else {
+    for (const seed of seeds) runSeed(seed);
+    console.log(failures ? `${failures} failure(s)` : 'longevity: all invariants held');
+    process.exit(failures ? 1 : 0);
+  }
 }

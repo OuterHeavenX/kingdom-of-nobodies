@@ -26,6 +26,9 @@ export const LAWS = {
   land: { name: 'Land Development Act', issue: 'works', description: 'Land is for building on, not hoarding.', requirement: 'Land bought must be built on within two years.', remedy: 'Idle land is bought back by the council at the price paid.' },
 };
 
+/** Laws added by later systems supply their own reasons and stances, keyed by law. */
+export const lawHooks = { reason: {}, stance: {} };
+
 export function ensureLaw(state) {
   if (state.law) return state.law;
   state.law = {
@@ -45,6 +48,7 @@ export function lawInForce(state, key, day = state.day) {
 
 /** How a citizen feels about a law, from their own interests (-1..1). */
 function stanceOn(state, c, key) {
+  if (lawHooks.stance[key]) return lawHooks.stance[key](state, c);
   const p = priorities(state, c);
   const owns = state.plots.filter((x) => x.ownerId === c.id && !x.building).length;
   switch (key) {
@@ -61,6 +65,11 @@ function stanceOn(state, c, key) {
 function reasonFor(state, key) {
   const law = ensureLaw(state);
   if (lawByKey(state, key)?.status === 'ACTIVE' || law.proposals.some((p) => p.key === key && p.status === 'PENDING')) return null;
+  if (lawHooks.reason[key]) {
+    // A bill that failed is not brought back for three years.
+    if (law.proposals.some((p) => p.key === key && p.status === 'REJECTED' && state.day - p.decidedDay < DAYS_PER_YEAR * 3)) return null;
+    return lawHooks.reason[key](state);
+  }
   if (key === 'contracts') {
     const dismissed = law.cases.filter((c) => c.kind === 'contract' && c.judgment?.outcome === 'dismissed' && /no law/.test(c.judgment.reason)).length;
     const deliveries = state.trade?.stats?.deliveries ?? 0;

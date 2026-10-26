@@ -32,9 +32,11 @@ jobs:
           npm run test:e2e
 
   longevity:
-    # Multigenerational stress test: 200 in-game years across four kingdoms, every invariant checked each decade.
+    # Routine multigenerational stress test: 100 in-game years per seed, ending as the
+    # Industrial Awakening opens, every invariant checked each decade. The full 500-year
+    # run is the release check (see longevity-release.yml).
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -47,5 +49,5 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
-      - name: 200-year headless stress test
-        run: npm run test:longevity -- 200 ${{ matrix.seed }}
+      - name: 100-year headless stress test
+        run: node tests/longevity.mjs 100 ${{ matrix.seed }}

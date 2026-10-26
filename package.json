@@ -1,6 +1,6 @@
 {
   "name": "kingdom-of-nobodies",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +9,12 @@
     "preview": "vite preview --host 0.0.0.0 --port 4173 --strictPort",
     "test": "node --test tests/*.test.js",
     "test:e2e": "node tests/e2e/mobile.e2e.cjs",
-    "test:longevity": "node tests/longevity.mjs"
+    "test:longevity": "node tests/longevity.mjs",
+    "test:longevity:quick": "node tests/longevity.mjs 25 1,2,3,4",
+    "test:longevity:century": "node tests/longevity.mjs 100 1,2,3,4",
+    "test:longevity:full": "node tests/longevity.mjs 500 1,2,3,4 --checkpoints .longevity",
+    "test:longevity:ages": "node tests/longevity.mjs 25 0 --from-dir .longevity",
+    "bench": "node scripts/bench-sim.mjs"
   },
   "dependencies": {
     "three": "^0.180.0"

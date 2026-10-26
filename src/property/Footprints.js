@@ -1,3 +1,5 @@
+import { dimsOf, EXTRA_FOOTPRINT } from '../civilization/ArchitectureData.js';
+
 // Building footprints shared by the simulation (navigation) and the renderer,
 // so what blocks a villager's path is exactly what is drawn. Sizes are in
 // building-local space: width along x, depth along z, the door on +z.
@@ -25,9 +27,16 @@ export const FOOTPRINT = {
   barracks: { w: 6.4, d: 4, h: 2.8 },
 };
 
+Object.assign(FOOTPRINT, EXTRA_FOOTPRINT);
+
 export const widthOf = (type) => FOOTPRINT[type]?.w ?? 3.6;
 export const depthOf = (type) => FOOTPRINT[type]?.d ?? 3.2;
 export const heightOf = (type) => FOOTPRINT[type]?.h ?? 2.5;
+
+/** Footprint and height of whatever stands on a plot, by its type and architectural era. */
+export const buildingDims = (plot, b = plot.building) => dimsOf(b, plot, FOOTPRINT[b.type]);
+/** Only Age of Foundations buildings grow side wings when expanded; later eras build the space in. */
+export const hasWing = (b) => (b.level ?? 1) >= 2 && (b.era ?? 1) <= 1 && !['well', 'lumberyard', 'farm', 'ruins', 'grounds'].includes(b.type);
 
 const ROTATE = {
   south: (x, z) => [x, z],
@@ -56,8 +65,9 @@ export function solidRects(plot) {
     const fw = Math.min(plot.w - 1, 10), fd = Math.min(plot.d - 1.5, 7);
     return [worldRect(plot, fw / 2 - 1.2, fd / 2 - 0.4, 3.2, 2.6)];
   }
-  if (b.type === 'ruins') return [];
-  const rects = [worldRect(plot, 0, 0, widthOf(b.type), depthOf(b.type))];
-  if ((b.level ?? 1) >= 2 && !['well', 'lumberyard'].includes(b.type)) rects.push(worldRect(plot, -(widthOf(b.type) / 2 + 1.1), -0.2, 2.4, 2.6));
+  if (b.type === 'ruins' || b.type === 'grounds') return [];
+  const { w, d } = buildingDims(plot, b);
+  const rects = [worldRect(plot, 0, 0, w, d)];
+  if (hasWing(b)) rects.push(worldRect(plot, -(w / 2 + 1.1), -0.2, 2.4, 2.6));
   return rects;
 }

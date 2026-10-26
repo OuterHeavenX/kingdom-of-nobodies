@@ -77,3 +77,15 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 @keyframes toast-time { to { transform: scaleX(0); } }
 @media (prefers-reduced-motion: reduce) { .toast, .toast::after { animation: none; } }
 #view-banner:not([hidden]) ~ #toasts { top: 74px; }
+
+/* ---------- v0.5.2: the era chip ---------- */
+.chips-line { display: flex; gap: 5px; align-items: center; min-width: 0; flex-wrap: nowrap; }
+.chips-line .holiday-chip { min-width: 0; }
+.era-chip { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; margin-top: 3px; padding: 2px 9px; min-height: 22px; border-radius: 999px; font-size: 11.5px; font-weight: 700;
+  border: 1px solid #ffd45c88; background: #ffd45c1f; color: #fff3dc; white-space: nowrap; }
+.era-chip.era-2 { border-color: #d98a5a; background: #c9603a2e; }
+.era-chip.era-3 { border-color: #9fb7c8; background: #7f9bb02e; }
+.era-chip.era-4 { border-color: #7fd0ff; background: #3f8ad82e; }
+.era-chip.era-5 { border-color: #5ee6a0; background: #2f9f6a2e; }
+#app { height: 100%; }
+@supports (height: 100dvh) { #app { height: 100dvh; } }

@@ -51,7 +51,7 @@ function neededProfession(state) {
 
 /** Check whether a newcomer arrives today. Returns the citizen or null. */
 export function maybeImmigrate(state) {
-  if (state.citizens.length >= POPULATION.max) return null;
+  if (state.citizens.length >= (state.populationCap ?? POPULATION.max)) return null;
   if (state.day % POPULATION.immigrationEveryDays !== 0) return null;
   const residents = state.plots.reduce((s, p) => s + p.residents.length, 0);
   if (housingCapacity(state) <= residents) return null;

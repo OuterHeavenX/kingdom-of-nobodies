@@ -69,10 +69,11 @@ export function generateCandidates(state, c, plan) {
   if (hunger < 72) {
     const urgency = ((100 - hunger) / 100) ** 2 * 140;
     const own = FOOD_GOODS.filter((g) => qty(c.inventory, g) > 0).sort((a, b) => GOODS[b].food - GOODS[a].food)[0];
+    const ownStock = own ? null : ownStockFood(state, c);
     if (own) {
       out.push(candidate('eat_own', urgency + 6, [[`hunger is ${hungerWord(hunger)} (fullness ${Math.round(hunger)}%)`, urgency], [`I have ${GOODS[own].label.toLowerCase()} with me`, 6]], { good: own }));
-    } else if (ownStockFood(state, c)) {
-      const own = ownStockFood(state, c);
+    } else if (ownStock) {
+      const own = ownStock;
       out.push(candidate('eat_stock', urgency + 4, [[`hunger is ${hungerWord(hunger)} (fullness ${Math.round(hunger)}%)`, urgency], [`${own.business.name} has ${GOODS[own.good].label.toLowerCase()} in stock`, 4]], { businessId: own.business.id, good: own.good }));
     } else {
       const offer = payer ? bestFoodOffer(state, c, payer) : null;

@@ -123,7 +123,7 @@ export class Villagers {
    * at middle distance only move (no limb animation). Low quality tightens both.
    */
   update(citizens, dt, time, selectedId, day, target, quality = 'high') {
-    const far = (quality === 'high' ? 95 : 70) ** 2, animate = (quality === 'high' ? 55 : 38) ** 2;
+    const far = (quality === 'high' ? 95 : quality === 'medium' ? 62 : 46) ** 2, animate = (quality === 'high' ? 55 : 38) ** 2;
     for (const c of citizens) {
       const node = this.nodes.get(c.id);
       if (!node) continue;
@@ -131,7 +131,9 @@ export class Villagers {
       const a = c.activity;
       const asleep = ((a?.kind === 'sleep' || a?.kind === 'cradle') && a.phase === 'perform') || a?.kind === 'away';
       const d2 = target ? (c.x - target.x) ** 2 + (c.z - target.z) ** 2 : 0;
-      node.visible = !asleep && (d2 < far || c.id === selectedId);
+      // Riders are drawn as their car, bus or pod (see Vehicles.js).
+      const riding = a?.phase === 'travel' && !!a.vehicle;
+      node.visible = !asleep && !riding && (d2 < far || c.id === selectedId);
       if (!node.visible) { node.position.set(c.x, 0, c.z); continue; }
       this.tmp.set(c.x, 0, c.z);
       const dx = c.x - node.position.x, dz = c.z - node.position.z;

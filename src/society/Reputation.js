@@ -10,18 +10,22 @@ export function bump(c, dimension, delta) {
 
 /** Daily: social standing follows how the rest of the village regards this person. */
 export function recomputeStanding(state) {
-  for (const c of state.citizens) {
-    const others = state.citizens.filter((o) => o.id !== c.id);
-    if (!others.length) continue;
+  const all = state.citizens;
+  for (const c of all) {
+    // Everyone else, in population order (counted rather than copied: this runs for every pair, every day).
+    let others = 0;
+    for (const o of all) if (o.id !== c.id) others++;
+    if (!others) continue;
     let sum = 0, best = 0;
-    for (const o of others) {
+    for (const o of all) {
+      if (o.id === c.id) continue;
       const r = peekRel(state, o.id, c.id);
       sum += r ? r.respect * 0.5 + r.friendship * 0.35 + r.trust * 0.15 - r.rivalry * 0.3 : 30;
       const mine = peekRel(state, c.id, o.id);
       if (mine && mine.friendship > best) best = mine.friendship;
     }
     c.social = { bestFriendship: best };
-    const target = clamp(sum / others.length + (c.reputation.generosity - 50) * 0.3);
+    const target = clamp(sum / others + (c.reputation.generosity - 50) * 0.3);
     c.reputation.standing = clamp(Math.round((c.reputation.standing * 0.8 + target * 0.2) * 10) / 10);
   }
 }

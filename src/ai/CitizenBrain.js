@@ -99,6 +99,9 @@ const r2 = (v) => Math.round(v * 100) / 100;
  * ground underfoot and how crowded it is. Unreachable places fail with a reason
  * instead of leaving anyone frozen.
  */
+/** Later transport (cars, buses, pods) speeds up long trips; set by civilization/Transport. */
+export const travelHooks = { plan: null };
+
 function travel(state, c, act) {
   const grid = navGrid(state);
   if (act.path && act.navV !== grid.version) {
@@ -120,9 +123,11 @@ function travel(state, c, act) {
     act.path = route.points.map(([x, z]) => [r2(x), r2(z)]);
     act.wp = 0;
     act.navV = route.version;
+    act.vf = travelHooks.plan?.(state, c, act, act.path) ?? 1;
+    if (act.vf === 1) delete act.vf;
     recordTrip(state, route.cells);
   }
-  let budget = MOVE.unitsPerTick * crowdFactor(state, c.x, c.z);
+  let budget = MOVE.unitsPerTick * crowdFactor(state, c.x, c.z) * (act.vf ?? 1);
   while (budget > 1e-6 && act.wp < act.path.length) {
     const [tx, tz] = act.path[act.wp];
     const dx = tx - c.x, dz = tz - c.z, d = Math.hypot(dx, dz);
@@ -132,7 +137,7 @@ function travel(state, c, act) {
     budget -= step / speed;
     if (step >= d - 1e-6) act.wp++;
   }
-  if (act.wp >= act.path.length) { act.phase = 'perform'; act.path = null; }
+  if (act.wp >= act.path.length) { act.phase = 'perform'; act.path = null; delete act.vehicle; delete act.vf; }
 }
 
 function routeFailed(state, c, act, reason) {

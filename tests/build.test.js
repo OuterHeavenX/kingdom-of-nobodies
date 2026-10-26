@@ -19,7 +19,16 @@ test('16. production build uses correct GitHub Pages asset paths', () => {
   assert.match(html, /id="boot"/, 'startup screen present');
   // Milestone 5.1: the shipped bundle carries the new version and the holiday system.
   const js = assets.filter((a) => a.endsWith('.js')).map((a) => readFileSync(join(out, a.replace('/kingdom-of-nobodies/', '')), 'utf8')).join('\n');
-  assert.match(js, /v0\.5\.1 Seasons & Celebrations/, 'version 0.5.1 in the interface');
+  assert.match(js, /v0\.5\.2 The Evolution of Civilization/, 'version 0.5.2 in the interface');
+  for (const marker of ['Then & Now', 'Glass skyscraper', 'Hearthsong', 'Enable sound']) assert.ok(js.includes(marker), `${marker} is bundled`);
+  // v0.5.2: the PWA files ship with the build, under the Pages base path.
+  for (const f of ['manifest.webmanifest', 'sw.js', 'icons/apple-touch-icon.png', 'icons/icon-512.png']) assert.ok(existsSync(join(out, f)), `${f} is published`);
+  assert.match(html, /href="\/kingdom-of-nobodies\/manifest\.webmanifest"/);
+  assert.match(html, /href="\/kingdom-of-nobodies\/icons\/apple-touch-icon\.png"/);
+  const sw = readFileSync(join(out, 'sw.js'), 'utf8');
+  assert.match(sw, /const CACHE = 'kon-/, 'a versioned cache');
+  assert.match(sw, /caches\.delete/, 'old caches are removed');
+  for (const a of assets.filter((x) => x.endsWith('.js'))) assert.ok(sw.includes(a.replace('/kingdom-of-nobodies/', '')), `${a} is precached`);
   for (const marker of ['Holiday preview', 'decor-grow', 'snowNoise']) assert.ok(js.includes(marker), `${marker} is bundled`);
   assert.match(html, /id="holiday-chip"/, 'the holiday chip is in the page');
 });

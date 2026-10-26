@@ -25,8 +25,80 @@ function octile(a, b) {
   return (Math.max(dx, dz) + (SQRT2 - 1) * Math.min(dx, dz)) * MIN_COST;
 }
 
-/** Raw A*: cell list from start to goal, or null when unreachable. */
+/**
+ * Raw A*: cell list from start to goal, or null when unreachable. The heap is
+ * inlined and the goal's coordinates hoisted, but every value is computed by
+ * the same expressions in the same order as the reference implementation
+ * (astarReference below), so the routes are identical cell for cell.
+ */
 function astar(cost, start, goal) {
+  generation++;
+  const gen = generation;
+  const gi = goal % SIZE, gj = Math.floor(goal / SIZE);
+  const D = SQRT2 - 1;
+  let size = 0;
+  // Push the start.
+  g[start] = 0; stamp[start] = gen; came[start] = -1;
+  {
+    const dx = Math.abs((start % SIZE) - gi), dz = Math.abs(Math.floor(start / SIZE) - gj);
+    heapCell[0] = start; heapF[0] = (Math.max(dx, dz) + D * Math.min(dx, dz)) * MIN_COST; size = 1;
+  }
+  while (size > 0) {
+    // Pop the lowest f.
+    const cur = heapCell[0];
+    const lastCell = heapCell[--size], lastF = heapF[size];
+    let h = 0;
+    while (true) {
+      let child = 2 * h + 1;
+      if (child >= size) break;
+      if (child + 1 < size && heapF[child + 1] < heapF[child]) child++;
+      if (heapF[child] >= lastF) break;
+      heapCell[h] = heapCell[child]; heapF[h] = heapF[child]; h = child;
+    }
+    heapCell[h] = lastCell; heapF[h] = lastF;
+    if (closed[cur] === gen) continue;
+    closed[cur] = gen;
+    if (cur === goal) {
+      const path = [];
+      for (let k = cur; k !== -1; k = came[k]) path.push(k);
+      return path.reverse();
+    }
+    const ci = cur % SIZE, cj = (cur - ci) / SIZE;
+    const here = cost[cur], gHere = g[cur];
+    for (let dj = -1; dj <= 1; dj++) {
+      const j = cj + dj;
+      if (j < 0 || j >= SIZE) continue;
+      for (let di = -1; di <= 1; di++) {
+        if (!di && !dj) continue;
+        const i = ci + di;
+        if (i < 0 || i >= SIZE) continue;
+        const next = j * SIZE + i;
+        const c = cost[next];
+        if (c === Infinity || closed[next] === gen) continue;
+        // No squeezing diagonally between two solid cells.
+        if (di && dj && (cost[cj * SIZE + i] === Infinity || cost[j * SIZE + ci] === Infinity)) continue;
+        const step = (di && dj ? SQRT2 : 1) * (here + c) / 2;
+        const tentative = gHere + step;
+        if (stamp[next] === gen && tentative >= g[next]) continue;
+        stamp[next] = gen; g[next] = tentative; came[next] = cur;
+        const dx = Math.abs(i - gi), dz = Math.abs(j - gj);
+        const f = tentative + (Math.max(dx, dz) + D * Math.min(dx, dz)) * MIN_COST;
+        // Push (sift up).
+        let k = size++;
+        while (k > 0) {
+          const parent = (k - 1) >> 1;
+          if (heapF[parent] <= f) break;
+          heapCell[k] = heapCell[parent]; heapF[k] = heapF[parent]; k = parent;
+        }
+        heapCell[k] = next; heapF[k] = f;
+      }
+    }
+  }
+  return null;
+}
+
+/** The original, straightforward A* (kept to prove the optimised one gives the same routes; used by tests). */
+export function astarReference(cost, start, goal) {
   generation++;
   let size = 0;
   const push = (cell, f) => {
@@ -71,7 +143,6 @@ function astar(cost, start, goal) {
       const next = j * SIZE + i;
       const c = cost[next];
       if (c === Infinity || closed[next] === generation) continue;
-      // No squeezing diagonally between two solid cells.
       if (di && dj && (cost[cj * SIZE + i] === Infinity || cost[j * SIZE + ci] === Infinity)) continue;
       const step = (di && dj ? SQRT2 : 1) * (cost[cur] + c) / 2;
       const tentative = g[cur] + step;
@@ -82,6 +153,9 @@ function astar(cost, start, goal) {
   }
   return null;
 }
+
+/** Exposed for the equivalence test. */
+export const astarFast = (cost, start, goal) => astar(cost, start, goal);
 
 /** Highest cost along a straight segment, or Infinity if it crosses a wall. */
 function lineCost(cost, ax, az, bx, bz) {

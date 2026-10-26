@@ -69,12 +69,17 @@ export function routeClosed(state, route) {
 }
 
 /** Travel speed on a route in km per hour, with the reasons it is slower than usual. */
+/** Later transport (rail, motor freight) multiplies regional speed; set by civilization/Transport. */
+export const transportHooks = { regional: null };
+
 export function routeSpeed(state, route, load = 0) {
   const why = [];
   let speed = CART_KMH * TERRAIN_SPEED[route.terrain] * QUALITY_SPEED[routeQuality(state, route)];
   if (seasonIndex(state.day) === 3) { speed *= route.terrain === 'mountain' ? 0.6 : 0.78; why.push('winter roads'); }
   for (const c of state.region.closures) if (c.routeId === route.id && c.until >= state.day && !c.closed) { speed *= c.factor; why.push(c.reason); }
   speed *= 1 - 0.25 * Math.min(1, load);
+  const t = transportHooks.regional?.(state);
+  if (t && t.factor !== 1) { speed *= t.factor; why.push(t.why); }
   const w = roadWeather(state);
   if (w < 1) { speed *= w; why.push(state.weather.today.kind === 'snow' ? 'snow on the roads' : state.weather.today.kind === 'fog' ? 'fog' : 'rain'); }
   return { speed: Math.max(0.6, speed), why };

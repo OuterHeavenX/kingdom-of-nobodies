@@ -1,11 +1,221 @@
-# Kingdom of Nobodies — Milestone 5.1: Seasons & Celebrations
+# Kingdom of Nobodies — v0.5.2: The Evolution of Civilization
 
-A mobile-first, low-poly 3D medieval settlement that lives for generations among neighbouring kingdoms.
-Five strangers light a hearth. Their descendants lay out streets, borrow from banks, join guilds, keep
-their faiths, trade with kingdoms whose people have names, and live through wars they did not start. You
-are the council: you can nudge the society, but you can't control anyone.
+A mobile-first, low-poly 3D settlement that lives for five hundred years. Five strangers light a hearth.
+Their descendants lay out streets, borrow from banks, join guilds, keep their faiths, trade with
+neighbouring kingdoms — and, century by century, rebuild their timber village into brick, concrete,
+steel and glass, while the old town they grew up in is kept. You are the council: you can nudge the
+society, but you can't control anyone.
 
-**Play:** https://outerheavenx.github.io/kingdom-of-nobodies/ · version 0.5.1
+**Play:** https://outerheavenx.github.io/kingdom-of-nobodies/ · version 0.5.2 · add it to your iPhone's
+Home Screen to play it as an app.
+
+## The Evolution of Civilization (v0.5.2)
+
+The rule from every earlier milestone holds: the chronicle only reports what the simulation did, and
+every coin moves through the ledger. Nothing in this release is a cut-scene; a skyline appears only
+when people decide to build it and can pay for it.
+
+### Five ages
+
+| Age | Opens | What becomes possible |
+|---|---|---|
+| 🏡 Age of Foundations | Year 1 | Timber, thatch and stone: cottages, farmsteads, workshops, taverns, a market |
+| 🏭 Industrial Awakening | Year 101 | Brick townhouses, factories, warehouses, gaslight, piped water, railways |
+| 🚗 Modern Expansion | Year 201 | Concrete, electricity, suburbs, apartments, motor cars, buses, a hospital, early high-rises |
+| 🏙️ Metropolitan Age | Year 301 | Steel and glass: skyscrapers, condominiums, rapid transit, digital networks, renewables |
+| 🌿 Age of Tomorrow | Year 401 | Solar glass and living walls, autonomous transit, robotics, vertical gardens |
+
+The ages follow the existing calendar (a year is still twelve days), so ageing, inheritance,
+elections, production and the holidays are unchanged. **An age only makes things possible.** On the
+morning of Year 101 every building is exactly as it was the night before.
+
+### Technology
+
+A data-driven registry of 25 technologies (`src/civilization/Technology.js`). Each has an age, the
+technologies it needs, and local needs read from the simulation — a working smithy for steam boilers,
+sixty townspeople and brick buildings already standing for a railway, four modern buildings before
+steel-and-glass. The council adopts one at a time, at most once a season and every few years, and pays
+real coins to the wider world for it. If the treasury can't pay (with a reserve), the technology waits.
+New architecture is buildable only once its technology is adopted.
+
+### Utilities and infrastructure
+
+Power, water, communications and transit are simplified networks with a level the town's technology
+allows and a level actually laid in each district. The council lays them district by district as
+public works, paid day by day to local crews (or outside contractors), with yearly upkeep; when upkeep
+can't be paid, a district's service falls back. Buildings that need more than their district provides
+(towers need mains water and bus routes, for example) work at reduced capacity — fewer beds, less
+output — until the network catches up.
+
+### Architecture
+
+Every building keeps its function (`cottage`, `bakery`, `lumberyard`…) and records the era it was
+built or last rebuilt in, a deterministic seed and its storeys. The era decides its look, value, beds
+and staff. `src/civilization/ArchitectureData.js` defines the forms for every type in every era, e.g.
+
+- **Homes:** timber-frame / stone / thatched cottage → brick townhouse / Victorian house → suburban
+  house → contemporary family home → solar villa.
+- **Lumberyard:** lumber workshop → brick sawmill → industrial warehouse → corporate office tower →
+  automated construction campus. (Smithy → ironworks → machine works → manufacturing plant →
+  automated production facility; merchant shop → department store → shopping centre → shopping
+  complex → smart market hall; tavern → coaching inn → hotel → hotel tower → sky hotel; and civic
+  buildings, banks, guild halls, schools, granaries, wells, chapels and farms likewise.)
+- **New types:** apartment blocks (brick tenement → concrete flats → condominiums → garden apartments),
+  residential towers (early high-rise → glass skyscraper → vertical garden tower / solar spire),
+  mansions (manor house → Victorian mansion → luxury estate → modern mansion → futuristic villa) with
+  their grounds, railway stations and hospitals.
+
+Footprints are era-aware and shared by navigation, decorations and the renderer, so what blocks a
+villager is what is drawn. Zoning follows distance from the crossroads: only the centre may build tall,
+the suburbs stay low and farmland never sprouts towers. Land in the centre gains value as the town
+becomes a city. Buildings wear slowly with age (newer materials more slowly) and are worth less in
+poor repair.
+
+### Modernization and redevelopment
+
+- **Owners decide.** Every few days a handful of owners review their buildings. A merchant whose timber
+  workshop is decades old and whose trade is good may pull it down for a brick factory; a family that
+  has held a house for generations is slow to; a poor household keeps the cottage it has. Wealth, bank
+  loans, condition, age, profitability, crowding, personality and the district's utilities all count.
+- **A rebuild is a real project:** demolition first (salvage goes to the owner, the land is cleared and
+  the history records it), then foundations, structure, roof and facade, and fittings. Builders are
+  paid by the owner, timber bought locally, and modern materials (brick, concrete, steel, glass)
+  bought from the town's builders' merchant — a trading lumberyard or smithy, so Bram's lumberyard can
+  grow rich supplying the city. From the Modern age a contracted crew keeps big sites moving when no
+  local builder comes. A business keeps trading through its rebuild and gains staff in modern premises.
+- **Developers** build apartments and towers to rent when families need homes, and wealthy families
+  commission mansions. Every site is acquired legally: a plot on the market, or an owner who neither
+  lives nor trades there and accepts a generous offer. Towers and mansions need a second, neighbouring
+  plot (a plaza or estate grounds) — land consolidation. Rent is a coin a day per household, paid to the
+  landlord (to the treasury for council flats, which charge only working households and never evict).
+
+### Heritage, preservation and Then & Now
+
+- Buildings gather **historic importance** from age, the founders' time, long-lived businesses, being a
+  public landmark or the first building of an era. The Founders' Memorial is always protected.
+- A scheme that would pull down an important building (or raise a tower beside a listed one) goes to
+  **planning**. If enough villagers care — people who are loyal, old, live nearby, descend from its
+  owners or keep the Hearthkin faith — they campaign, and the council votes, weighing heritage against
+  growth and housing need.
+- Once enough has been lost or fought over, the government may pass the **Heritage Preservation Act**.
+  Under it the council lists the most important buildings each year and declares **conservation
+  areas** (the old town first, later the oldest surviving quarter) where old buildings may be repaired
+  but not pulled down and no towers may rise; campaigners can take an approved scheme to **court**,
+  where the judge weighs the building's documented importance and may grant an injunction.
+- **Then & Now.** Every property keeps a compact, permanent record (type, era, seed, storeys, owner,
+  business) of every change, taken within the hour it happens. Open a property → *Then & Now* to see its
+  timeline, choose any year, and see that year's building reconstructed in 3D beside today's with a
+  before/after divider you slide across the plot. Owners are listed with their family links ("child of
+  the previous owner"). It is visual only: time, ownership and buildings are untouched (tested byte for
+  byte).
+
+### Transport
+
+Long trips across town are made by car (for households with savings), bus or rapid transit (where the
+district has the service) and later autonomous pods: the villager follows the same pathfinder route, only
+faster, and is drawn in that vehicle. Caravans travel by freight rail (once a station is built), lorry or
+automated cargo, faster on the regional roads, and are drawn as what they travel in. With motor cars the
+council resurfaces the busiest roads to asphalt (and later smart roads), which is also cheaper to walk.
+
+### Graphics
+
+- Procedural architecture for every later era, assembled from reusable parts (walls, gable, hip,
+  mansard and sawtooth roofs, chimneys and smokestacks, balconies, shopfronts, columns, porches,
+  gardens, pools, gates, solar panels, green roofs, rooftop plant, cranes) with several silhouettes for
+  skyscrapers (setbacks, slabs, twisting, tapering, round and garden towers) and spires, helipads and
+  aviation lights.
+- Facades are procedural textures (brick, factory glazing, concrete, Art Deco, glass curtain wall,
+  eco panels, solar glass) that repeat by storey and bay, with windows that light up at night. Glass
+  reflects a small pre-filtered sky (off in battery-saver mode).
+- Street lighting follows the power network: torches, gas lamps, electric, LED, then light rings, lining
+  every street in later ages. Asphalt roads have kerbs and centre lines; smart roads glow.
+- Construction sites in later ages raise a concrete or steel frame storey by storey, with a slewing
+  tower crane for tall work.
+- Seasons and holidays keep working with every era: snow settles on factory and tower roofs, and
+  decorations are placed around each building's real footprint.
+
+### Sound and music
+
+A Web Audio engine in `src/audio/`, with everything synthesised live in the browser — no recordings and
+no borrowed music.
+
+- **An original soundtrack** composed from descriptions in `MusicLibrary.js`: at least two pieces per
+  age (day and night), e.g. *Hearthsong* and *Moonlit Commons* (lute, harp, flute, frame drum), *Brass
+  and Steam* and *Gaslight Waltz*, *Main Street Swing* (swing, walking bass, brushes) and *Evening
+  Radio*, *Glass Horizon* and *Night Skyline*, *Solar Gardens* and *Starlit Transit*, plus themes for
+  the title screen, festivals, winter, New Year, war, disasters and a fanfare for great moments.
+- **The music director** chooses from the age, the hour, war, festivals, New Year, fires and the
+  kingdom on screen (each kingdom hears it in its own key), crossfades over a few seconds, and never
+  flaps between calm cues.
+- **Ambience** is mixed from what is around the point you look at: wind, birds, crowds, market
+  chatter, horses, carts, hammering at real building sites, anvils, steam, machinery, traffic, trains,
+  trams, quiet electric pods, rain and snowy wind. The surroundings' own age is heard: the preserved old
+  town still sounds medieval in the Age of Tomorrow.
+- **Effects** for taps, panels, selection, construction, demolition, coins, notifications, fireworks
+  and celebrations, placed by distance and direction from the view, with cooldowns and a voice limit so
+  a crowd of builders is a rhythm, not a din. Zoom in on a smithy and you hear the hammer; zoom out and
+  it fades into the town.
+- **Mixer:** master, music, ambience, effects and interface sliders with mutes, shuffle and a reduced
+  audio mode, kept on this device (not in the save).
+- **iPhone-safe:** nothing is created or played until you tap *Enable sound* (on the title screen, the
+  🔇 button or Council → Sound & music). Sound suspends when the game is hidden and resumes only on your
+  next tap — it never starts playing by itself. Add `?dev` to the address for an audio test panel.
+
+### iPhone app
+
+- An original app icon — a gold crown over a skyline that runs from a medieval keep to glass towers and
+  a garden spire, on forest green — as an SVG source (`public/icons/icon.svg`) and PNGs rasterised with
+  `node scripts/build-icons.mjs`: 1024, 512 and 192 (any), 512 and 192 (maskable, in the safe zone),
+  180 (Apple touch icon) and a 32 px favicon. All opaque RGB, as iOS expects.
+- A web app manifest (standalone, theme colours, icons) with paths relative to the Pages base.
+- A title screen with the icon, a medieval-to-future skyline, real loading progress, the build version,
+  *Start* / *Continue · Year N* and an *Enable sound* switch; load failures show a reload button.
+- A service worker generated with each build: a cache named after the build, old caches deleted on
+  activation, pages fetched network-first (so a new deployment is never hidden behind a stale page),
+  hashed assets cache-first. It never touches the saves. The game starts offline once installed.
+- **To install:** open the game in Safari → Share → *Add to Home Screen*. It launches full screen, with
+  the safe areas and Dynamic Island respected, in portrait or landscape.
+
+### Settings and interface
+
+- The **era chip** under the date opens *World → Era & tech*: the age and the years to the next, every
+  technology with what it needs and costs, utilities district by district, public works and transport.
+- *World → Evolution*: buildings by era, modernization, landmarks and conservation areas, density,
+  housing and rented flats, mansions, the tallest and most valuable buildings, redevelopment under way,
+  planning applications and disputes.
+- Each property shows its architecture, age, condition, value, utilities and heritage, and *Then & Now*.
+- *Council → Graphics*: Low / Medium / High, see-through towers, adaptive resolution.
+
+### Performance
+
+Static parts of each building are merged into one mesh per material (geometry batching), tall
+buildings get a distant stand-in (level of detail), street lights are batched, tall buildings fade to
+glass when they hide the villager you follow, rebuilds after a redevelopment wave are spread over
+several frames, adaptive resolution steps down when frames are slow, and battery-saver mode drops
+shadows, reflections and distant villagers.
+
+### Saves
+
+Save format 8. A version 7 (Milestone 5.1) or older kingdom upgrades on load: every standing building
+becomes Age of Foundations architecture with a deterministic seed, the world joins the age its calendar
+has reached with no technology adopted beyond timber framing, utilities start unbuilt and each
+property's history begins with what stands on it. No coins, goods, people or dates change. **The
+original save is kept on the device before it is upgraded** (Council → *Pre-upgrade copy* downloads it).
+The cloud service refuses to let an older game version overwrite a kingdom saved in the newer format.
+
+### Known limitations (v0.5.2)
+
+- Physical iPhone installation was **not** tested on a device: the PWA, audio unlock, orientation,
+  offline start and touch flows were verified in Chromium emulating an iPhone 13 (WebKit's own audio
+  and Home Screen behaviour may differ in details).
+- Frame rates were measured only under software rendering in CI-like containers, which says little
+  about an iPhone 15 Pro Max; the adaptive resolution and Low preset exist for slower devices.
+- The population stays at village-to-town scale (about 80–160 simulated people) because every person is
+  simulated individually; towers house these people, there is no abstract city population.
+- Heritage disputes go to the council and the courts, but there is no player action to list a building
+  directly.
+- The optional cloud backup is still implemented but not deployed (see below).
+
 
 ## Seasons & Celebrations (Milestone 5.1)
 
@@ -391,7 +601,11 @@ npm ci
 npm run dev                  # development server
 npm test                     # all node:test suites, including Milestone 5: city-planning, travel, finance,
                              # institutions, warfare and cloud-saves
-npm run test:longevity -- 200 1,2,3,4 # headless 200-year stress test across seeds
+npm run test:longevity:quick     # 25 years x 4 seeds in parallel (~20 s): routine development
+npm run test:longevity:century   # 100 years x 4 seeds (~3.5 min): covers the first age transition; runs in CI
+npm run test:longevity:full      # 500 years x 4 seeds (release check), saves age-start checkpoints to .longevity/
+npm run test:longevity:ages      # resumes each saved checkpoint for 25 years: quick checks on late ages
+npm run bench -- --seed 1 --years 25  # ms per tick and a hash of the final state (optimisations must keep it)
 npm run build && npm run preview      # production build on http://localhost:4173/kingdom-of-nobodies/
 npm run test:e2e             # touch end-to-end test (needs Playwright + Chromium and the preview running)
 ```

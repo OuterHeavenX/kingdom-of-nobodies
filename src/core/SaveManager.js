@@ -1,4 +1,5 @@
-import { serialize, deserialize, newestSave } from './Serialization.js';
+import { serialize, deserialize, newestSave, versionOf } from './Serialization.js';
+import { SAVE_VERSION } from './Config.js';
 import { yearOf } from './Calendar.js';
 
 // Browser persistence. The primary store is IndexedDB with two slots: a new
@@ -90,7 +91,13 @@ export class SaveManager {
     } catch { /* IndexedDB unavailable */ }
     try { candidates.push(['backup save', localStorage.getItem(LS_BACKUP)]); } catch { /* ignore */ }
     const best = newestSave(candidates);
-    if (best) return { state: best.state, source: best.label };
+    if (best) {
+      // Before an older kingdom is upgraded, its original save is kept untouched.
+      const v = versionOf(best.text);
+      if (v && v < SAVE_VERSION) await this.keepBackup(best.text, v);
+      else await this.findBackup();
+      return { state: best.state, source: best.label, upgradedFrom: v && v < SAVE_VERSION ? v : null };
+    }
     try {
       const legacy = localStorage.getItem(LEGACY_KEY);
       if (legacy && !localStorage.getItem(LEGACY_DONE)) {
@@ -100,6 +107,45 @@ export class SaveManager {
       }
     } catch (e) { console.warn('Could not migrate the Milestone 1 save:', e.message); }
     return { state: null, source: null };
+  }
+
+  /** Find a pre-upgrade copy kept by an earlier session (the newest format wins). */
+  async findBackup() {
+    const newest = (keys) => keys.map((k) => /^backup-v(\d+)$/.exec(k)).filter(Boolean).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+    let key = null;
+    try { key = newest((await idb('readonly', (store) => store.getAllKeys())) ?? []); } catch { /* IndexedDB unavailable */ }
+    if (!key) {
+      try { key = newest(Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i).replace(/^kingdom-of-nobodies-/, ''))); } catch { /* ignore */ }
+    }
+    if (key) this.backupKey = key;
+    return key;
+  }
+
+  /** Keep a copy of a save in an older format (once per format version). */
+  async keepBackup(text, version) {
+    const key = `backup-v${version}`;
+    try {
+      await idb('readwrite', (store) => { const r = store.get(key); r.onsuccess = () => { if (!r.result) store.put(text, key); }; });
+      this.backupKey = key;
+    } catch {
+      try { if (!localStorage.getItem(`kingdom-of-nobodies-${key}`)) localStorage.setItem(`kingdom-of-nobodies-${key}`, text); this.backupKey = key; } catch { /* no room: the previous slot still holds it */ }
+    }
+  }
+
+  /** Download the pre-upgrade copy, if one was kept. */
+  async exportBackup() {
+    if (!this.backupKey) return false;
+    let text = null;
+    try { text = await idb('readonly', (store) => store.get(this.backupKey)); } catch { /* fall back */ }
+    text = text ?? (() => { try { return localStorage.getItem(`kingdom-of-nobodies-${this.backupKey}`); } catch { return null; } })();
+    if (!text) return false;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    a.download = `kingdom-of-nobodies-${this.backupKey}.json`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    return true;
   }
 
   /** The yearly recovery snapshot, if one exists, for an explicit roll-back. */

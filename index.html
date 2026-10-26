@@ -3,29 +3,44 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
-  <meta name="theme-color" content="#0f1230" />
+  <meta name="theme-color" content="#0f3b2c" />
+  <meta name="description" content="An autonomous civilization that grows from a medieval village to a city of tomorrow over five hundred years." />
+  <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Nobodies" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>Kingdom of Nobodies | Seasons & Celebrations</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♜</text></svg>" />
+  <meta name="format-detection" content="telephone=no" />
+  <title>Kingdom of Nobodies | The Evolution of Civilization</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
   <style>
     /* Startup screen styles are inline so they work even if the stylesheet fails to load. */
-    html, body { margin: 0; height: 100%; background: #0f1230; }
+    html, body { margin: 0; height: 100%; background: #0a281d; }
     #boot { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
-      background: radial-gradient(circle at 50% 40%, #2a2f7a, #0b0d26 70%); color: #f5edd7; font-family: -apple-system, system-ui, sans-serif; text-align: center; padding: 24px; transition: opacity .5s; }
+      background: radial-gradient(circle at 50% 38%, #1f6a4b, #0a281d 72%); color: #fbf3dc; font-family: -apple-system, system-ui, sans-serif; text-align: center;
+      padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom)); transition: opacity .5s; overflow: hidden; }
     #boot.done { opacity: 0; pointer-events: none; }
-    #boot .crest { font-size: 54px; animation: kon-pulse 1.6s ease-in-out infinite; }
-    #boot h1 { font: 700 22px/1.2 Georgia, serif; margin: 0; letter-spacing: .5px; }
-    #boot p { margin: 0; color: #c9cdf2; font-size: 14px; max-width: 320px; line-height: 1.45; }
-    #boot .bar { width: 180px; height: 4px; border-radius: 4px; background: #2c347a; overflow: hidden; }
-    #boot .bar i { display: block; height: 100%; width: 40%; background: #ffc94a; animation: kon-slide 1.2s ease-in-out infinite; }
-    #boot button { display: none; margin-top: 6px; padding: 12px 20px; border-radius: 10px; border: 1px solid #7a83d8; background: #3a3fb0; color: #f5edd7; font-size: 15px; }
+    #boot .crest { width: 112px; height: 112px; border-radius: 26px; box-shadow: 0 10px 30px rgba(0,0,0,.45); animation: kon-pulse 2.4s ease-in-out infinite; }
+    #boot h1 { font: 700 26px/1.15 Georgia, serif; margin: 0; letter-spacing: .5px; }
+    #boot h1 small { position: static; display: block; font: 600 12px/1.4 -apple-system, system-ui, sans-serif; letter-spacing: 2px; text-transform: uppercase; color: #ffd45c; margin-top: 6px; }
+    #boot p { margin: 0; color: #cfe6d8; font-size: 14px; max-width: 320px; line-height: 1.45; min-height: 20px; }
+    #boot .skyline { width: min(420px, 90vw); height: auto; opacity: .9; }
+    #boot .bar { width: 200px; height: 5px; border-radius: 4px; background: #174d38; overflow: hidden; }
+    #boot .bar i { display: block; height: 100%; width: 8%; background: linear-gradient(90deg, #ffd45c, #fff1b8); border-radius: 4px; transition: width .35s; }
+    #boot .start { display: none; flex-direction: column; gap: 10px; align-items: center; }
+    #boot.ready .start { display: flex; }
+    #boot.ready .bar { display: none; }
+    #boot .go { min-width: 210px; padding: 14px 24px; border-radius: 14px; border: 0; background: linear-gradient(180deg, #ffd45c, #e2a228); color: #20160a; font: 700 17px -apple-system, system-ui, sans-serif; box-shadow: 0 6px 18px rgba(0,0,0,.35); }
+    #boot .snd { display: flex; align-items: center; gap: 8px; color: #e8f3ec; font-size: 14px; padding: 8px 14px; border-radius: 12px; background: rgba(255,255,255,.08); }
+    #boot .snd input { width: 20px; height: 20px; accent-color: #ffd45c; }
+    #boot .retry { display: none; margin-top: 6px; padding: 12px 20px; border-radius: 10px; border: 1px solid #5fb88a; background: #1f6a4b; color: #fbf3dc; font-size: 15px; }
     #boot.failed .bar, #boot.failed .crest { animation: none; }
-    #boot.failed .bar { display: none; }
-    #boot.failed button { display: inline-block; }
-    #boot small { position: absolute; bottom: max(14px, env(safe-area-inset-bottom)); color: #8a90c8; font-size: 11px; }
-    @keyframes kon-pulse { 50% { transform: scale(1.08); } }
-    @keyframes kon-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
+    #boot.failed .bar, #boot.failed .start { display: none; }
+    #boot.failed .retry { display: inline-block; }
+    #boot .ver { position: absolute; bottom: max(14px, env(safe-area-inset-bottom)); color: #8fbfa6; font-size: 11px; }
+    @keyframes kon-pulse { 50% { transform: translateY(-4px); } }
   </style>
   <script>
     // Startup guard: surfaces load failures instead of leaving a blank or unstyled page.
@@ -37,7 +52,7 @@
         if (!boot) return;
         boot.classList.add('failed');
         boot.querySelector('h1').textContent = title;
-        boot.querySelector('p').textContent = detail;
+        boot.querySelector('#boot-status').textContent = detail;
       };
       window.__konReload = function () {
         var url = location.pathname + '?v=' + Date.now() + location.hash;
@@ -67,12 +82,25 @@
 </head>
 <body>
   <div id="boot">
-    <div class="crest">♜</div>
-    <h1>Kingdom of Nobodies</h1>
-    <p>Waking the villagers…</p>
-    <div class="bar"><i></i></div>
-    <button type="button" onclick="window.__konReload()">Reload the game</button>
-    <small id="boot-version"></small>
+    <img class="crest" src="/icons/icon-192.png" width="112" height="112" alt="" />
+    <h1>Kingdom of Nobodies<small>The Evolution of Civilization</small></h1>
+    <svg class="skyline" viewBox="0 0 420 70" aria-hidden="true">
+      <!-- Medieval cottages and a keep on the left give way to towers of glass and gardens on the right. -->
+      <g fill="#e2a228"><rect x="10" y="40" width="26" height="28"/><polygon points="6,42 23,28 40,42"/><rect x="46" y="24" width="22" height="44"/><rect x="44" y="18" width="6" height="8"/><rect x="54" y="18" width="6" height="8"/><rect x="64" y="18" width="6" height="8"/><rect x="76" y="44" width="24" height="24"/><polygon points="72,46 88,34 104,46"/></g>
+      <g fill="#c97a3c"><rect x="120" y="36" width="34" height="32"/><rect x="140" y="12" width="8" height="26"/><rect x="160" y="30" width="20" height="38"/></g>
+      <g fill="#d9dcc8"><rect x="196" y="26" width="22" height="42"/><rect x="224" y="34" width="28" height="34"/><polygon points="258,68 258,22 268,14 278,22 278,68"/></g>
+      <g fill="#fff1b8"><rect x="296" y="10" width="18" height="58"/><polygon points="320,68 320,6 330,0 340,6 340,68"/><rect x="348" y="20" width="24" height="48" rx="10"/><rect x="378" y="30" width="14" height="38"/></g>
+      <path d="M360 20 C 352 12, 356 4, 366 2 C 368 10, 366 16, 360 20 Z" fill="#4fbf86"/>
+      <rect x="0" y="67" width="420" height="3" rx="1.5" fill="#ffd45c"/>
+    </svg>
+    <p id="boot-status">Waking the villagers…</p>
+    <div class="bar"><i id="boot-bar"></i></div>
+    <div class="start">
+      <button type="button" class="go" id="boot-go">Start</button>
+      <label class="snd"><input type="checkbox" id="boot-sound" /> 🔊 Enable sound</label>
+    </div>
+    <button type="button" class="retry" onclick="window.__konReload()">Reload the game</button>
+    <small class="ver" id="boot-version"></small>
   </div>
   <noscript><p style="color:#f5edd7;font-family:sans-serif;padding:24px">Kingdom of Nobodies needs JavaScript enabled.</p></noscript>
 
@@ -80,10 +108,11 @@
     <header id="topbar">
       <div class="brand">
         <span class="crown">♜</span>
-        <div><strong id="kingdom-name">Kingdom of Nobodies</strong><span id="clock">Day 1 · 08:00</span><span id="holiday-chip" class="holiday-chip" hidden></span></div>
+        <div><strong id="kingdom-name">Kingdom of Nobodies</strong><span id="clock">Day 1 · 08:00</span><span class="chips-line"><button id="era-chip" class="era-chip" data-act="era-tab" aria-label="Era and technology">🏡 Foundations</button><span id="holiday-chip" class="holiday-chip" hidden></span></span></div>
       </div>
       <div id="stats" class="stats" aria-label="Kingdom statistics"></div>
       <div class="time-controls">
+        <button id="sound" class="icon-btn" aria-label="Enable sound">🔇</button>
         <button id="pause" class="icon-btn" aria-label="Pause">⏸</button>
         <button id="speed" class="icon-btn speed" aria-label="Game speed">1×</button>
       </div>

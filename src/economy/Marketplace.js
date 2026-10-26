@@ -35,20 +35,27 @@ const distance = (c, loc) => Math.hypot(c.x - loc.x, c.z - loc.z);
  * Rank where a citizen could buy a good. Preference blends price, distance,
  * perceived honesty of the owner, friendship with the owner and service quality.
  */
-export function rankSellers(state, c, good, { forFood = false } = {}) {
+export function rankSellers(state, c, good, { forFood = false, memo = null, pool = null } = {}) {
   const offers = [];
   const distanceWeight = state.council.marketplace ? 0.05 : 0.09;
-  for (const b of state.businesses) {
-    if (!isOpenNow(state, b) || !BUSINESS_TYPES[b.type].sells.includes(good) || qty(b.inventory, good) < 1) continue;
-    if (b.ownerId === c.id) continue;
+  // The same for every seller: how much this customer minds price, and how hungry they are.
+  const priceSensitivity = 1 + trait(c, 'frugal') + (balance(state, c.id) < 10 ? 1 : 0);
+  const urgency = forFood ? 1 + Math.max(0, 60 - (c.needs?.hunger ?? 60)) / 20 : 1;
+  // `pool` is the open shops not owned by this customer, already filtered in business order.
+  for (const b of pool ?? state.businesses) {
+    if (!pool && !isOpenNow(state, b)) continue;
+    if (!BUSINESS_TYPES[b.type].sells.includes(good) || qty(b.inventory, good) < 1) continue;
+    if (!pool && b.ownerId === c.id) continue;
     const price = retailPrice(b, good);
-    const loc = businessLocation(state, b);
-    const owner = byId(state.citizens, b.ownerId);
-    const honesty = owner ? perceivedHonesty(state, c, owner) : 60;
-    const friendship = owner ? peekRel(state, c.id, owner.id)?.friendship ?? 20 : 25;
+    // Where the shop is and what the customer thinks of its owner do not depend on the good.
+    let seller = memo?.get(b);
+    if (!seller) {
+      const owner = byId(state.citizens, b.ownerId);
+      seller = { loc: businessLocation(state, b), honesty: owner ? perceivedHonesty(state, c, owner) : 60, friendship: owner ? peekRel(state, c.id, owner.id)?.friendship ?? 20 : 25 };
+      memo?.set(b, seller);
+    }
+    const { loc, honesty, friendship } = seller;
     const value = forFood ? GOODS[good].food / price : 10 / price;
-    const priceSensitivity = 1 + trait(c, 'frugal') + (balance(state, c.id) < 10 ? 1 : 0);
-    const urgency = forFood ? 1 + Math.max(0, 60 - (c.needs?.hunger ?? 60)) / 20 : 1;
     const score = value * 10 * priceSensitivity - distance(c, loc) * distanceWeight * urgency + (honesty - 50) * 0.08 +
       (friendship - 20) * 0.04 + b.quality * 3 + (b.licensed ? 1.5 : 0) + (GOODS[good].social ?? 0) * 0.1 * trait(c, 'friendly');
     offers.push({ business: b, good, price, loc, score, honesty });
@@ -59,7 +66,10 @@ export function rankSellers(state, c, good, { forFood = false } = {}) {
 /** Best affordable food option for a citizen, or null. */
 export function bestFoodOffer(state, c, payer = c.id) {
   const money = balance(state, payer);
-  const all = FOOD_GOODS.flatMap((g) => rankSellers(state, c, g, { forFood: true })).filter((o) => o.price <= money);
+  // One pass over the businesses (most of a city's history is closed shops), shared by every food good.
+  const memo = new Map();
+  const pool = state.businesses.filter((b) => isOpenNow(state, b) && b.ownerId !== c.id);
+  const all = FOOD_GOODS.flatMap((g) => rankSellers(state, c, g, { forFood: true, memo, pool })).filter((o) => o.price <= money);
   all.sort((a, b) => b.score - a.score);
   if (all[0]) return all[0];
   // Seller of last resort: the council pantry at the Hearth Hall.

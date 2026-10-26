@@ -6,6 +6,7 @@ import { serialize, deserialize, migrateMilestone1 } from '../src/core/Serializa
 import { Simulation } from '../src/sim/Simulation.js';
 import { rel } from '../src/citizens/Relationships.js';
 import { totalMoney } from '../src/economy/Transactions.js';
+import { SaveManager } from '../src/core/SaveManager.js';
 
 test('10. relationships, businesses and construction persist through save/load', () => {
   const sim = makeSim(2);
@@ -74,4 +75,26 @@ test('the most recently written save wins, even if an older one has more progres
   const best = newestSave([['previous save', JSON.stringify(older)], ['saved game', JSON.stringify(newer)], ['broken', '{oops']]);
   assert.equal(best.label, 'saved game');
   assert.equal(best.state.seed, 2);
+});
+
+test('save: a pre-upgrade backup kept by an earlier session is found again after the upgraded save is reloaded', async () => {
+  const items = new Map();
+  globalThis.localStorage = {
+    get length() { return items.size; },
+    key: (i) => [...items.keys()][i] ?? null,
+    getItem: (k) => items.get(k) ?? null,
+    setItem: (k, v) => items.set(k, String(v)),
+    removeItem: (k) => items.delete(k),
+  };
+  try {
+    const sim = makeSim(4);
+    items.set('kingdom-of-nobodies-backup-v6', '{}');
+    items.set('kingdom-of-nobodies-backup-v7', '{}');
+    items.set('kingdom-of-nobodies-m2-backup', serialize(sim.state, 'test'));
+    const saves = new SaveManager('test');
+    const { state, upgradedFrom } = await saves.load();
+    assert.ok(state, 'the current-format save loads');
+    assert.equal(upgradedFrom, null, 'no upgrade was needed this time');
+    assert.equal(saves.backupKey, 'backup-v7', 'the newest kept backup is offered for download');
+  } finally { delete globalThis.localStorage; }
 });
