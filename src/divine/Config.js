@@ -11,7 +11,7 @@ export const DIVINE = {
   unlockYear: 200,
   // Whispers regenerate with time alone: never from worship, prayer, conversion or believers.
   whispers: { start: 4, max: 12, perDay: 0.25 },
-  kept: { prayers: 80, hidden: 400, omens: 30, missions: 30, sites: 12 },
+  kept: { prayers: 60, hidden: 300, omens: 30, missions: 30, sites: 12 },
   stone: { halfSize: 0.9, noticeRadius: 7, bounds: 84, roadPad: 1, plotPad: 1.2 },
   // How many seasons a prayer waits for its outcome before it is judged.
   prayerWindowDays: 9,

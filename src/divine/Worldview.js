@@ -74,7 +74,7 @@ export const worldviewLabel = (key) => TRADITIONS[key]?.name ?? OUTLOOKS[key]?.l
 export function experience(state, c, kind, interp, text = null) {
   const wv = worldviewOf(state, c);
   wv.exp.unshift({ day: state.day, kind, interp, ...(text ? { text } : {}) });
-  if (wv.exp.length > 8) wv.exp.length = 8;
+  if (wv.exp.length > 6) wv.exp.length = 6;
 }
 
 const recentExp = (state, wv, interp) => wv.exp.filter((e) => e.interp === interp && state.day - e.day < DAYS_PER_YEAR * 4).length;

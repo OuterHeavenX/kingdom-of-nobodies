@@ -70,7 +70,7 @@ export function hiddenRecord(state, kind, text, refs = {}, importance = 1) {
   const d = state.divine ?? ensureDivine(state);
   const entry = { id: nextDivineId(state, 'h'), day: state.day, minute: state.minute, kind, text, refs, importance };
   d.hidden.push(entry);
-  if (d.hidden.length > DIVINE.kept.hidden) {
+  while (d.hidden.length > DIVINE.kept.hidden) {
     // Ordinary notes go first; the player's own interventions and milestones stay longest.
     const i = d.hidden.findIndex((e) => e.importance < 2 && !e.actual);
     d.hidden.splice(i >= 0 ? i : 0, 1);

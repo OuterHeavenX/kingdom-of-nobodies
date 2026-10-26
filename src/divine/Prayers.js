@@ -52,7 +52,7 @@ export function troublesOf(state, c) {
   const own = state.businesses.find((b) => b.ownerId === c.id && b.status === 'STRUGGLING');
   if (own) out.push({ subject: 'business', weight: 0.15, target: c, businessId: own.id, text: `${own.name} is failing. Let it find its customers again.`, blessings: ['fortune', 'courage'] });
   const loss = c.memories.find((m) => m.kind === 'loss' && state.day - m.day < DAYS_PER_YEAR);
-  if (loss) out.push({ subject: 'grief', weight: 0.15, target: c, memoryDay: loss.day, text: `Give me strength to bear it: ${loss.text.replace(/\.$/, '').toLowerCase()}.`, blessings: ['comfort'] });
+  if (loss) out.push({ subject: 'grief', weight: 0.15, target: c, memoryDay: loss.day, text: lossPrayer(loss.text), blessings: ['comfort'] });
   if (!c.homePlotId && ageOf(state, c) >= LIFE.adultAge) out.push({ subject: 'courage', weight: 0.15, target: c, text: 'Give me the courage to begin again.', blessings: ['courage', 'fortune'] });
   if (ageOf(state, c) >= 24 && ageOf(state, c) < 50 && !c.romance.partnerId && !c.family.spouseId && c.needs.social < 35) out.push({ subject: 'companion', weight: 0.07, target: c, text: 'I am so alone. Let me find a friend who understands me.', blessings: ['encounter'] });
   if (c.education?.masterId || (c.worldview?.role === 'scholar')) out.push({ subject: 'learning', weight: 0.05, target: c, text: c.worldview?.role === 'scholar' ? 'Let me understand what the carvings say.' : 'Help me learn my trade well.', blessings: ['inspiration'] });
@@ -127,6 +127,29 @@ function outcomeOf(state, p) {
   }
 }
 
+/** A grief prayer in the mourner's words (memories read "Mourned Brom, my parent."). */
+function lossPrayer(text) {
+  const m = /^Mourned ([^,.]+)(?:, my ([a-z]+))?/.exec(text);
+  return m ? `Give me strength to bear the loss of ${m[2] ? `my ${m[2]}, ` : ''}${m[1]}.` : 'Give me strength to bear my grief.';
+}
+
+/**
+ * Prayers the player never looked at are tallied once a season in the Hidden
+ * Chronicle rather than one entry each, so a kingdom left alone does not fill
+ * the record with them.
+ */
+function noteUnheard(state, p, outcome) {
+  const d = state.divine;
+  const season = Math.floor((state.day - 1) / 3);
+  let e = d.hidden.at(-1)?.kind === 'prayers-unheard' && d.hidden.at(-1).refs.season === season ? d.hidden.at(-1) : null;
+  if (!e) e = hiddenRecord(state, 'prayers-unheard', '', { season, n: 0, good: 0, names: [] }, 1);
+  e.refs.n++;
+  if (GOOD.has(outcome)) e.refs.good++;
+  if (e.refs.names.length < 3 && !e.refs.names.includes(p.name)) e.refs.names.push(p.name);
+  const who = e.refs.names.join(', ') + (e.refs.n > e.refs.names.length ? ' and others' : '');
+  e.text = `${e.refs.n} prayer${e.refs.n === 1 ? '' : 's'} went by without your answer (${who}); ${e.refs.good} of them ended well all the same.`;
+}
+
 const GOOD = new Set(['recovered', 'returned', 'peace came', 'the fields recovered', 'found work', 'it recovered', 'found company', 'found some peace']);
 
 /**
@@ -145,7 +168,8 @@ function resolvePrayers(state) {
     p.resolvedDay = state.day;
     const answered = p.response && p.response !== 'silence';
     if (answered) d.stats.prayersAnswered++; else d.stats.prayersUnanswered++;
-    hiddenRecord(state, answered ? 'prayer-answered' : 'prayer-unanswered', `${p.name}'s prayer (“${p.text}”) — ${answered ? `you answered with ${p.responseLabel ?? 'a blessing'}` : 'you did not answer'}; ${outcome}.`, { citizens: [p.citizenId], prayer: p.id }, answered ? 2 : 1);
+    if (answered || p.response === 'silence') hiddenRecord(state, answered ? 'prayer-answered' : 'prayer-silence', `${p.name}'s prayer (“${p.text}”) — ${answered ? `you answered with ${p.responseLabel ?? 'a blessing'}` : 'you chose silence'}; ${outcome}.`, { citizens: [p.citizenId], prayer: p.id }, 2);
+    else noteUnheard(state, p, outcome);
     const c = byId(state.citizens, p.citizenId);
     if (!c || p.subject === 'gratitude') continue;
     const good = GOOD.has(outcome);
