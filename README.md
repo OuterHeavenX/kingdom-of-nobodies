@@ -129,6 +129,57 @@ given a worldview based on the faith they already hold. Nothing else changes. A 
 200 offers the stone straight away. The cloud service accepts format 9, and it still refuses to let
 an older game version overwrite a newer save.
 
+### Long-run validation (v0.5.3)
+
+`tests/longevity.mjs` can now play the Hidden Hand itself. Use `--player none` to never intervene,
+`--player stone` to only place the stone, or `--player active` to also answer some prayers and send
+a different sign every third year. The default, `auto`, gives odd seeds an active player and even
+seeds none.
+
+It also checks the divine layer every decade:
+
+- Whispers stay within their bounds.
+- There is one stone, and no plot or road is ever laid over it.
+- Every open prayer belongs to someone who still lives here.
+- Every missionary who is out on a mission is actually away.
+- Every tradition, view and society that anyone holds actually exists.
+- The record lists stay bounded.
+- If there are enough adults to tell, not every adult belongs to a faith of the stone.
+
+| Run | Result |
+|---|---|
+| CI release check, 500 years × seeds 1–4 (1 and 3 active, 2 and 4 never intervene) | all invariants held |
+| Seeds 1 and 2 from Year 1 to Year 520, before the final balance changes (seed 1 active, seed 2 never intervenes) | all invariants held; final state 5.4 MB and 5.4 MB |
+| Seeds 1 and 2 with an active player, from Year 201 to Year 520 (final code) | all invariants held; final state 4.8 MB and 5.9 MB |
+
+What the people of those kingdoms made of the stone, by Year 520 in the active runs:
+
+| | Seed 1 | Seed 2 |
+|---|---|---|
+| Knew of it, over the centuries | 1,318 | 1,988 |
+| Views of those living at the end | natural 32, divine 20, ancient 6, cosmic 4 | natural 62, ancient 43, divine 15, cosmic 4 |
+| Peak share in a faith of the stone | 11% (Year 300) | 20% (Year 300) |
+| Faith of the stone at the end | 3% | 0% |
+| Conversions / people who left again | 92 / 7 | 217 / 84 |
+| Faith splits | 0 (the Way never had enough adult members) | 8 (Light and Silence formed, faded and formed again) |
+| Missions abroad | 95: circles in all three kingdoms | 143: circles in all three kingdoms |
+| Prayers made / answered by the player | 10,846 / 537 | 15,378 / 330 |
+| Societies founded | 18 (Rational Inquiry has 17 members at the end) | 10 (Rational Inquiry has 45 members at the end) |
+| Site works | offerings, fence, plinth, pavilion, lanterns, museum, observatory | all eight |
+| Laws | both Acts passed | both Acts passed |
+
+In the runs where nobody intervenes, there is no stone. The founding traditions keep 89–96% of the
+people, and 4–11% are agnostic, atheist or of no faith. People still make about 11,000 prayers, and
+none of them is answered by the player. Charity (about 120,000 meals) and donations (about 165,000
+coins) carry on as in v0.5.2.
+
+An earlier balance had every long run converge on *a sign from the cosmos* after Year 350, because
+both the civilization age and the scholars' findings pushed that way. The age now also strengthens
+natural explanations, and the findings weigh less. Splits had never happened at all, because
+villagers carry only a few personality traits, so the threshold now also counts whether a person
+has seen signs. In every run, the faiths of the stone grow for about a century and then fade in the
+later ages. This comes out of the simulation; the code doesn't target it.
+
 ### Known limitations (v0.5.3)
 
 - The production build and the mobile end-to-end test run only in CI. This environment can't
@@ -140,6 +191,10 @@ an older game version overwrite a newer save.
   the occasional sign. It doesn't use every blessing in every situation.
 - The other kingdoms hold missions, named believers and circles, but their faiths aren't simulated
   in the same detail as the home kingdom's.
+- In the long runs, the prank explanation fades within the stone's first decade, and in the later
+  ages the faiths of the stone shrink to a few per cent.
+- With an active player, seed 2 ends Year 520 at 5.9 MB of state, close to the 6 MB guard in the
+  stress test. The divine layer is about 120 KB of that, and its lists are bounded.
 
 ## The Evolution of Civilization (v0.5.2)
 
