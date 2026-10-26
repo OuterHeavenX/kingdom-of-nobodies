@@ -545,6 +545,27 @@ test('hidden hand: the divine layer runs on the simulation day, deterministicall
   assert.equal(typeof dailyDivine, 'function');
 });
 
+test('hidden hand 30: the divine layer stays cheap and its records stay bounded', () => {
+  const sim = world();
+  withStone(sim, 'square');
+  const s = sim.state;
+  s.divine.stone.discovered = true;
+  for (const c of adults(s)) seeIt(sim, c);
+  // Daily work over a whole crowd of believers and doubters: a small, fixed cost.
+  const t0 = performance.now();
+  for (let i = 0; i < 120; i++) { s.day++; dailyDivine(s); }
+  const perDay = (performance.now() - t0) / 120;
+  assert.ok(perDay < 25, `daily divine work costs ${perDay.toFixed(2)} ms`);
+  // However long a kingdom lives, the lists it keeps do not grow without end.
+  for (let i = 0; i < DIVINE.kept.hidden * 3; i++) hiddenRecord(s, 'note', `entry ${i}`, {}, 1);
+  assert.ok(s.divine.hidden.length <= DIVINE.kept.hidden);
+  assert.ok(s.divine.prayers.length <= DIVINE.kept.prayers);
+  assert.ok(s.divine.omens.length <= DIVINE.kept.omens);
+  for (const c of s.citizens) assert.ok((c.worldview?.exp?.length ?? 0) <= 6);
+  // Unheard prayers are tallied, not logged one by one.
+  assert.ok(s.divine.hidden.filter((e) => e.kind === 'prayers-unheard').length <= 40);
+});
+
 test('hidden hand 28: every section of the Unseen Influence renders, with large touch targets and no gaps', () => {
   const sim = world();
   const views = [...UNSEEN_SECTIONS.map(([k]) => ({ unseen: k })), { unseen: 'blessings', unseenBlessing: 'comfort' }, { unseen: 'mysteries', unseenInscription: 'light' }];
