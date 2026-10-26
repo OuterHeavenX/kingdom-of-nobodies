@@ -144,11 +144,19 @@ export function considerSplit(state) {
   if (!f) return;
   const members = membersOf(state, f).filter((c) => ageOf(state, c) >= LIFE.adultAge);
   if (members.length < 12) return;
-  for (const [tradition, lean] of [['silence', (c) => trait(c, 'shy') + trait(c, 'frugal') * 0.6 + trait(c, 'loyal') * 0.4 - trait(c, 'friendly') * 0.5], ['light', (c) => trait(c, 'friendly') + trait(c, 'creative') * 0.6 + trait(c, 'riskTaking') * 0.3 - trait(c, 'shy') * 0.5]]) {
+  // Temperament and what each believer has lived through pull them apart: those
+  // who never saw a sign come to honour the silence; those who saw signs, the light.
+  const signs = (c) => (c.worldview?.exp ?? []).filter((e) => e.kind === 'omen').length;
+  const words = d.stone?.inscription;
+  const LEANS = [
+    ['silence', (c) => trait(c, 'shy') + trait(c, 'frugal') * 0.6 + trait(c, 'loyal') * 0.4 + trait(c, 'stubborn') * 0.2 - trait(c, 'friendly') * 0.5 + (signs(c) ? 0 : 0.15) + (['silence', 'glyphs'].includes(words) ? 0.12 : 0)],
+    ['light', (c) => trait(c, 'friendly') + trait(c, 'creative') * 0.6 + trait(c, 'riskTaking') * 0.3 - trait(c, 'shy') * 0.5 + Math.min(0.3, signs(c) * 0.1) + (words === 'light' ? 0.12 : 0)],
+  ];
+  for (const [tradition, lean] of LEANS) {
     if (activeCommunities(state).some((x) => x.tradition === tradition) || state.citizens.some((c) => c.belief?.tradition === tradition)) continue;
-    const leaners = members.filter((c) => c.id !== f.leaderId && lean(c) + (roll(state, c.id, 'lean-' + tradition) - 0.5) * 0.3 > 0.7);
-    const leader = leaners.find((c) => c.reputation.standing >= 50 || trait(c, 'ambitious') > 0.4);
-    if (leaners.length < 4 || !leader || roll(state, f.id, tradition, state.day) > 0.5) continue;
+    const leaners = members.filter((c) => c.id !== f.leaderId && lean(c) + (roll(state, c.id, 'lean-' + tradition) - 0.5) * 0.3 > 0.45);
+    const leader = leaners.find((c) => c.reputation.standing >= 50 || trait(c, 'ambitious') > 0.4) ?? leaners.find((c) => c.belief.stance === 'devout');
+    if (leaners.length < 3 || leaners.length > members.length / 2 || !leader || roll(state, f.id, tradition, state.day) > 0.35) continue;
     for (const c of leaners) { c.belief.tradition = tradition; c.belief.since = state.day; remember(state, c, `Followed ${leader.firstName} out of the Keepers of the Stone to found ${TRADITIONS[tradition].name}.`, 3, 'life'); }
     d.stats.splits++;
     const text = `The faith of the Hidden Hand divided: ${leader.firstName} ${leader.lastName} and ${leaners.length - 1} others left the ${f.name} to follow ${TRADITIONS[tradition].name} (${TRADITIONS[tradition].theme}).`;
