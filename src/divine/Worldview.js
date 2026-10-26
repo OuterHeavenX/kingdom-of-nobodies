@@ -126,7 +126,7 @@ export function weigh(state, c, ctx = {}) {
   add('prank', trait(c, 'jealous') * 0.2, 'I suspect whoever stands to gain from the fuss');
   if (!ctx.saw && yearsSince < 6) add('prank', 0.1, 'it appeared out of nowhere, so somebody must have put it there');
   if (ctx.saw) add('prank', -0.1, 'I saw it: it looks older than anyone living');
-  add('prank', -Math.min(0.25, yearsSince * 0.005), yearsSince > 10 ? 'no prank lasts this long' : '');
+  add('prank', -Math.min(0.12, yearsSince * 0.004), yearsSince > 10 ? 'no prank lasts this long' : '');
 
   add('natural', 0.08 + wv.skep * 0.28, 'we do not know enough to say');
   if (wv.outlook === 'reason') add('natural', 0.15, 'reason asks for evidence, not stories');
@@ -253,7 +253,7 @@ export function reconsider(state, c, idx, membershipOf = () => null) {
   }
   // Talk fades, and so does interest that nothing renews.
   for (const key of Object.keys(k.social)) { k.social[key] = r2(k.social[key] * 0.6); if (k.social[key] < 0.01) delete k.social[key]; }
-  k.interest = r2(clamp01(k.interest - 0.025 + (k.interp === 'indifferent' ? -0.02 : 0)));
+  k.interest = r2(clamp01(k.interest - 0.035 + (k.interp === 'indifferent' ? -0.02 : 0)));
   return changed;
 }
 

@@ -59,7 +59,7 @@ export class Game {
     this.hud = new HUD(this);
     if (this.world) this.world.themes.hooks = { announce: (text) => this.hud.toasts.show(text, { ms: 10000, holiday: true }), bell: () => (this.audio.running ? this.audio.bells() : ringBells()) };
     if (this.world) this.world.setSeeThrough(this.settings.seeThrough);
-    if (this.world) this.world.onPick = (kind, id) => (kind === 'memorial' ? this.hud.showMemorial() : this.hud.openDetail(kind, id, { push: false }));
+    if (this.world) this.world.onPick = (kind, id) => (kind === 'memorial' ? this.hud.showMemorial() : kind === 'stone' ? this.hud.unseen.open('mysteries') : this.hud.openDetail(kind, id, { push: false }));
     this.lastChronicle = this.sim.state.nextId.chronicle;
     this.startCloud();
     this.last = performance.now();
@@ -232,6 +232,7 @@ export class Game {
     this.lastChronicle = state.nextId.chronicle;
     if (this.world) { this.world.home(); this.world.syncPlots(true); this.world.themes.resetFireworks(); this.world.themes.check(true); }
     this.world?.exitThenNow(false);
+    this.hud.unseen?.reset();
     this.hud.setBanner(null);
     this.hud.openTab('citizens');
   }

@@ -150,6 +150,17 @@ export function bestow(state, id, targetId, { prayerId = null } = {}) {
   return { ok: true, message: `${def.icon} ${def.name}: ${label}. No one will know.`, effect };
 }
 
+/** Who a blessing offered in answer to a prayer would go to: the person (or farm, or kingdom) the prayer is about. */
+export function prayerTarget(state, p, blessing) {
+  if (blessing === 'harvest') return p.world?.businessId ?? null;
+  if (blessing === 'peace') {
+    const war = (state.military?.wars ?? []).find((w) => w.id === p.world?.warId && w.status === 'ACTIVE');
+    const foe = war ? [...(war.attackers ?? []), ...(war.defenders ?? [])].find((k) => k !== HEARTH && KINGDOMS[k]) : null;
+    return foe ?? BLESSINGS.peace.targets(state)[0]?.id ?? null;
+  }
+  return p.targetId ?? p.citizenId;
+}
+
 /** The player chooses not to answer a prayer (no cost, no consequence). */
 export function keepSilence(state, prayerId) {
   const p = ensureDivine(state).prayers.find((x) => x.id === prayerId);

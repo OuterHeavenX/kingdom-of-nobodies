@@ -5,8 +5,8 @@
 import { HUD } from '../src/ui/HUD.js';
 
 const DETAILS = ['citizen', 'business', 'plot', 'house', 'tree', 'bio', 'kingdom', 'caravan', 'case', 'landmark', 'foreign', 'war', 'army', 'bank', 'guild', 'faith', 'thennow'];
-const MODES = { 'world-mode': 'worldMode', 'people-mode': 'peopleMode', 'region-mode': 'regionMode', 'pol-mode': 'polMode', 'econ-mode': 'econMode', 'hist-mode': 'historyMode' };
-const TABS = ['world', 'citizens', 'region', 'economy', 'politics', 'history'];
+const MODES = { 'hh-mode': 'unseen', 'world-mode': 'worldMode', 'people-mode': 'peopleMode', 'region-mode': 'regionMode', 'pol-mode': 'polMode', 'econ-mode': 'econMode', 'hist-mode': 'historyMode' };
+const TABS = ['world', 'citizens', 'region', 'economy', 'politics', 'history', 'unseen'];
 
 export function sweepPanels(sim, { limit = 4000 } = {}) {
   const errors = [];

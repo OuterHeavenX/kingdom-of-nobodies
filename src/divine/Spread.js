@@ -64,7 +64,7 @@ export function hear(state, listener, speaker, strength = 1) {
   kl.social[ks.interp] = r2((kl.social[ks.interp] ?? 0) + w);
   // A confirmed sceptic pressed with talk of gods pushes back toward evidence instead.
   if (ks.interp === 'divine' && kl.interp !== 'divine' && wv.skep > 0.6) kl.social.natural = r2((kl.social.natural ?? 0) + w * 0.6);
-  kl.interest = r2(clamp01(kl.interest + 0.02 * strength));
+  kl.interest = r2(clamp01(kl.interest + 0.01 * strength));
   // Disagreement handled without tolerance strains a friendship a little; with tolerance it does not.
   if (kl.interp !== ks.interp && kl.interp !== 'indifferent' && wv.tol < 0.35 && kl.conf > 0.6) adjust(state, listener.id, speaker.id, { respect: -1 });
 }

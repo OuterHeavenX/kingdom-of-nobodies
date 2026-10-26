@@ -435,7 +435,8 @@ function civic(g, b, dm, r) {
     else { const top = walls(g, { w: 2, d: 2, h: fh, floors: 1, ...facadeFor(era, r), bay: 2 }); era === 2 ? gable(g, 2, 2, top, 0.9, P.roofSlate) : flatRoof(g, 2, 2, top); }
     return;
   }
-  if (t === 'chapel' || t === 'temple' || t === 'shrine') {
+  if ((t === 'temple' || t === 'shrine') || (t === 'chapel' && era >= 3)) return faithBuilding(g, b, dm, r);
+  if (t === 'chapel') {
     const f = era === 2 ? facadeFor(2, r) : { kind: era >= 4 ? 'glass' : 'concrete', tint: '#ffffff' };
     const top = walls(g, { w: w * 0.7, d, h: fh * 1.4, floors: 1, ...f, bay: 1.6 });
     gable(g, w * 0.7, d, top, 2.4, era === 2 ? P.roofSlate : '#e8e8e4', { along: true });
@@ -465,6 +466,67 @@ function civic(g, b, dm, r) {
   for (const sx of [-1, 1]) {
     part(g, G.box(), mat(P.timberDark), [0.08, 3.2, 0.08], [sx * (w / 2 + 0.4), 1.6, d / 2 + 0.6], null, false);
     part(g, G.box(), mat(sx < 0 ? '#3f6fa3' : '#b8443a'), [0.7, 0.9, 0.04], [sx * (w / 2 + 0.4) + 0.36 * sx, 2.7, d / 2 + 0.6], null, false);
+  }
+}
+
+/**
+ * v0.5.3: places of worship that change with the ages — brick temples and
+ * domes, modern spiritual centres, great sanctuaries, luminous glass temples
+ * in gardens. Buildings of the stone's own faiths carry a small replica of
+ * the standing stone and a gold eye at the door.
+ */
+function faithBuilding(g, b, dm, r) {
+  const era = b.era, fh = FLOOR_H[era], { w, d } = dm, t = b.type;
+  const stoneFaith = /Hidden Hand|Children of the Light|Keepers of the Silence/.test(b.name ?? '');
+  const gold = mat('#e2c46a', { metalness: 0.55, roughness: 0.3 });
+  const glowGlass = mat('#fff4cf', { emissive: '#ffd27a', emissiveIntensity: 0.35, transparent: true, opacity: 0.8, roughness: 0.2 });
+  if (t === 'shrine') {
+    part(g, G.box(), mat(era >= 3 ? '#cfcac0' : P.stoneDark), [2.2, 0.3, 2], [0, 0.15, 0]);
+    if (era === 2) { const top = walls(g, { w: 1.6, d: 1.2, h: 1.9, floors: 1, kind: 'brick', tint: '#b8604a', z: -0.3, bay: 1.6 }); gable(g, 1.8, 1.4, top, 0.8, P.roofSlate, { z: -0.3 }); }
+    else if (era === 3) { part(g, G.box(), mat('#d8d4cb'), [0.25, 2.2, 0.25], [-0.8, 1.25, -0.4]); part(g, G.box(), mat('#d8d4cb'), [0.25, 2.2, 0.25], [0.8, 1.25, -0.4]); part(g, G.box(), mat('#bfbab0'), [2.2, 0.18, 1.4], [0, 2.4, -0.3]); }
+    else { part(g, G.cyl(16), glowGlass, [2, 2.6, 0.25], [0, 1.4, -0.3], null, false); if (era >= 5) greenRoof(g, 2.2, 2, 0.3, r); }
+    part(g, G.sphere(8), glowGlass, [0.28, 0.28, 0.28], [0, 1.1, 0.2], null, false);
+  } else if (t === 'chapel') {
+    // Modern church (age 3), chapel of glass (age 4), light chapel under a living roof (age 5).
+    const top = walls(g, { w: w * 0.72, d: d * 0.85, h: fh * 1.5, floors: 1, kind: era >= 4 ? 'glass' : 'concrete', tint: '#ffffff', bay: 1.4 });
+    part(g, G.prism(), mat(era >= 4 ? '#dfe6ea' : '#e8e8e4'), [w * 0.8, 3.4, d * 0.9], [0, top, 0], [0, Math.PI / 2, 0]);
+    part(g, G.box(), mat('#d4d4d0'), [0.5, top + 5, 0.5], [w * 0.38, (top + 5) / 2, -d * 0.35]);
+    part(g, G.box(), gold, [1.1, 0.12, 0.12], [w * 0.38, top + 4, -d * 0.35 + 0.3], null, false);
+    if (era >= 5) greenRoof(g, w * 0.5, d * 0.5, top + 0.2, r);
+    entrance(g, w * 0.72, d * 0.85, { glass: true, width: 1.6, height: 2.6 });
+  } else if (era === 2) {
+    // A brick temple: portico of columns, a drum and a dome.
+    const top = walls(g, { w: w * 0.8, d: d * 0.75, h: fh * 1.6, floors: 1, ...facadeFor(2, r), bay: 1.8 });
+    for (const x of [-0.3, -0.1, 0.1, 0.3]) part(g, G.cyl(10), mat('#f2ece0'), [0.42, fh * 1.6, 0.42], [x * w, (fh * 1.6) / 2, d * 0.42]);
+    part(g, G.prism(), mat('#f2ece0'), [w * 0.7, 1.1, 1.6], [0, fh * 1.6, d * 0.42]);
+    part(g, G.cyl(16), mat('#c96e52'), [w * 0.42, 1.4, w * 0.42], [0, top + 0.7, -d * 0.05]);
+    part(g, G.sphere(16), mat('#6f8f8a', { metalness: 0.3, roughness: 0.5 }), [w * 0.42, w * 0.34, w * 0.42], [0, top + 1.4, -d * 0.05]);
+    part(g, G.cyl(8), gold, [0.3, 1, 0.3], [0, top + 1.4 + w * 0.17 + 0.4, -d * 0.05], null, false);
+  } else if (era === 3) {
+    // A community spiritual centre: a wide low hall round a courtyard, with a slender bell tower.
+    const top = walls(g, { w, d: d * 0.45, h: fh * 1.2, floors: 1, kind: 'concrete', tint: '#f4efe6', z: -d * 0.27, bay: 2 });
+    flatRoof(g, w, d * 0.45, top, { color: '#8f9294', z: -d * 0.27 });
+    for (const sx of [-1, 1]) { const tt = walls(g, { w: w * 0.18, d: d * 0.5, h: fh * 1.1, floors: 1, kind: 'concrete', tint: '#efe9de', x: sx * w * 0.41, z: d * 0.2, bay: 2 }); flatRoof(g, w * 0.18, d * 0.5, tt, { x: sx * w * 0.41, z: d * 0.2 }); }
+    lawn(g, w * 0.6, d * 0.4, 0, d * 0.2);
+    part(g, G.box(), mat('#e6e2da'), [0.9, fh * 4, 0.9], [w * 0.38, fh * 2, -d * 0.4]);
+    part(g, G.box(), gold, [0.7, 0.7, 0.08], [w * 0.38, fh * 3.6, -d * 0.4 + 0.47], null, false);
+  } else if (era === 4) {
+    // A great sanctuary: a tall faceted hall of glass and steel beside a campanile.
+    const top = walls(g, { w: w * 0.7, d: d * 0.8, h: fh * 2.6, floors: 2, kind: 'glass', tint: '#ffffff', bay: 1.6 });
+    part(g, G.cone(4), mat('#dfe6ea', { metalness: 0.4, roughness: 0.25 }), [w * 0.82, fh * 2.2, d * 0.9], [0, top + fh * 1.1, 0], [0, Math.PI / 4, 0]);
+    part(g, G.box(), mat('#cfd6da'), [0.8, top + fh * 3, 0.8], [w * 0.42, (top + fh * 3) / 2, -d * 0.36]);
+    entrance(g, w * 0.7, d * 0.8, { glass: true, width: 2.2, height: 3 });
+  } else {
+    // A luminous temple: a glass dome that glows at night, in a ring of gardens.
+    part(g, G.cyl(20), mat('#e9efe8'), [w * 0.7, 0.6, w * 0.7], [0, 0.3, 0]);
+    part(g, G.sphere(20), glowGlass, [w * 0.62, w * 0.5, w * 0.62], [0, 0.6, 0], null, false);
+    for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; tree(g, Math.cos(a) * w * 0.46, Math.sin(a) * d * 0.46, 0.7); }
+    part(g, G.cyl(8), gold, [0.25, 1.2, 0.25], [0, w * 0.5 + 0.9, 0], null, false);
+  }
+  if (stoneFaith) {
+    // The faith's emblem: a small standing stone before the door and a gold eye above it.
+    part(g, G.dodeca(), mat('#8d8a80'), [0.5, 1.4, 0.3], [w * 0.28, 0.7, d / 2 + 0.6]);
+    part(g, G.cyl(16), gold, [0.7, 0.7, 0.06], [0, Math.min(fh * 1.3, 3.2), d / 2 + 0.06], [Math.PI / 2, 0, 0], false);
   }
 }
 

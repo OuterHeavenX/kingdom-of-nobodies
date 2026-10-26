@@ -38,7 +38,7 @@ export function proposeActivities(state, c, { minor, h, sick }) {
       const sc = 26 + wv.cur * 34;
       out.push({ kind: 'visit_stone', score: sc, factors: [[`I glimpsed a strange carved stone ${placeName(state)} and want a closer look`, sc]] });
     } else if (day && k && k.interest > 0.42 && !minor) {
-      const gap = wv.role === 'pilgrim' ? 3 : wv.role === 'scholar' ? 4 : 8;
+      const gap = wv.role === 'pilgrim' ? 6 : wv.role === 'scholar' ? 6 : 24;
       if (k.lastVisit === null || state.day - k.lastVisit >= gap) {
         const bonus = wv.role === 'pilgrim' ? 14 : wv.role === 'scholar' ? 12 : 0;
         const sc = 4 + k.interest * 26 + bonus;
@@ -114,7 +114,7 @@ export const FINISH = {
     seeStone(state, c);
     const k = c.worldview.stone;
     k.visits++; k.lastVisit = state.day;
-    k.interest = r2(clamp01(k.interest + 0.06));
+    k.interest = r2(clamp01(k.interest + 0.04));
     s.visits++;
     c.worldview.glimpsed = null;
     if (a.study) investigate(state, c, { boost: effectOn(state, 'inspiration', c.id) ? 1.5 : 1 });

@@ -56,4 +56,5 @@ export const COOLDOWNS = {
   hammer: 0.35, anvil: 1.2, chop: 0.8, crash: 3, farm: 2, road: 1.5,
   horse: 3, cart: 4, car: 1.8, pod: 1.6, bus: 6, tram: 8, whistle: 25, steam: 5, machine: 4, interface: 4,
   bird: 0.9, owl: 12, market: 2.5, townbell: 60, cheer: 4, launch: 0.15, boom: 0.12,
+  whisper: 9, chime: 6, templebell: 20, omen: 4, discovery: 6, blessing: 1,
 };

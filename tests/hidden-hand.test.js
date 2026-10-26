@@ -1,6 +1,7 @@
 // v0.5.3 — The Hidden Hand. Each test is numbered after the release brief's
 // automated-testing list (section 27) so the coverage can be checked line by line.
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { makeSim, totalMoney } from './helpers.js';
 import { Simulation } from '../src/sim/Simulation.js';
@@ -28,6 +29,9 @@ import { troublesOf, dailyPrayers } from '../src/divine/Prayers.js';
 import { bestow, BLESSINGS, blessingProblem, illnessFactor, productionFactor, keepSilence } from '../src/divine/Blessings.js';
 import { sendOmen } from '../src/divine/Omens.js';
 import { dailyDivine } from '../src/divine/index.js';
+import { FakeAudioContext, memoryStorage } from './fake-audio.js';
+import { AudioManager } from '../src/audio/AudioManager.js';
+import { unseenPanel, unseenEntryCard, glyphSvg, UNSEEN_SECTIONS } from '../src/ui/UnseenPanel.js';
 
 // A small living kingdom, grown once and copied for each test.
 let base = null;
@@ -539,4 +543,46 @@ test('hidden hand: the divine layer runs on the simulation day, deterministicall
   assert.equal(JSON.stringify(a.state.divine), JSON.stringify(b.state.divine));
   assert.equal(JSON.stringify(a.state.citizens.map((c) => c.worldview)), JSON.stringify(b.state.citizens.map((c) => c.worldview)));
   assert.equal(typeof dailyDivine, 'function');
+});
+
+test('hidden hand 28: every section of the Unseen Influence renders, with large touch targets and no gaps', () => {
+  const sim = world();
+  const views = [...UNSEEN_SECTIONS.map(([k]) => ({ unseen: k })), { unseen: 'blessings', unseenBlessing: 'comfort' }, { unseen: 'mysteries', unseenInscription: 'light' }];
+  for (const v of views) {
+    const { title, html } = unseenPanel(sim, v);
+    assert.equal(title, 'The Unseen Influence');
+    assert.doesNotMatch(html, /undefined|NaN|\[object/, `${v.unseen} renders cleanly`);
+    assert.match(html, /data-act="hh-mode"/);
+  }
+  withStone(sim, 'meadow', 'question');
+  const st = unseenPanel(sim, { unseen: 'mysteries' }).html;
+  assert.match(st, /Show the stone/);
+  assert.match(st, /Who remembers the beginning/, 'the player sees what they carved');
+  assert.match(unseenEntryCard(sim, { unseenEye: 'left' }), /data-act="hh-eye" data-id="hidden"/, 'the eye can be moved or hidden from the main navigation');
+  assert.match(glyphSvg('silence'), /<svg/);
+  // The stylesheet keeps touch targets large and respects reduced motion and safe areas.
+  const css = readFileSync(new URL('../src/styles/unseen.css', import.meta.url), 'utf8');
+  assert.match(css, /width: 54px; height: 54px/);
+  assert.match(css, /prefers-reduced-motion: reduce/);
+  assert.match(css, /safe-area-inset-right/);
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(html, /id="unseen-eye"/);
+  assert.match(html, /id="whisper-notice"/);
+});
+
+test('hidden hand 29: its sounds wait for the player to turn sound on and obey the mixer', () => {
+  const before = FakeAudioContext.instances.length;
+  const sim = world();
+  const a = new AudioManager({ storage: memoryStorage(), AudioContextClass: FakeAudioContext, getState: () => sim.state, getWorld: () => null });
+  try {
+    assert.equal(a.hiddenHand('motif'), false, 'silent while sound is off');
+    assert.equal(a.hiddenHand('blessing'), false);
+    assert.equal(FakeAudioContext.instances.length, before, 'no audio context is created');
+    a.enable();
+    assert.equal(a.hiddenHand('motif'), true);
+    assert.equal(a.hiddenHand('motif'), false, 'the motif is used sparingly');
+    assert.equal(a.hiddenHand('omen'), true);
+    a.set('muteMusic', true);
+    assert.equal(a.mixer.bus.music.gain.value, 0, 'the motif plays on the music bus, which the player can mute');
+  } finally { a.dispose(); }
 });
