@@ -7,7 +7,7 @@ import { CUES, cuesForEra, specialCue, renderBar, composeMelody } from '../src/a
 import { AudioMixer } from '../src/audio/AudioMixer.js';
 import { loadAudio, saveAudio, busGain, DEFAULT_AUDIO, AUDIO_KEY } from '../src/audio/AudioSettings.js';
 import { VoicePool, placeSound, COOLDOWNS } from '../src/audio/SpatialAudio.js';
-import { ambienceMix } from '../src/audio/AmbientSoundscape.js';
+import { ambienceMix, AmbientSoundscape } from '../src/audio/AmbientSoundscape.js';
 import { SFX, SFX_KINDS } from '../src/audio/SoundEffects.js';
 import { VOICES } from '../src/audio/Instruments.js';
 
@@ -185,4 +185,14 @@ test('audio: the mixer measures what is playing (used by the audio test panel)',
   const m = new AudioMixer(ctx, { ...DEFAULT_AUDIO, enabled: true });
   assert.ok(m.level() > 0);
   m.dispose();
+});
+
+test('audio: heavy rain is a soft bed under the music, not a hiss that drowns it', () => {
+  const ctx = new FakeAudioContext();
+  const amb = new AmbientSoundscape(ctx, ctx.createGain());
+  amb.update(ambienceMix({ hour: 12, season: 1, era: 1, weather: 'rain', intensity: 1, zoom: 40 }));
+  // Measured in Chromium through the real mixer: music -22.6 dB, rain -32.2 dB (was -17.6 dB).
+  assert.ok(amb.beds.rain.gain.value > 0.05, 'rain is still heard');
+  assert.ok(amb.beds.rain.gain.value <= 0.14, `rain bed gain ${amb.beds.rain.gain.value}`);
+  assert.ok(amb.beds.rain.gain.value < amb.beds.wind.gain.value * 2, 'no louder than the wind it comes with');
 });
