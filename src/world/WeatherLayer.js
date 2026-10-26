@@ -11,6 +11,9 @@ const BOX = 80, HEIGHT = 40;
 // Splashes are only drawn near the view centre, where they can be seen.
 const SPLASH_RADIUS = 32;
 const SPLASH_LIFE = 0.32, SPRAY_LIFE = 0.28;
+// Just above the highest flat ground (paved roads 0.034, the square 0.04, the
+// ford 0.07, road markings 0.08), so a ring is never hidden under the surface it lands on.
+const SPLASH_Y = 0.09;
 
 export class WeatherLayer {
   constructor(scene) {
@@ -32,6 +35,8 @@ export class WeatherLayer {
   build(kind) {
     if (this.rain) {
       for (const o of [this.rain.streaks, this.rain.rings, this.rain.spray]) { this.scene.remove(o); o.geometry.dispose(); o.material.dispose(); }
+      // An InstancedMesh also holds its own instance buffers on the GPU.
+      this.rain.rings.dispose();
       this.rain = null;
     }
     this.kind = kind;
@@ -89,7 +94,7 @@ export class WeatherLayer {
     for (let k = 0; k < r.per; k++) {
       const j = (i * r.per + k) * 3;
       const a = Math.random() * Math.PI * 2, out = 0.6 + Math.random() * 0.9;
-      p[j] = x; p[j + 1] = 0.02; p[j + 2] = z;
+      p[j] = x; p[j + 1] = SPLASH_Y; p[j + 2] = z;
       r.sprayV[j] = Math.cos(a) * out; r.sprayV[j + 1] = 1.4 + Math.random() * 1.2; r.sprayV[j + 2] = Math.sin(a) * out;
     }
   }
@@ -139,7 +144,7 @@ export class WeatherLayer {
       if (s.age > SPLASH_LIFE + 1) continue;
       s.age += dt;
       const t = Math.min(1, s.age / SPLASH_LIFE);
-      d.position.set(s.x, 0.03, s.z);
+      d.position.set(s.x, SPLASH_Y, s.z);
       d.scale.setScalar(t >= 1 ? 0 : s.size * (1 + t * 4));
       d.updateMatrix();
       r.rings.setMatrixAt(i, d.matrix);
