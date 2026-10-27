@@ -230,8 +230,10 @@ export class Game {
     state.events = [];
     this.sim.selected = { kind: 'citizen', id: state.citizens[0]?.id ?? null };
     this.lastChronicle = state.nextId.chronicle;
-    if (this.world) { this.world.home(); this.world.syncPlots(true); this.world.themes.resetFireworks(); this.world.themes.check(true); }
+    // Leave every visual-only view of the old kingdom first: Then & Now, a Holiday Preview, a visit.
     this.world?.exitThenNow(false);
+    if (this.world?.themes.preview) this.world.themes.stopPreview();
+    if (this.world) { this.world.home(); this.world.syncPlots(true); this.world.themes.resetFireworks(); this.world.themes.check(true); }
     this.hud.unseen?.reset();
     this.hud.setBanner(null);
     this.hud.openTab('citizens');

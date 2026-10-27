@@ -33,6 +33,7 @@ import { ageDef } from '../civilization/Ages.js';
 import { appearances } from '../civilization/PropertyHistory.js';
 import { unseenPanel, unseenEntryCard } from './UnseenPanel.js';
 import { UnseenController } from './UnseenController.js';
+import { patchAround, SheetActivity, KEEP_SELECTOR } from './LiveSheet.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -52,7 +53,7 @@ export class HUD {
     this.lastTop = 0;
     this.lastBody = 0;
     this.bodyHtml = '';
-    this.interacting = false;
+    this.activity = new SheetActivity();
     this.bind();
     this.unseen = new UnseenController(this);
     this.renderTop(true);
@@ -76,8 +77,12 @@ export class HUD {
     });
     $('sheet-back').onclick = () => this.back();
     const body = $('sheet-body');
-    body.addEventListener('pointerdown', () => { this.interacting = true; });
-    window.addEventListener('pointerup', () => { setTimeout(() => { this.interacting = false; }, 250); });
+    // Live updates wait while the player touches or scrolls the sheet. A native
+    // touch scroll ends with pointercancel, and momentum scrolls on after it.
+    body.addEventListener('pointerdown', () => this.activity.down());
+    window.addEventListener('pointerup', () => this.activity.up());
+    window.addEventListener('pointercancel', () => this.activity.up());
+    body.addEventListener('scroll', () => { if (performance.now() - this.lastBody > 120) this.activity.scrolled(); }, { passive: true });
     body.addEventListener('click', (e) => this.onAction(e));
     body.addEventListener('change', (e) => this.onAction(e));
     body.addEventListener('input', (e) => {
@@ -91,9 +96,12 @@ export class HUD {
       if (!el) return;
       if (el.dataset.act === 'citizen-search') this.view.citizenQuery = el.value;
       if (el.dataset.act === 'hist-search') this.view.historyQuery = el.value;
+      // The box itself is kept in place (see renderSheet), so the focus and the keyboard stay.
       this.renderSheet(true);
-      const again = $('sheet-body').querySelector(`input[data-act="${el.dataset.act}"]`);
-      if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+      if (!el.isConnected) {
+        const again = $('sheet-body').querySelector(`input[data-act="${el.dataset.act}"]`);
+        if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); }
+      }
     });
     $('import-file').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) this.game.importSave(f); });
   }
@@ -225,6 +233,8 @@ export class HUD {
     this.view.thenDay = stops[0]?.d ?? 1;
     this.view.thenSplit = 0.5;
     this.openDetail('thennow', plotId);
+    // Then & Now is shown at First Hearth: come home properly first, so the banner no longer says "Visiting…".
+    if (this.game.world && this.game.world.mode !== 'village') this.visit('hearth');
     const ok = this.game.world?.showThenNow(plotId, this.view.thenDay, 0.5);
     if (ok) this.setBanner('🕰 Then & Now: history view (the kingdom keeps living)', { label: '✓ Present', action: () => { this.game.world.exitThenNow(); this.setBanner(this.awayBanner ?? null); if (this.view.detail?.kind === 'thennow') this.back(); } });
   }
@@ -267,10 +277,13 @@ export class HUD {
     if (btn) btn.onclick = b.action;
   }
 
+  /** True while the player is touching or scrolling the sheet (live updates wait). */
+  get interacting() { return this.activity.busy(); }
+
   /** Called every animation frame; throttles DOM work. */
   update(now) {
     if (now - this.lastTop > 250) { this.renderTop(); this.unseen.update(now); }
-    if (now - this.lastBody > 900 && !this.interacting && (this.sheet.state !== 'closed' || this.sheet.docked)) this.renderSheet();
+    if (now - this.lastBody > 900 && !this.activity.busy(now) && (this.sheet.state !== 'closed' || this.sheet.docked)) this.renderSheet();
   }
 
   renderTop(force = false) {
@@ -389,7 +402,17 @@ export class HUD {
     if (!force && html === this.bodyHtml) return;
     const body = $('sheet-body');
     const scroll = body.scrollTop;
-    body.innerHTML = html;
+    // A search box being typed in survives the refresh: everything around it is replaced, it is not.
+    const active = document.activeElement;
+    const keep = active && active !== body && body.contains(active) && active.matches(KEEP_SELECTOR) ? active : null;
+    if (keep) {
+      const t = document.createElement('template');
+      t.innerHTML = html;
+      if (!patchAround(body, t.content, keep)) {
+        if (!force) return; // a live refresh never takes the box away; a deliberate change of view may
+        body.innerHTML = html;
+      }
+    } else body.innerHTML = html;
     body.scrollTop = scroll;
     this.bodyHtml = html;
   }
