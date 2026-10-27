@@ -33,7 +33,8 @@ says that cloud backup is not set up and everything else works as before.
   - the supported versions;
   - the world structure;
   - non-negative integer accounts;
-  - a 6 MB save limit (7 MB per request).
+  - a 12 MB save limit (13 MB per request); saves are stored gzipped so they
+    fit within D1's 2 MB per-value limit.
 - Per-user rate limits: 20 writes and 120 reads a minute.
 - CORS and sign-in redirects only for `ALLOWED_ORIGIN`.
 - Optional AES-GCM encryption of every stored save. D1 is also encrypted at

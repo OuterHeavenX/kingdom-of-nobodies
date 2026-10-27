@@ -4,7 +4,12 @@
 // checksum, data } where `data` is the JSON text of the world.
 
 export const FORMAT = 'kingdom-of-nobodies';
-export const MAX_SAVE_BYTES = 6 * 1024 * 1024;
+// Saves grow with the kingdom's history (about 1 MB a century once the
+// founders' generation has passed), so the limit leaves room for a millennium.
+// It bounds what the cloud service will store; local saves are never refused
+// for their size, and a local save over the limit is reported as too large
+// for backup, never mistaken for "no save here" (see CloudSaveClient.plan).
+export const MAX_SAVE_BYTES = 12 * 1024 * 1024;
 export const MIN_VERSION = 2;
 export const MAX_VERSION = 9; // keep in step with SAVE_VERSION (v0.5.3 saves are version 9)
 
@@ -23,7 +28,7 @@ const isInt = (v) => Number.isInteger(v);
  */
 export function validateEnvelope(text) {
   if (typeof text !== 'string' || !text.length) return { ok: false, error: 'empty save' };
-  if (text.length > MAX_SAVE_BYTES) return { ok: false, error: `save is larger than ${Math.round(MAX_SAVE_BYTES / 1048576)} MB` };
+  if (text.length > MAX_SAVE_BYTES) return { ok: false, oversize: true, error: `save is larger than ${Math.round(MAX_SAVE_BYTES / 1048576)} MB` };
   let env;
   try { env = JSON.parse(text); } catch { return { ok: false, error: 'not valid JSON' }; }
   if (!env || typeof env !== 'object' || env.format !== FORMAT) return { ok: false, error: 'not a Kingdom of Nobodies save' };

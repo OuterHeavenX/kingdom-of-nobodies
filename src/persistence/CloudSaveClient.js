@@ -82,7 +82,14 @@ export class CloudSaveClient {
    * `localText` is the local envelope; `sync` the world's record of the last exchange.
    */
   async plan(localText, sync) {
-    const local = localText ? validateEnvelope(localText).meta ?? null : null;
+    let local = null;
+    if (localText) {
+      // A local kingdom that fails the checks (too large, say) is still a
+      // kingdom: it must never be treated as "nothing here" and downloaded over.
+      const check = validateEnvelope(localText);
+      if (!check.ok) return { action: 'error', reason: check.oversize ? `This kingdom is too large for cloud backup (${check.error})` : `This device's save could not be prepared for backup (${check.error})`, local: null, cloud: null };
+      local = check.meta;
+    }
     const { saves } = await this.list();
     const cloud = saves.find((x) => x.slot === SLOT) ?? null;
     return { ...compareSaves(local, cloud, sync), local, cloud };

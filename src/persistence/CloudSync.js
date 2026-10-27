@@ -39,6 +39,8 @@ export class CloudSync {
   async download() {
     const { envelope, meta } = await this.client.download();
     const state = deserialize(envelope);
+    // Whatever the reason for the download, this device's world goes to a file first.
+    this.exportBackup?.(this.getState());
     this.setState(state);
     this.writeRecord({ revision: meta.revision, checksum: meta.checksum, lastSyncedAt: new Date().toISOString() });
     return { action: 'downloaded', meta };
@@ -50,7 +52,8 @@ export class CloudSync {
       const local = serialize(this.getState(), this.build);
       const plan = await this.client.plan(local, this.readRecord());
       let result;
-      if (plan.action === 'upload') result = await this.upload(plan.cloud?.revision ?? 0);
+      if (plan.action === 'error') result = { action: 'error', error: plan.reason };
+      else if (plan.action === 'upload') result = await this.upload(plan.cloud?.revision ?? 0);
       else if (plan.action === 'download' && allowDownload) result = await this.download();
       else if (plan.action === 'conflict' || (plan.action === 'download' && !allowDownload)) { this.pending = { local: plan.local, cloud: plan.cloud, reason: plan.reason }; result = { action: 'conflict', ...this.pending }; }
       else result = { action: plan.action };
@@ -78,8 +81,7 @@ export class CloudSync {
         return { ...r, replaced: 'cloud (kept in its backup history)' };
       }
       if (keep === 'cloud') {
-        this.exportBackup?.(this.getState());
-        const r = await this.download();
+        const r = await this.download(); // exports this device's world first
         this.pending = null;
         return { ...r, replaced: 'this device (a backup file was downloaded first)' };
       }

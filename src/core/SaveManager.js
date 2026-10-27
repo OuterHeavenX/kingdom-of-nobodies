@@ -36,11 +36,24 @@ function idb(mode, fn) {
   }));
 }
 
+/**
+ * The localStorage copy. A large kingdom can outgrow the browser's quota
+ * (about 5 MB); then an older copy must not linger there, filling the quota
+ * (the cloud sync record lives in localStorage too) and posing as a fallback.
+ * It is removed only when IndexedDB holds the new save (`stored`).
+ */
+function writeBackup(text, stored) {
+  try { localStorage.setItem(LS_BACKUP, text); return true; } catch { /* quota or privacy mode */ }
+  if (stored) { try { localStorage.removeItem(LS_BACKUP); } catch { /* ignore */ } }
+  return false;
+}
+
+const futureKey = (v) => `future-v${v}`;
+
 export class SaveManager {
   constructor(build) { this.build = build; this.writing = null; this.lastSaved = null; }
 
-  async save(state) {
-    const text = serialize(state, this.build);
+  async save(state, text = serialize(state, this.build)) {
     // Serialise writes so two saves never interleave.
     const run = async () => {
       let ok = false;
@@ -60,7 +73,7 @@ export class SaveManager {
         });
         ok = true;
       } catch { /* fall through to localStorage */ }
-      try { localStorage.setItem(LS_BACKUP, text); ok = true; } catch { /* quota or privacy mode */ }
+      if (writeBackup(text, ok)) ok = true;
       if (ok) this.lastSaved = new Date();
       return ok;
     };
@@ -70,8 +83,9 @@ export class SaveManager {
 
   /** Synchronous best-effort save for page-hide, when async work may be cut short. */
   saveNow(state) {
-    try { localStorage.setItem(LS_BACKUP, serialize(state, this.build)); } catch { /* ignore */ }
-    this.save(state);
+    const text = serialize(state, this.build);
+    writeBackup(text, false);
+    this.save(state, text);
   }
 
   /** Load the newest valid save: IndexedDB current, then previous, then localStorage, then a Milestone 1 save. */
@@ -90,13 +104,19 @@ export class SaveManager {
       candidates.push(['saved game', current], ['previous save', previous], ['yearly recovery snapshot', snapshot]);
     } catch { /* IndexedDB unavailable */ }
     try { candidates.push(['backup save', localStorage.getItem(LS_BACKUP)]); } catch { /* ignore */ }
+    // A kingdom saved by a newer build cannot be read here. It is set aside
+    // where no save rotation can reach it, and if it is the most recent world
+    // on this device nothing is loaded (or founded) over it: the player is
+    // asked to update the game instead.
+    const future = await this.keepFuture(candidates);
     const best = newestSave(candidates);
+    if (future && (!best || future.savedAt > best.savedAt)) return { state: null, source: null, future };
     if (best) {
       // Before an older kingdom is upgraded, its original save is kept untouched.
       const v = versionOf(best.text);
       if (v && v < SAVE_VERSION) await this.keepBackup(best.text, v);
       else await this.findBackup();
-      return { state: best.state, source: best.label, upgradedFrom: v && v < SAVE_VERSION ? v : null };
+      return { state: best.state, source: best.label, upgradedFrom: v && v < SAVE_VERSION ? v : null, future };
     }
     try {
       const legacy = localStorage.getItem(LEGACY_KEY);
@@ -107,6 +127,34 @@ export class SaveManager {
       }
     } catch (e) { console.warn('Could not migrate the Milestone 1 save:', e.message); }
     return { state: null, source: null };
+  }
+
+  /**
+   * Keep every save written in a format newer than this build understands
+   * under `future-vN` (once per format; an existing copy is never replaced).
+   * Returns the newest such save's { version, savedAt, label, kept }, or null.
+   */
+  async keepFuture(candidates) {
+    let newest = null;
+    for (const [label, text] of candidates) {
+      if (!text) continue;
+      const v = versionOf(text);
+      if (!Number.isInteger(v) || v <= SAVE_VERSION) continue;
+      let savedAt = '';
+      try { savedAt = String(JSON.parse(text).savedAt ?? ''); } catch { /* unreadable */ }
+      if (!newest || savedAt > newest.savedAt) newest = { version: v, savedAt, label, text };
+    }
+    if (!newest) return null;
+    const key = futureKey(newest.version);
+    let kept = false;
+    try {
+      await idb('readwrite', (store) => { const r = store.get(key); r.onsuccess = () => { if (!r.result) store.put(newest.text, key); }; });
+      kept = true;
+    } catch {
+      try { const k = `kingdom-of-nobodies-${key}`; if (!localStorage.getItem(k)) localStorage.setItem(k, newest.text); kept = true; } catch { /* no room: its own slot still holds it */ }
+    }
+    console.warn(`A kingdom saved in format ${newest.version} (newer than this game's ${SAVE_VERSION}) is kept as ${key}.`);
+    return { version: newest.version, savedAt: newest.savedAt, label: newest.label, key, kept };
   }
 
   /** Find a pre-upgrade copy kept by an earlier session (the newest format wins). */

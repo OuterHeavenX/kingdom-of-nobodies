@@ -29,7 +29,9 @@ function d1() {
     all: async () => ({ results: db.prepare(sql).all(...args) }),
     run: async () => db.prepare(sql).run(...args),
   });
-  return { prepare: (sql) => stmt(sql) };
+  // D1's batch runs its statements as one transaction.
+  const batch = async (list) => { db.exec('BEGIN'); try { const out = []; for (const st of list) out.push(await st.run()); db.exec('COMMIT'); return out; } catch (e) { db.exec('ROLLBACK'); throw e; } };
+  return { prepare: (sql) => stmt(sql), batch };
 }
 
 function env(extra = {}) {
@@ -94,7 +96,8 @@ test('malformed, tampered and oversized saves are rejected by the service', asyn
   const { checksum } = await import('../src/persistence/SaveValidation.js');
   bad.checksum = checksum(bad.data);
   assert.equal((await call(e, 'PUT', '/api/saves/main', t, { envelope: JSON.stringify(bad), baseRevision: 0 })).status, 400, 'invalid world');
-  const huge = 'x'.repeat(7.5 * 1024 * 1024);
+  const { MAX_SAVE_BYTES } = await import('../src/persistence/SaveValidation.js');
+  const huge = 'x'.repeat(MAX_SAVE_BYTES + 1.5 * 1024 * 1024);
   assert.equal((await call(e, 'PUT', '/api/saves/main', t, { envelope: huge, baseRevision: 0 })).status, 413);
   assert.equal((await call(e, 'PUT', '/api/saves/../etc', t, { envelope: serialize(createKingdom(3)), baseRevision: 0 })).status, 404, 'slot names are restricted');
 });
