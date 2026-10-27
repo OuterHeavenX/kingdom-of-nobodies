@@ -347,3 +347,23 @@ test('development: a scheme whose financing falls through does not drain the dev
   assert.equal(typeof why, 'string', 'the scheme could not go ahead');
   assert.equal(depositOf(state, dain.id), before, 'savings stayed in the bank');
 });
+
+test('migration: newcomers respond to the job market, and lone job-seekers wait for an opening', async () => {
+  const { attractiveness, maybeImmigrate } = await import('../src/population/Migration.js');
+  const { state } = makeSim();
+  const before = attractiveness(state).score;
+  state.citizens.find((c) => c.employment).employment = null;
+  const after = attractiveness(state);
+  assert.equal(after.joblessShare, 0.2);
+  assert.ok(before - after.score >= 0.6, `one adult in five out of work cut the pull by only ${Math.round((before - after.score) * 100) / 100}`);
+  for (const b of state.businesses) b.openings = 0;
+  let lone = 0, families = 0;
+  for (let i = 0; i < 150; i++) {
+    const s = structuredClone(state);
+    s.rng = (state.rng + i * 7919) | 0;
+    const m = maybeImmigrate(s);
+    if (m?.length === 1) lone++; else if (m) families++;
+  }
+  assert.equal(lone, 0, 'no lone job-seeker comes while nobody is hiring');
+  assert.ok(families > 0, 'families still come');
+});
