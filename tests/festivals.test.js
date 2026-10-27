@@ -5,7 +5,7 @@ import { Simulation } from '../src/sim/Simulation.js';
 import { createKingdom } from '../src/sim/Setup.js';
 import { serialize, deserialize } from '../src/core/Serialization.js';
 import { CALENDAR } from '../src/core/Config.js';
-import { balance, totalMoney } from '../src/economy/Transactions.js';
+import { balance, totalMoney, transfer } from '../src/economy/Transactions.js';
 import { produce } from '../src/economy/Businesses.js';
 import { die } from '../src/citizens/Lifecycle.js';
 import { dailyFestivals, attendanceScore, ensureCulture } from '../src/culture/Festivals.js';
@@ -41,7 +41,10 @@ test('30. festivals cost real money and food, and are cancelled when there is no
 test('31. attendance is each villager\'s own decision', () => {
   const sim = fresh(1);
   const s = sim.state;
-  sim.runDays(CALENDAR.daysPerSeason * 4);
+  // The council can afford this festival (whether it can is test 30's business).
+  sim.runDays(CALENDAR.daysPerSeason * 4 - 1);
+  transfer(s, 'outside', 'treasury', 100, 'grant', 'test: a funded festival');
+  sim.runDays(1);
   toDayOfSeason(sim, 2);
   while (s.minute / 60 !== 15) sim.step();
   const f = s.culture.current;
