@@ -55,7 +55,7 @@ export function populationLoss(k, lost) {
  * together, its strength summed and its losses shared. At a town's walls
  * (`fortified` names it) the defender has the walls; in the field only the
  * side named by `ground` (the one that came first and chose its position;
- * the defender by default) has the terrain.
+ * the defender by default; 'none' when they arrived together) has the terrain.
  */
 export function resolveBattle(state, attacker, defender, { routeId = null, fortified = null, war = null, attackerAllies = [], defenderAllies = [], ground = 'defender' } = {}) {
   const m = ensureMilitary(state);
@@ -63,7 +63,7 @@ export function resolveBattle(state, attacker, defender, { routeId = null, forti
   const terrain = route?.terrain ?? 'plains';
   const attackers = [attacker, ...attackerAllies.filter((x) => x !== attacker)], defenders = [defender, ...defenderAllies.filter((x) => x !== defender)];
   const side = (armies, holds) => armies.map((x) => strengthOf(state, x, { defending: holds, terrain, fortified: holds ? fortified : null }));
-  const AS = side(attackers, !fortified && ground === 'attacker'), DS = side(defenders, !!fortified || ground !== 'attacker');
+  const AS = side(attackers, !fortified && ground === 'attacker'), DS = side(defenders, !!fortified || ground === 'defender');
   const A = AS[0], D = DS[0];
   const total = (xs) => xs.reduce((s, x) => s + x.value, 0);
   const rollA = 0.85 + nextRandom(state) * 0.3, rollD = 0.85 + nextRandom(state) * 0.3;

@@ -117,7 +117,10 @@ export function raiseArmy(state, party, war, target, { share = 1 } = {}) {
   return army;
 }
 
-export const IMPORTED_ARMS_CEILING = 0.8;
+export const IMPORTED_ARMS_CEILING = 0.7;
+export const drillCeiling = (party) => Math.min(0.9, (BASE[party]?.training ?? 0.4) + 0.35);
+/** The best equipment a kingdom can keep: a mining kingdom arms itself; the others depend on imports. */
+export const armsCeiling = (party) => (KINGDOMS[party]?.produces?.iron || KINGDOMS[party]?.produces?.tools ? 0.95 : IMPORTED_ARMS_CEILING);
 
 /**
  * Buy `units` of arms (iron and tools) from the lands beyond the region at the
@@ -213,19 +216,21 @@ export function peacetimeForces(state) {
     const garrison = Math.floor(k.population * MILITARY.garrisonShare);
     const cost = Math.ceil(garrison * MILITARY.soldierUpkeep * 3);
     if (balance(state, accountOf(party)) > cost + 400 && transfer(state, accountOf(party), 'outside', cost, 'expense', `${KINGDOMS[party].name} garrison drills`)) {
-      f.training = Math.min(0.9, Math.round((f.training + 0.01) * 1000) / 1000);
+      // Drills sharpen a force toward what its traditions allow (Ironhold's professional host the most).
+      f.training = Math.min(drillCeiling(party), Math.round((f.training + 0.01) * 1000) / 1000);
       f.drills++;
     } else f.training = Math.max(0.2, Math.round((f.training - 0.01) * 1000) / 1000);
     // Smiths keep the armouries stocked: equipment drifts up when the kingdom has metal
     // enough for its garrison (from its own mines, or bought abroad), and down when it has not.
-    // Arms bought abroad keep an armoury in fair order, but not as well as a kingdom's own smiths.
+    // Supplied with metal (from its stores, or bought abroad when they run short), an armoury
+    // drifts toward what the kingdom can sustain: its own mines and smiths keep it best; arms
+    // bought abroad keep it in fair order. Unsupplied, it decays.
     const need = Math.max(1, Math.ceil(garrison / 10));
     const metal = available(k, 'iron') + available(k, 'tools');
-    const own = metal >= need * 2;
-    const ceiling = own ? 0.95 : IMPORTED_ARMS_CEILING;
-    const stocked = own || (f.equipment < ceiling && buyArms(state, party, need) >= need);
-    const drift = stocked ? 0.01 : f.equipment >= ceiling && !own ? 0 : -0.01;
-    f.equipment = Math.round(Math.max(0.2, Math.min(0.95, f.equipment + drift)) * 1000) / 1000;
+    const stocked = metal >= need * 2 || buyArms(state, party, need) >= need;
+    const target = stocked ? armsCeiling(party) : 0.2;
+    const step = Math.sign(target - f.equipment) * Math.min(0.01, Math.abs(target - f.equipment));
+    f.equipment = Math.round(Math.max(0.2, Math.min(0.95, f.equipment + step)) * 1000) / 1000;
   }
 }
 

@@ -83,6 +83,10 @@ function crisisResponse(state) {
   const changes = [];
   if (!gov.policies.foodAssistance) { gov.policies.foodAssistance = true; changes.push('restored food assistance'); }
   if (!gov.policies.publicWorks) { gov.policies.publicWorks = true; changes.push('restored the public works crew'); }
+  // Platforms now trade programmes against taxes; in a famine the budget gives way to the hungry.
+  const jobless = adults(state).some((c) => !c.employment && !c.retired && ageOf(state, c) < LIFE.retireAge);
+  if (!gov.policies.unemploymentAid && jobless && balance(state, 'treasury') > 60) { gov.policies.unemploymentAid = true; changes.push('introduced unemployment relief'); }
+  if (gov.policies.taxLevel === 'low' && balance(state, 'treasury') < 60) { gov.policies.taxLevel = 'normal'; state.council.taxLevel = 'normal'; changes.push('raised taxes to fund relief'); }
   if (changes.length) record(state, 'council', `Faced with hunger in the village, ${leader ? `${gov.title} ${leader.firstName}` : 'the council'} ${changes.join(' and ')}.`, { citizens: leader ? [leader.id] : [] }, 2);
 }
 

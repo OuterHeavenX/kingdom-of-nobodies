@@ -37,7 +37,7 @@ export const besieged = (state, p) => (siegeAt(state, p) ? p : null);
 const coalition = (state, parties) => parties.reduce((s, p) => s + potentialStrength(state, p), 0);
 
 /** The strength ratio over the enemy a ruler of this temper (plus need) wants before going to war. */
-export const warOdds = (drive) => Math.max(0.85, Math.min(1.15, 1.15 - (drive - 0.75) * 0.5));
+export const warOdds = (drive) => Math.max(0.95, Math.min(1.15, 1.15 - (drive - 0.75) * 0.4));
 
 /** A side's standing in a war: the points won by every party fighting on it, allies included. */
 export const sideScore = (war, side) => war[side].reduce((s, p) => s + (war.score[p] ?? 0), 0);
@@ -145,9 +145,9 @@ export function dailyWar(state) {
     const def = camp.filter((a) => war.defenders.includes(a.owner)).sort((x, y) => y.soldiers - x.soldiers || x.id.localeCompare(y.id));
     if (att.length && def.length) {
       // Every army encamped on the field fights: allies stand together. The side that
-      // reached the field first chose its position and has the ground (the holder on a tie).
+      // reached the field first chose its position and has the ground; arriving together, neither has.
       const first = (xs) => Math.min(...xs.map((x) => x.arrivedDay ?? state.day));
-      const ground = first(att) < first(def) ? 'attacker' : 'defender';
+      const ground = first(att) < first(def) ? 'attacker' : first(def) < first(att) ? 'defender' : 'none';
       const battle = resolveBattle(state, att[0], def[0], { routeId: war.field.route, war, attackerAllies: att.slice(1), defenderAllies: def.slice(1), ground });
       const beaten = war.attackers.includes(battle.loser) ? att : def;
       for (const x of beaten) orderMarch(state, x, { kind: 'settlement', id: x.owner }, 'retreat');

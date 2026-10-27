@@ -131,9 +131,9 @@ test('fair war: a kingdom without mines keeps its armoury by buying arms abroad'
   assert.ok(f.equipment > 0.4, `equipment ${f.equipment}`);
   assert.ok(balance(s, 'k:greenvale') < coins - 12 * 3, 'the arms were paid for (garrison drills aside)');
   // Bought arms keep an armoury in fair order, though not up to a mining kingdom's own.
-  f.equipment = 0.8;
+  f.equipment = 0.9;
   for (let i = 0; i < 4; i++) { toNewSeason(s); peacetimeForces(s); s.day++; }
-  assert.ok(f.equipment <= 0.8 && f.equipment >= 0.79, `equipment ${f.equipment}`);
+  assert.ok(f.equipment < 0.9 && f.equipment >= 0.85, `equipment ${f.equipment}`);
 });
 
 test('fair war: allied armies on the same field fight as one host, and a small kingdom is not refilled by battle', () => {
