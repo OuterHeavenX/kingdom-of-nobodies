@@ -6,7 +6,7 @@ import { needsCourthouse } from '../law/Courts.js';
 import { byId } from '../core/EntityRegistry.js';
 import { COUNCIL, ECONOMY, FOOD_GOODS, GOODS, TIME, DAYS_PER_YEAR, LIFE, NEEDS } from '../core/Config.js';
 import { transfer, balance } from '../economy/Transactions.js';
-import { qty, moveGoods, addGoods } from '../economy/Inventory.js';
+import { qty, moveGoods, addGoods, removeGoods } from '../economy/Inventory.js';
 import { isTrading, BUSINESS_TYPES, wholesalePrice, createBusiness, businessName } from '../economy/Businesses.js';
 import { buyRetail, rankSellers } from '../economy/Marketplace.js';
 import { startProject } from '../property/Construction.js';
@@ -272,16 +272,18 @@ export function councilDaily(state) {
     if (b) { b.lastGrantDay = state.day; COUNCIL_ACTIONS.supportBusiness(state, b.id); }
   }
   // The hungriest are fed first when the pantry runs short (not whoever has lived here longest):
-  // the penniless and hungry, and anyone close to starving with no food in hand (the sick, the
-  // frail), who pays the pantry price if they can. The starving and hungry children come first
-  // and get a day's food (two portions); others get one.
+  // the penniless and hungry, and anyone close to starving with no food in hand, who pays the
+  // pantry price if they can. The starving and hungry children come first and get a day's food
+  // (two portions); others get one.
   const hasFood = (c) => FOOD_GOODS.some((g) => qty(c.inventory, g) > 0);
   const child = (c) => state.day - c.birthDay < LIFE.adultAge * DAYS_PER_YEAR;
   const starving = (c) => c.needs.hunger <= NEEDS.criticalHunger || (c.health?.starvingDays ?? 0) > 0;
-  const destitute = state.citizens.filter((c) => c.needs.hunger <= 30 && !c.away && (balance(state, c.id) < 3 || (starving(c) && !hasFood(c))))
+  // The bedridden and the very old do not get up to eat, even with food at hand.
+  const frail = (c) => (c.health?.sickUntil ?? 0) > state.day || state.day - c.birthDay >= 65 * DAYS_PER_YEAR;
+  const destitute = state.citizens.filter((c) => c.needs.hunger <= 30 && !c.away && (balance(state, c.id) < 3 || (starving(c) && (!hasFood(c) || frail(c)))))
     .sort((a, b) => (b.health?.starvingDays ?? 0) - (a.health?.starvingDays ?? 0) || child(b) - child(a) || a.needs.hunger - b.needs.hunger || a.id.localeCompare(b.id));
   for (const c of destitute) {
-    const portions = starving(c) || child(c) ? 2 : 1;
+    const portions = hasFood(c) ? 0 : starving(c) || child(c) ? 2 : 1;
     for (let i = 0; i < portions; i++) {
       const good = FOOD_GOODS.find((g) => qty(state.council.pantry, g) > 0);
       if (!good) break;
@@ -289,8 +291,10 @@ export function councilDaily(state) {
       if (balance(state, c.id) >= price + 2) transfer(state, c.id, 'treasury', price, 'purchase', `${good} from the council pantry`);
       moveGoods(state.council.pantry, c.inventory, good, 1);
     }
+    // The council's helpers feed them a portion there and then.
+    const portion = FOOD_GOODS.find((g) => qty(c.inventory, g) > 0);
+    if (frail(c) && starving(c) && portion && removeGoods(c.inventory, portion, 1)) c.needs.hunger = Math.min(100, c.needs.hunger + GOODS[portion].food);
     remember(state, c, 'The council fed me when I was going hungry.', 1, 'council');
-    if (!FOOD_GOODS.some((g) => qty(state.council.pantry, g) > 0)) break;
   }
   const surplus = balance(state, 'treasury') - COUNCIL.reserve;
   // Standing policy: a large surplus funds a founding grant for a would-be business owner.

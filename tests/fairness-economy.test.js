@@ -100,6 +100,18 @@ test('fair relief: when the pantry runs short, the hungriest are fed first, not 
   assert.equal(qty(ada.inventory, 'grain'), 0);
 });
 
+test('fair relief: a bedridden villager starving beside their food is fed by the council, and starving children get a day\'s food', () => {
+  const { state } = makeSim();
+  const [cora, kid] = [byName(state, 'Cora'), byName(state, 'Dain')];
+  for (const c of state.citizens) { c.needs.hunger = 80; c.inventory = {}; }
+  cora.needs.hunger = 5; cora.health.sickUntil = state.day + 3; addGoods(cora.inventory, 'grain', 2);
+  drain(state, kid.id); kid.needs.hunger = 8; kid.birthDay = state.day - 10 * 12;
+  state.council.pantry = { grain: 5 };
+  councilDaily(state);
+  assert.ok(cora.needs.hunger > 20, `fed in bed (hunger ${cora.needs.hunger})`);
+  assert.equal(qty(kid.inventory, 'grain'), 2, 'two portions for a starving child');
+});
+
 test('new business: opening draws working capital from savings in the bank, not just the purse', () => {
   const { state } = makeSim();
   const b0 = bank(state);
