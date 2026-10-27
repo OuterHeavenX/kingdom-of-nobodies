@@ -350,3 +350,19 @@ test('rejected road proposals do not pile up while no road is finished', () => {
   assert.ok(s.roadProjects.filter((p) => p.status === 'REJECTED').length <= 30);
 });
 
+
+test('sim fixes: after archiving, a business opened the same day is still found by id', async () => {
+  const { archiveClosedBusinesses } = await import('../src/sim/BusinessArchive.js');
+  const { byId } = await import('../src/core/EntityRegistry.js');
+  const { makeSim } = await import('./helpers.js');
+  const { state: s } = makeSim(2);
+  const long = { id: 'b9001', name: 'Old Shop', status: 'CLOSED', compact: true, closedDay: -1000, employees: [], inventory: {} };
+  s.businesses.push(long);
+  s.accounts[long.id] = 0;
+  assert.equal(byId(s.businesses, long.id), long, 'index built with the old shop');
+  assert.equal(archiveClosedBusinesses(s), 1);
+  const fresh = { id: 'b9002', name: 'New Shop', status: 'TRADING', employees: [], inventory: {} };
+  s.businesses.push(fresh); // back to the length the index was built at
+  assert.equal(byId(s.businesses, fresh.id), fresh);
+  assert.equal(byId(s.businesses, long.id), null);
+});

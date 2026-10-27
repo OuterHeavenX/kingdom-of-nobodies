@@ -1,5 +1,6 @@
 import { DAYS_PER_YEAR } from '../core/Config.js';
 import { isTrading } from '../economy/Businesses.js';
+import { invalidateIds } from '../core/EntityRegistry.js';
 
 // Closed businesses are kept for history, but a long-lived town closes a few
 // every year and nearly every system scans state.businesses. Once a business
@@ -37,5 +38,8 @@ export function archiveClosedBusinesses(state) {
   let w = 0;
   for (const b of state.businesses) if (!ids.has(b.id)) state.businesses[w++] = b;
   state.businesses.length = w;
+  // The id index is rebuilt only when the length changes; a business opened
+  // later the same day would restore the old length and leave it stale.
+  invalidateIds(state.businesses);
   return moving.length;
 }
