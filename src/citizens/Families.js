@@ -56,7 +56,7 @@ export function dailyFamilies(state) {
     const b = living(state, a.family.spouseId);
     if (!b || a.id > b.id) continue;
     const ab = rel(state, a.id, b.id), ba = rel(state, b.id, a.id);
-    if ((ab.trust < FAMILY.divorceTrust || ba.trust < FAMILY.divorceTrust || ab.rivalry > 60 || ab.affection < 22) && chance(state, 0.2)) divorce(state, a, b);
+    if ((Math.min(ab.trust, ba.trust) < FAMILY.divorceTrust || Math.max(ab.rivalry, ba.rivalry) > 60 || Math.min(ab.affection, ba.affection) < 22) && chance(state, 0.2)) divorce(state, a, b);
   }
 }
 
@@ -99,12 +99,20 @@ export function divorce(state, a, b) {
     adjust(state, x.id, y.id, { affection: -30 });
     remember(state, x, `Separated from ${y.firstName}.`, 3, 'romance');
   }
-  // Whoever does not own the shared home moves back to the hall.
+  // If they share a home, whoever owns it stays; otherwise the parent caring for
+  // the children there keeps it, and failing that a coin toss decides. The
+  // children stay in their home, in the care of the parent who stays.
   const home = plotById(state, a.homePlotId);
-  const leaver = home?.ownerId === a.id ? b : a;
-  if (home && leaver.homePlotId === home.id) {
+  if (home && b.homePlotId === home.id) {
+    const minorsIn = (x) => state.citizens.filter((k) => k.homePlotId === home.id && k.family.guardianId === x.id && ageOf(state, k) < LIFE.adultAge).length;
+    const stayer = home.ownerId === a.id ? a : home.ownerId === b.id ? b
+      : minorsIn(a) !== minorsIn(b) ? (minorsIn(a) > minorsIn(b) ? a : b) : (chance(state, 0.5) ? a : b);
+    const leaver = stayer === a ? b : a;
     home.residents = home.residents.filter((id) => id !== leaver.id);
     leaver.homePlotId = null;
+    for (const k of state.citizens) {
+      if (k.homePlotId === home.id && k.family.guardianId === leaver.id && k.family.parentIds.includes(stayer.id) && ageOf(state, k) < LIFE.adultAge) k.family.guardianId = stayer.id;
+    }
   }
   record(state, 'relationships', `${a.firstName} and ${b.firstName} have divorced.`, { citizens: [a.id, b.id] }, 2);
 }
@@ -241,9 +249,10 @@ export function feedInfants(state) {
       const seller = state.businesses.filter((b) => isTrading(b) && FOOD_GOODS.some((f) => qty(b.inventory, f) > 0))
         .sort((x, y) => x.id.localeCompare(y.id))[0];
       const good = seller && FOOD_GOODS.find((f) => qty(seller.inventory, f) > 0);
-      if (good && transfer(state, g.id, seller.id, FAMILY.childCostPerDay * (GOODS[good].base > 3 ? 2 : 1), 'purchase', `food for baby ${c.firstName}`)) {
+      const price = good ? FAMILY.childCostPerDay * (GOODS[good].base > 3 ? 2 : 1) : 0;
+      if (good && transfer(state, g.id, seller.id, price, 'purchase', `food for baby ${c.firstName}`)) {
         removeGoods(seller.inventory, good, 1);
-        seller.today.revenue += FAMILY.childCostPerDay;
+        seller.today.revenue += price; // the books record what was actually paid
         fed = true;
       }
     }

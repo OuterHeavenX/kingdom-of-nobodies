@@ -2,7 +2,7 @@ import { byId } from '../core/EntityRegistry.js';
 import { SOCIAL } from '../core/Config.js';
 import { chance, nextRandom } from '../core/Random.js';
 import { trait } from '../ai/Personality.js';
-import { rel, adjust } from '../citizens/Relationships.js';
+import { peekRel, adjust } from '../citizens/Relationships.js';
 import { rumorIndex } from './Reputation.js';
 
 // Village gossip. A rumor is a claim about a citizen. Each citizen holds beliefs
@@ -45,7 +45,7 @@ export function shareGossip(state, speaker, listener) {
   if (!chance(state, SOCIAL.rumorShareChance)) return null;
   // A jealous speaker with a rival may invent a damaging rumor.
   if (trait(speaker, 'jealous') > 0.3 || trait(speaker, 'dishonest') > 0.4) {
-    const rival = state.citizens.find((o) => o.id !== speaker.id && o.id !== listener.id && rel(state, speaker.id, o.id).rivalry > 45);
+    const rival = state.citizens.find((o) => o.id !== speaker.id && o.id !== listener.id && (peekRel(state, speaker.id, o.id)?.rivalry ?? 0) > 45);
     if (rival && chance(state, 0.12 + trait(speaker, 'dishonest') * 0.1)) {
       const rumor = createRumor(state, {
         kind: 'cheat', subjectId: rival.id, truth: false, origin: speaker.id,
@@ -65,7 +65,7 @@ export function shareGossip(state, speaker, listener) {
 }
 
 function passOn(state, speaker, listener, rumor) {
-  const trust = rel(state, listener.id, speaker.id).trust / 100;
+  const trust = (peekRel(state, listener.id, speaker.id)?.trust ?? 45) / 100; // a stranger's word carries default trust
   const skeptic = trait(listener, 'honest') * 0.2 + trait(listener, 'stubborn') * 0.2;
   const confidence = speaker.beliefs[rumor.id].confidence * SOCIAL.rumorDecay * (0.4 + trust) - skeptic;
   if (confidence < 0.15) return null;

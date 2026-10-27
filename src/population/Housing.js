@@ -12,11 +12,23 @@ export function householdOf(state, c) {
   const members = new Set([c]);
   const spouse = byId(state.citizens, c.family.spouseId);
   if (spouse) members.add(spouse);
+  const ours = (x) => x === c || (spouse && x === spouse);
   for (const k of state.citizens) {
     if (ageOf(state, k) >= LIFE.adultAge) continue;
-    if (k.family.guardianId === c.id || k.family.parentIds.includes(c.id) || (spouse && (k.family.guardianId === spouse.id || k.family.parentIds.includes(spouse.id)))) members.add(k);
+    // A minor belongs to the household caring for them: their guardian's, or,
+    // with no living guardian on record, their only living parent's. A parent
+    // without custody does not take the child with them.
+    const g = k.family.guardianId;
+    const guardian = g && g !== 'council' ? byId(state.citizens, g) : null;
+    if (guardian ? ours(guardian) : g !== 'council' && parentInCharge(state, k, ours)) members.add(k);
   }
   return [...members];
+}
+
+/** With no living guardian on record: the only living parent, or else a parent the child lives with. */
+function parentInCharge(state, k, ours) {
+  const living = k.family.parentIds.map((id) => byId(state.citizens, id)).filter(Boolean);
+  return living.length === 1 ? ours(living[0]) : living.some((p) => ours(p) && p.homePlotId && p.homePlotId === k.homePlotId);
 }
 
 export function rehouseFamilies(state) {
