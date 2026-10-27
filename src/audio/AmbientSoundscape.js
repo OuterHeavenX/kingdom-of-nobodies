@@ -57,10 +57,20 @@ export function ambienceMix(e) {
   return { beds, events };
 }
 
+/** A chain of biquad filters, as an { input, output } pair: [[type, frequency, Q], ...]. */
+function chain(ctx, specs) {
+  const nodes = specs.map(([type, hz, q]) => { const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = hz; if (q != null) f.Q.value = q; return f; });
+  nodes.reduce((a, b) => a.connect(b));
+  return { input: nodes[0], output: nodes.at(-1) };
+}
+
+// Noise beds are filtered steeply. White noise carries most of its energy high up,
+// so a single gentle filter left a hiss that a phone speaker (which drops the
+// music's bass) played almost as loud as the music.
 const BED_FILTERS = {
-  wind: (ctx) => { const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 480; return f; },
-  crowd: (ctx) => { const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 700; f.Q.value = 1.1; return f; },
-  traffic: (ctx) => { const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 230; return f; },
+  wind: (ctx) => chain(ctx, [['lowpass', 420, 0.6], ['lowpass', 420, 0.6], ['lowpass', 600, 0.5]]),
+  crowd: (ctx) => chain(ctx, [['bandpass', 620, 0.8], ['lowpass', 1100, 0.6], ['lowpass', 1300, 0.5]]),
+  traffic: (ctx) => chain(ctx, [['lowpass', 230, 0.7], ['lowpass', 300, 0.6]]),
   machine: (ctx) => { const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 160; f.Q.value = 2; return f; },
   // Rain is two layers: a soft, band-limited wash, and a patter of drops whose
   // density flickers. (A plain high-passed hiss read as far louder than its level
@@ -83,7 +93,7 @@ const BED_FILTERS = {
   snowwind: (ctx) => { const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 0.8; return f; },
   crickets: (ctx) => { const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 4300; f.Q.value = 9; return f; },
 };
-const BED_LEVEL = { wind: 0.5, crowd: 0.35, traffic: 0.7, machine: 0.6, hum: 0.05, shimmer: 0.04, rain: 0.14, snowwind: 0.45, crickets: 0.25 };
+const BED_LEVEL = { wind: 0.16, crowd: 0.1, traffic: 0.38, machine: 0.4, hum: 0.05, shimmer: 0.04, rain: 0.065, snowwind: 0.45, crickets: 0.25 };
 // Slow swells that make a bed breathe (Hz, depth).
 const BED_LFO = { rain: [0.07, 0.3], wind: [0.13, 0.5], crowd: [0.4, 0.3], traffic: [0.08, 0.35], machine: [2.2, 0.6], snowwind: [0.2, 0.6], crickets: [11, 0.9] };
 
