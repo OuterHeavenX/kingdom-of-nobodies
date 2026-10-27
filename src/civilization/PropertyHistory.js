@@ -67,9 +67,16 @@ function push(state, plot, rec) {
   const list = (archive[plot.id] = archive[plot.id] ?? []);
   list.push({ d: state.day, ...rec });
   if (list.length > CIV.archivePerPlot) {
-    // Keep every structural change; thin out ownership and business notes, oldest first.
-    const i = list.findIndex((r, idx) => idx > 0 && !STRUCTURAL.has(r.k));
-    if (i > 0) list.splice(i, 1); else list.splice(1, 1);
+    // Thin out the oldest ownership and business note, else the oldest
+    // structural change; never the first record nor the one just added.
+    const last = list.length - 1;
+    let i = list.findIndex((r, idx) => idx > 0 && idx < last && !STRUCTURAL.has(r.k));
+    if (i < 0) i = 1;
+    const [gone] = list.splice(i, 1);
+    // The next record carries forward what the dropped one set, so replaying
+    // the list still ends at the plot's real owner and business.
+    const next = list[i];
+    for (const k of ['o', 'on', 'bz']) if (gone[k] !== undefined && next[k] === undefined) next[k] = gone[k];
   }
 }
 

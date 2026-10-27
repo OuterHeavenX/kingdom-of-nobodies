@@ -92,7 +92,7 @@ button.chip.active { background: #6a3fb5; border-color: var(--accent); color: #f
 .toggle input { width: 22px; height: 22px; accent-color: #ffc94a; }
 
 /* ---------- Milestone 3 ---------- */
-.search { width: 100%; padding: 10px 12px; border-radius: 11px; border: 1px solid #4b56b0; background: #141842; color: var(--text); font: inherit; font-size: 14px; }
+.search { width: 100%; padding: 10px 12px; border-radius: 11px; border: 1px solid #4b56b0; background: #141842; color: var(--text); font: inherit; font-size: 16px; } /* 16px or more: iPhone Safari does not zoom the page on focus */
 .search::placeholder { color: #9aa2e0; }
 .center { text-align: center; }
 .pyramid { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }

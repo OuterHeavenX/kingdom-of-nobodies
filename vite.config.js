@@ -29,6 +29,8 @@ function serviceWorker() {
       this.emitFile({ type: 'asset', fileName: 'sw.js', source: `// Kingdom of Nobodies service worker (generated at build ${BUILD}).
 const CACHE = 'kon-${version}';
 const PRECACHE = ${JSON.stringify(precache)};
+const ROOT = new URL('./', self.location.href).pathname;
+const isAppRoot = (url) => { const p = new URL(url).pathname; return p === ROOT || p === ROOT + 'index.html'; };
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
 });
@@ -40,7 +42,12 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
   if (req.mode === 'navigate') {
     // Network first, so a new deployment is never hidden behind a stale page.
-    e.respondWith(fetch(req).then((res) => { const copy = res.clone(); caches.open(CACHE).then((c) => c.put('./', copy)); return res; }).catch(() => caches.match('./')));
+    // Only a good copy of the game's own page is kept for offline play: never an
+    // error page, a redirect or some other page under the same origin.
+    e.respondWith(fetch(req).then((res) => {
+      if (res.ok && res.type === 'basic' && !res.redirected && isAppRoot(req.url)) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put('./', copy)); }
+      return res;
+    }).catch(() => caches.match('./')));
     return;
   }
   if (req.url.includes('/assets/') || req.url.includes('/icons/')) {

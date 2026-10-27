@@ -1,4 +1,4 @@
-import { validateEnvelope } from '../../../src/persistence/SaveValidation.js';
+import { validateEnvelope, MAX_SAVE_BYTES } from '../../../src/persistence/SaveValidation.js';
 
 // Kingdom of Nobodies — optional cloud backup service (Cloudflare Worker + D1).
 //
@@ -24,6 +24,10 @@ const SESSION_DAYS = 30;
 const KEEP_REVISIONS = 6;
 const LIMITS = { read: 120, write: 20 }; // requests per user per minute
 const SLOT = /^[a-z0-9-]{1,24}$/;
+const MAX_REQUEST_BYTES = MAX_SAVE_BYTES + 1024 * 1024; // the envelope plus a little JSON around it
+// D1 stores at most 2,000,000 bytes in one value; stored saves are gzipped
+// (about a tenth of their size) so long-lived kingdoms still fit.
+const MAX_STORED_BYTES = 1_950_000;
 
 const json = (body, status = 200, headers = {}) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers } });
 
@@ -49,20 +53,32 @@ async function aesKey(env) {
   const raw = Uint8Array.from(atob(env.SAVE_ENCRYPTION_KEY), (c) => c.charCodeAt(0));
   return crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt']);
 }
+async function gzip(text) {
+  return new Uint8Array(await new Response(new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
+}
+async function gunzip(bytes) {
+  return new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+}
+const unb64url = (s) => Uint8Array.from(atob(s.replaceAll('-', '+').replaceAll('_', '/') + '==='.slice((s.length + 3) % 4)), (c) => c.charCodeAt(0));
+
+// Stored forms: 'gz:<b64>' or 'aesgz:<iv>:<ct>' (gzipped, current), and the
+// older uncompressed 'plain:<text>' / 'aes:<iv>:<ct>', which are still read.
 async function seal(env, text) {
   const key = await aesKey(env);
-  if (!key) return 'plain:' + text;
+  const packed = await gzip(text);
+  if (!key) return 'gz:' + b64url(packed);
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(text));
-  return 'aes:' + b64url(iv) + ':' + b64url(ct);
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, packed);
+  return 'aesgz:' + b64url(iv) + ':' + b64url(ct);
 }
 async function unseal(env, stored) {
   if (stored.startsWith('plain:')) return stored.slice(6);
-  const [, ivs, cts] = stored.split(':');
-  const dec = (s) => Uint8Array.from(atob(s.replaceAll('-', '+').replaceAll('_', '/') + '==='.slice((s.length + 3) % 4)), (c) => c.charCodeAt(0));
+  if (stored.startsWith('gz:')) return gunzip(unb64url(stored.slice(3)));
+  const [kind, ivs, cts] = stored.split(':');
   const key = await aesKey(env);
   if (!key) throw new Error('encryption key missing');
-  return new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: dec(ivs) }, key, dec(cts)));
+  const plain = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64url(ivs) }, key, unb64url(cts)));
+  return kind === 'aesgz' ? gunzip(plain) : new TextDecoder().decode(plain);
 }
 
 // --- Sessions and rate limits ------------------------------------------------------
@@ -144,11 +160,14 @@ async function getSave(env, user, slot) {
   return json({ meta: metaOf(row), envelope: await unseal(env, row.body) });
 }
 
+/** Rows changed by a write (D1 reports it under meta; node:sqlite at the top level). */
+const changesOf = (res) => Number(res?.meta?.changes ?? res?.changes ?? 0);
+
 async function putSave(env, user, slot, req) {
   const len = Number(req.headers.get('content-length') ?? 0);
-  if (len > 7 * 1024 * 1024) return json({ error: 'save too large' }, 413);
+  if (len > MAX_REQUEST_BYTES) return json({ error: 'save too large' }, 413);
   const text = await req.text();
-  if (text.length > 7 * 1024 * 1024) return json({ error: 'save too large' }, 413);
+  if (text.length > MAX_REQUEST_BYTES) return json({ error: 'save too large' }, 413);
   let body;
   try { body = JSON.parse(text); } catch { return json({ error: 'request is not JSON' }, 400); }
   const check = validateEnvelope(body?.envelope);
@@ -164,14 +183,30 @@ async function putSave(env, user, slot, req) {
   const revision = (current?.revision ?? 0) + 1;
   const m = check.meta;
   const sealed = await seal(env, body.envelope);
+  if (sealed.length > MAX_STORED_BYTES) return json({ error: 'save too large for cloud storage' }, 413);
   const now = Date.now();
-  if (current) await env.DB.prepare('INSERT INTO save_revisions (user_id, slot, revision, saved_at, uploaded_at, device, version, day, year, population, checksum, bytes, kingdom_name, body) SELECT user_id, slot, revision, saved_at, uploaded_at, device, version, day, year, population, checksum, bytes, kingdom_name, body FROM saves WHERE user_id = ? AND slot = ?').bind(user.id, slot).run();
-  await env.DB.prepare('INSERT INTO saves (user_id, slot, revision, saved_at, uploaded_at, device, version, day, year, population, checksum, bytes, kingdom_name, body) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(user_id, slot) DO UPDATE SET revision = excluded.revision, saved_at = excluded.saved_at, uploaded_at = excluded.uploaded_at, device = excluded.device, version = excluded.version, day = excluded.day, year = excluded.year, population = excluded.population, checksum = excluded.checksum, bytes = excluded.bytes, kingdom_name = excluded.kingdom_name, body = excluded.body')
-    .bind(user.id, slot, revision, m.savedAt, now, device, m.version, m.day, m.year, m.population, m.checksum, m.bytes, m.kingdomName, sealed).run();
+  const cols = [revision, m.savedAt, now, device, m.version, m.day, m.year, m.population, m.checksum, m.bytes, m.kingdomName, sealed];
+  // Compare-and-swap: the row is replaced only if it still holds the revision
+  // this request was checked against, so two uploads racing from the same base
+  // cannot both succeed (the loser gets the usual 409 and the player chooses).
+  // The replaced copy joins the backup history in the same batch (one
+  // transaction): if either write fails, neither happens and the cloud kingdom
+  // stays as it was. Both statements are guarded by the revision, so a lost
+  // race copies nothing.
+  const res = current
+    ? (await env.DB.batch([
+      env.DB.prepare('INSERT OR IGNORE INTO save_revisions (user_id, slot, revision, saved_at, uploaded_at, device, version, day, year, population, checksum, bytes, kingdom_name, body) SELECT user_id, slot, revision, saved_at, uploaded_at, device, version, day, year, population, checksum, bytes, kingdom_name, body FROM saves WHERE user_id = ? AND slot = ? AND revision = ?').bind(user.id, slot, current.revision),
+      env.DB.prepare('UPDATE saves SET revision = ?, saved_at = ?, uploaded_at = ?, device = ?, version = ?, day = ?, year = ?, population = ?, checksum = ?, bytes = ?, kingdom_name = ?, body = ? WHERE user_id = ? AND slot = ? AND revision = ?').bind(...cols, user.id, slot, current.revision),
+    ]))[1]
+    : await env.DB.prepare('INSERT INTO saves (revision, saved_at, uploaded_at, device, version, day, year, population, checksum, bytes, kingdom_name, body, user_id, slot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(user_id, slot) DO NOTHING').bind(...cols, user.id, slot).run();
+  if (!changesOf(res)) {
+    const latest = await env.DB.prepare('SELECT * FROM saves WHERE user_id = ? AND slot = ?').bind(user.id, slot).first();
+    return json({ conflict: true, meta: metaOf(latest) }, 409);
+  }
   // Keep a bounded backup history.
   await env.DB.prepare('DELETE FROM save_revisions WHERE user_id = ? AND slot = ? AND revision <= ?').bind(user.id, slot, revision - 1 - KEEP_REVISIONS).run();
-  const row = await env.DB.prepare('SELECT * FROM saves WHERE user_id = ? AND slot = ?').bind(user.id, slot).first();
-  return json({ meta: metaOf(row) });
+  // What this request wrote (a later upload may already have replaced it).
+  return json({ meta: metaOf({ slot, revision, saved_at: m.savedAt, uploaded_at: now, device, version: m.version, day: m.day, year: m.year, population: m.population, checksum: m.checksum, bytes: m.bytes, kingdom_name: m.kingdomName }) });
 }
 
 async function listRevisions(env, user, slot) {

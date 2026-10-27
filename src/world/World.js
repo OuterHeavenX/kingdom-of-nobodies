@@ -292,6 +292,8 @@ export class World {
       if (node) { this.plotLayer.remove(node); disposeBaked(node); this.unghost(plot.id); }
       node = this.makePlot(plot, project, business, stageProgress, open, status, selected, burning.has(plot.id), season);
       node.userData.sig = sig;
+      // Then & Now draws this property itself; the real building stays hidden until it ends.
+      if (this.thenNow?.plotId === plot.id) node.visible = false;
       this.plotLayer.add(node);
       this.plotNodes.set(plot.id, node);
       cranesChanged = true;
@@ -299,6 +301,7 @@ export class World {
     for (const [id, node] of this.plotNodes) if (!s.plots.some((p) => p.id === id)) { this.plotLayer.remove(node); disposeBaked(node); this.plotNodes.delete(id); cranesChanged = true; }
     if (cranesChanged || force) this.refreshSkyline();
     if (s.council.marketplace && !this.market) this.market = this.makeMarket();
+    else if (!s.council.marketplace && this.market) { this.village.remove(this.market); disposeBaked(this.market); this.market = null; }
     this.syncMemorial();
     this.syncRoadWorks();
   }
@@ -361,7 +364,7 @@ export class World {
   ghost(pid) {
     const node = this.plotNodes.get(pid);
     const plot = this.sim.state.plots.find((p) => p.id === pid);
-    if (!node || !plot?.building) return;
+    if (!node || !plot?.building || this.thenNow?.plotId === pid) return;
     const dm = buildingDims(plot, plot.building);
     const box = new THREE.Mesh(G.box(), GHOST);
     box.scale.set(dm.w, dm.h, dm.d);
@@ -417,9 +420,7 @@ export class World {
     const clip = (group, plane) => {
       group.traverse((o) => {
         if (!o.isMesh) return;
-        o.material = o.material.clone();
-        o.material.clippingPlanes = [plane];
-        o.material.clipShadows = true;
+        o.material = clippedCopy(o.material, plane);
         o.userData.ownMaterial = true;
       });
     };
@@ -460,7 +461,9 @@ export class World {
     const t = this.thenNow;
     if (!t) return;
     this.village.remove(t.root);
-    t.root.traverse((o) => { if (o.isMesh && o.userData.ownMaterial) o.material.dispose(); if (o.isMesh && o.userData.ownGeometry) o.geometry.dispose(); });
+    t.root.traverse((o) => { if (o.isMesh && o.userData.ownMaterial) o.material.dispose(); });
+    disposeBaked(t.root); // its own geometry and the instance buffers of crops and the like
+
     const node = this.plotNodes.get(t.plotId);
     if (node) node.visible = true;
     this.renderer.localClippingEnabled = false;
@@ -468,10 +471,27 @@ export class World {
     if (restoreView) this.focusOn(t.plot.x, t.plot.z);
   }
 
+  /**
+   * Then & Now's clipped copies follow their originals' light: night window
+   * glow, the forge's flicker, fading. Called each frame while it is shown.
+   */
+  syncThenNowMaterials() {
+    this.thenNow?.root.traverse((o) => {
+      const src = o.isMesh && o.userData.ownMaterial ? o.material.userData.clippedFrom : null;
+      if (!src) return;
+      if (src.emissiveIntensity !== undefined) o.material.emissiveIntensity = src.emissiveIntensity;
+      o.material.opacity = src.opacity;
+    });
+  }
+
   /** The Founders' Memorial stands in the square; it gains a crown once every founder has passed. */
   syncMemorial() {
     const s = this.sim.state;
-    if (!s.monuments?.some((m) => m.id === 'founders')) return;
+    if (!s.monuments?.some((m) => m.id === 'founders')) {
+      // A new, imported or restored kingdom may have none.
+      if (this.memorial) { this.village.remove(this.memorial); disposeBaked(this.memorial); this.memorial = null; }
+      return;
+    }
     const allPassed = !s.citizens.some((c) => c.founder);
     if (this.memorial && this.memorial.userData.allPassed === allPassed) return;
     if (this.memorial) this.village.remove(this.memorial);
@@ -793,6 +813,7 @@ export class World {
     this.terrain.fire.scale.y = 1.5 * flicker;
     this.terrain.fireLight.intensity = (8 + night * 40) * flicker;
     forgeGlow.emissiveIntensity = 1 + Math.sin(time * 5) * 0.3;
+    if (this.thenNow) this.syncThenNowMaterials();
     // Trees sway with the wind of the day.
     if (this.mode === 'village' && this.terrain.treeGroup) this.terrain.treeGroup.rotation.z = Math.sin(time * 1.3) * 0.004 * weather.wind;
     if (this.mode !== 'village') return;
@@ -853,6 +874,21 @@ export class World {
 function stageFraction(p) {
   const s = stagesFor(p.kind, p)[p.stageIndex];
   return s ? Math.min(1, p.work / s.work) : 0;
+}
+
+/**
+ * A copy of a material clipped by `plane`. Material.clone() does not carry
+ * onBeforeCompile, so the snow shader (and its program key) are passed on by
+ * hand; `clippedFrom` lets the copy follow the original's glow each frame.
+ */
+export function clippedCopy(material, plane) {
+  const m = material.clone();
+  if (material.onBeforeCompile !== THREE.Material.prototype.onBeforeCompile) m.onBeforeCompile = material.onBeforeCompile;
+  if (material.customProgramCacheKey !== THREE.Material.prototype.customProgramCacheKey) m.customProgramCacheKey = material.customProgramCacheKey;
+  m.clippingPlanes = [plane];
+  m.clipShadows = true;
+  m.userData.clippedFrom = material;
+  return m;
 }
 
 const GHOST = new THREE.MeshStandardMaterial({ color: '#cfe6f2', transparent: true, opacity: 0.18, roughness: 0.2, metalness: 0.3, depthWrite: false });

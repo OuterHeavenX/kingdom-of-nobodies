@@ -72,11 +72,32 @@
       window.addEventListener('unhandledrejection', function (e) {
         if (!window.__konStarted) window.__konFail('Something went wrong while starting', String((e.reason && e.reason.message) || e.reason));
       });
-      setTimeout(function () {
-        if (window.__konStarted) return;
-        if (!sessionStorage.getItem('kon-retried')) { sessionStorage.setItem('kon-retried', '1'); window.__konReload(); return; }
+      // Watchdog, aware of progress: a slow first download (or a big kingdom being
+      // raised) is not a hang. The clock restarts whenever a file finishes
+      // downloading, the loading screen reports a step, the main thread was busy
+      // working, or the page was in the background. Only a long silence counts:
+      // then one fresh reload is tried, and after that the player is asked.
+      var STALL = 20000, last = Date.now(), tick = last;
+      var bump = function () { last = Date.now(); };
+      try { new PerformanceObserver(bump).observe({ type: 'resource' }); } catch (err) { /* older browsers: steps and busy time still count */ }
+      document.addEventListener('DOMContentLoaded', function () {
+        var b = document.getElementById('boot');
+        if (b && window.MutationObserver) new MutationObserver(bump).observe(b, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['style'] });
+      });
+      document.addEventListener('visibilitychange', bump);
+      var retried = function () { try { return !!sessionStorage.getItem('kon-retried'); } catch (err) { return true; } };
+      var watch = setInterval(function () {
+        var now = Date.now();
+        if (now - tick > 3000) bump(); // the page was busy (or asleep), not stalled
+        tick = now;
+        if (document.hidden) bump();
+        if (window.__konStarted || failed) { clearInterval(watch); return; }
+        if (now - last < STALL) return;
+        clearInterval(watch);
+        if (navigator.onLine === false) { window.__konFail('You are offline', 'The game needs a connection the first time it loads. Reconnect and tap below to try again.'); return; }
+        if (!retried()) { try { sessionStorage.setItem('kon-retried', '1'); } catch (err) { /* ignore */ } window.__konReload(); return; }
         window.__konFail('The kingdom is taking too long to load', 'Check your connection and tap below to try again.');
-      }, 15000);
+      }, 1000);
     })();
   </script>
 </head>

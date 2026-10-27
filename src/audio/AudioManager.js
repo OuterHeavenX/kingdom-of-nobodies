@@ -217,10 +217,11 @@ export class AudioManager {
     }
     const g = this.ctx.createGain();
     g.gain.value = gain;
-    let out = g;
-    if (this.ctx.createStereoPanner) { const pn = this.ctx.createStereoPanner(); pn.pan.value = pan; g.connect(pn); pn.connect(this.mixer.bus[bus]); } else g.connect(this.mixer.bus[bus]);
-    SFX[kind](this.ctx, out, now + 0.02);
-    setTimeout(() => { try { g.disconnect(); } catch { /* ignore */ } }, 4000);
+    let pn = null;
+    if (this.ctx.createStereoPanner) { pn = this.ctx.createStereoPanner(); pn.pan.value = pan; g.connect(pn); pn.connect(this.mixer.bus[bus]); } else g.connect(this.mixer.bus[bus]);
+    SFX[kind](this.ctx, g, now + 0.02);
+    // Both nodes are let go once the effect has rung out (a panner left connected to the bus would never be freed).
+    setTimeout(() => { try { g.disconnect(); pn?.disconnect(); } catch { /* ignore */ } }, 4000);
     return true;
   }
 
