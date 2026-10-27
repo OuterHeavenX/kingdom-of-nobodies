@@ -10,7 +10,8 @@ import { createBusiness, staffCap } from '../src/economy/Businesses.js';
 import { addGoods, qty } from '../src/economy/Inventory.js';
 import { restockAll, sellGathered } from '../src/economy/Marketplace.js';
 import { closeDay } from '../src/economy/EconomyManager.js';
-import { openBusiness, estimateMaterialsCost } from '../src/property/Construction.js';
+import { updateOpenings } from '../src/economy/Employment.js';
+import { openBusiness } from '../src/property/Construction.js';
 import { planFor } from '../src/ai/GoalPlanner.js';
 import { deposit, depositOf, raiseCash, spendable } from '../src/finance/BankAccounts.js';
 import { createBank, settleBeforeLeaving } from '../src/finance/BankManager.js';
@@ -116,17 +117,42 @@ test('new business: opening draws working capital from savings in the bank, not 
   assert.equal(totalMoney(state), money);
 });
 
-test('new business: a would-be owner budgets for working capital, not just the premises', () => {
+test('new business: a founder saves the working capital before starting work on the premises', () => {
   const { state } = makeSim();
   const dain = byName(state, 'Dain');
   dain.traits.riskTaking = 0;
   dain.dream = { type: 'business', businessType: 'general_store', text: 'Open a general store' };
-  dain.venture = {};
-  for (const p of state.plots) if (p.name !== 'Crossroads Corner' && p.marketStatus === 'FOR_SALE') p.marketStatus = 'NOT_FOR_SALE';
-  const plan = planFor(state, dain);
-  const required = Number(plan.steps.map((s) => s.label.match(/^Save (\d+) coins/)).find(Boolean)?.[1]);
-  const premises = plot(state, 'Crossroads Corner').price + estimateMaterialsCost(state, 'refit');
-  assert.ok(required >= premises + 40, `saving for ${required} coins against premises of ${premises}`);
+  const shop = plot(state, 'Crossroads Corner');
+  shop.ownerId = dain.id; shop.marketStatus = 'NOT_FOR_SALE';
+  dain.venture = { plotId: shop.id };
+  drain(state, dain.id); fund(state, dain.id, 10);
+  let plan = planFor(state, dain);
+  assert.ok(!plan.actions.some((a) => a.kind === 'start_project'), 'no refit with 10 coins and an empty till ahead');
+  assert.ok(plan.need >= 40, `still to save: ${plan.need}`);
+  fund(state, dain.id, 60);
+  plan = planFor(state, dain);
+  assert.ok(plan.actions.some((a) => a.kind === 'start_project'), 'with the capital saved, work can start');
+});
+
+test('jobs: a thriving business at full strength takes on extra hands, and lets the place go when trade turns', () => {
+  const { state } = makeSim();
+  const farm = bizByName(state, 'Sunfield Farm');
+  fund(state, farm.id, 400);
+  const usual = staffCap(farm);
+  for (let i = 0; farm.employees.length + 1 < usual; i++) {
+    const c = { ...structuredClone(byName(state, 'Dain')), id: `cx${i + 30}`, employment: { businessId: farm.id, role: 'worker', wage: 6, since: 1, unpaid: 0 } };
+    state.citizens.push(c); state.accounts[c.id] = 0; farm.employees.push(c.id);
+  }
+  farm.status = 'OPEN';
+  farm.history = Array.from({ length: 6 }, (_, i) => ({ day: state.day - 6 + i, revenue: 60, expenses: 40, profit: 20, customers: 8, produced: 20, cash: 400 }));
+  updateOpenings(state, farm);
+  assert.equal(staffCap(farm), usual + 1, 'room for one more');
+  assert.equal(farm.openings, 1, 'and it is hiring');
+  updateOpenings(state, farm);
+  assert.equal(staffCap(farm), usual + 1, 'at most one extra place at a time');
+  farm.status = 'STRUGGLING';
+  updateOpenings(state, farm);
+  assert.equal(staffCap(farm), usual, 'the unfilled extra place goes when trade turns');
 });
 
 test('new business: the number a market supports grows with the town', () => {

@@ -52,7 +52,10 @@ export const BUSINESS_TYPES = {
 };
 
 /** Staff a business can employ: bigger premises (upgrades, modern rebuilds) take more hands. */
-export const staffCap = (b) => BUSINESS_TYPES[b.type].maxStaff + ((b.level ?? 1) - 1) * 2 + (b.premisesStaff ?? 0);
+export const staffCap = (b) => BUSINESS_TYPES[b.type].maxStaff + ((b.level ?? 1) - 1) * 2 + (b.premisesStaff ?? 0) + (b.extraStaff ?? 0);
+
+/** Most extra hands a thriving business takes on beyond its premises' usual staff (see Employment.updateOpenings). */
+export const maxExtraStaff = (b) => (BUSINESS_TYPES[b.type].civic ? 0 : Math.ceil(BUSINESS_TYPES[b.type].maxStaff / 2));
 
 /** Systems that change how productive premises are (architecture, technology, utilities) register here. */
 export const productionHooks = [];

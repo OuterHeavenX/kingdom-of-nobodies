@@ -4,7 +4,7 @@ import { workOnRoad } from '../navigation/RoadConstruction.js';
 import { byId } from '../core/EntityRegistry.js';
 import { ECONOMY } from '../core/Config.js';
 import { transfer, balance } from './Transactions.js';
-import { BUSINESS_TYPES, businessById, isTrading, produce, staffCap } from './Businesses.js';
+import { BUSINESS_TYPES, businessById, isTrading, produce, staffCap, maxExtraStaff } from './Businesses.js';
 import { baseWage, productivity, improveSkill, skillFor, SKILL_FOR_BUSINESS, PROFESSION_FOR_BUSINESS } from '../citizens/Careers.js';
 import { adjust, adjustBoth, peekRel } from '../citizens/Relationships.js';
 import { bump } from '../society/Reputation.js';
@@ -158,6 +158,15 @@ export function updateOpenings(state, b) {
   const cash = balance(state, b.id);
   const affordable = cash >= cashReserve(state, b) + 6 * 4;
   const flush = cash >= cashReserve(state, b) + 60;
+  // Demand-led growth: a business at full strength that is making money and has cash to spare
+  // takes on another pair of hands (at most one every six days, up to half its usual staff
+  // again); when trade turns and a place stands empty, the extra place goes.
+  const extra = b.extraStaff ?? 0;
+  const profit6 = b.history.slice(-6).reduce((s, h) => s + h.profit, 0);
+  if (b.status === 'OPEN' && staff >= staffCap(b) && flush && b.history.length >= 6 && profit6 > 0 && extra < maxExtraStaff(b) && state.day - (b.grewDay ?? -99) >= 6) {
+    b.extraStaff = extra + 1;
+    b.grewDay = state.day;
+  } else if (extra > 0 && staff < staffCap(b) && (b.status !== 'OPEN' || profit6 <= 0)) b.extraStaff = extra - 1;
   b.openings = b.status === 'OPEN' && (lowStock || flush) && affordable && staff < staffCap(b) ? 1 : 0;
   if (b.type === 'works') b.openings = cash >= 14 && b.employees.length < staffCap(b) ? 2 : 0;
   if (b.ownerId === 'council' && b.employees.length === 0 && b.status === 'OPEN') b.openings = Math.max(b.openings, 1);

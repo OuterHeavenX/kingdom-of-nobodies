@@ -271,14 +271,23 @@ export function councilDaily(state) {
       x.history.slice(-6).reduce((t, h) => t + h.customers, 0) >= 3);
     if (b) { b.lastGrantDay = state.day; COUNCIL_ACTIONS.supportBusiness(state, b.id); }
   }
-  // The hungriest are fed first when the pantry runs short (not whoever has lived here longest).
-  const destitute = state.citizens.filter((c) => balance(state, c.id) < 3 && c.needs.hunger <= 30)
-    .sort((a, b) => a.needs.hunger - b.needs.hunger || a.id.localeCompare(b.id));
+  // The hungriest are fed first when the pantry runs short (not whoever has lived here longest):
+  // the penniless and hungry, and anyone already starving with no food in hand (the sick, the
+  // frail), who pays the pantry price if they can. Someone starving gets a second portion.
+  const hasFood = (c) => FOOD_GOODS.some((g) => qty(c.inventory, g) > 0);
+  const destitute = state.citizens.filter((c) => c.needs.hunger <= 30 && !c.away && (balance(state, c.id) < 3 || (c.health?.starvingDays > 0 && !hasFood(c))))
+    .sort((a, b) => (b.health?.starvingDays ?? 0) - (a.health?.starvingDays ?? 0) || a.needs.hunger - b.needs.hunger || a.id.localeCompare(b.id));
   for (const c of destitute) {
-    const good = FOOD_GOODS.find((g) => qty(state.council.pantry, g) > 0);
-    if (!good) break;
-    moveGoods(state.council.pantry, c.inventory, good, 1);
-    remember(state, c, 'The council fed me when I had nothing.', 1, 'council');
+    const portions = c.health?.starvingDays > 0 ? 2 : 1;
+    for (let i = 0; i < portions; i++) {
+      const good = FOOD_GOODS.find((g) => qty(state.council.pantry, g) > 0);
+      if (!good) break;
+      const price = ECONOMY.councilPantryPrice + 1;
+      if (balance(state, c.id) >= price + 2) transfer(state, c.id, 'treasury', price, 'purchase', `${good} from the council pantry`);
+      moveGoods(state.council.pantry, c.inventory, good, 1);
+    }
+    remember(state, c, 'The council fed me when I was going hungry.', 1, 'council');
+    if (!FOOD_GOODS.some((g) => qty(state.council.pantry, g) > 0)) break;
   }
   const surplus = balance(state, 'treasury') - COUNCIL.reserve;
   // Standing policy: a large surplus funds a founding grant for a would-be business owner.

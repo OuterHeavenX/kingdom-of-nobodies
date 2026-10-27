@@ -1,5 +1,5 @@
 import { byId } from '../core/EntityRegistry.js';
-import { ECONOMY, GOODS } from '../core/Config.js';
+import { ECONOMY, GOODS, LIFE, DAYS_PER_YEAR } from '../core/Config.js';
 import { transfer, balance } from './Transactions.js';
 import { qty, removeGoods, addGoods } from './Inventory.js';
 import { BUSINESS_TYPES, isTrading, freshLedger, workingCapital, NEW_BUSINESS_GRACE_DAYS } from './Businesses.js';
@@ -85,7 +85,9 @@ export function ownerTopUp(state, b) {
   const capital = workingCapital(b.type);
   const target = Math.max(Math.round(capital * 0.6), cashReserve(state, b) + 12);
   const room = capital * 2 - (b.ownerInjected ?? 0);
-  const amount = Math.min(target - balance(state, b.id), spendable(state, owner.id) - OWNER_CUSHION, room);
+  // The owner keeps food money for themselves and each child in their care.
+  const dependants = state.citizens.filter((k) => k.family?.guardianId === owner.id || (k.family?.parentIds?.includes(owner.id) && state.day - k.birthDay < LIFE.adultAge * DAYS_PER_YEAR)).length;
+  const amount = Math.min(target - balance(state, b.id), spendable(state, owner.id) - OWNER_CUSHION - 8 * dependants, room);
   if (amount < 3) return 0;
   if (balance(state, owner.id) < amount) raiseCash(state, owner.id, amount);
   if (!transfer(state, owner.id, b.id, amount, 'capital', `${owner.firstName} put more money into ${b.name}`)) return 0;
