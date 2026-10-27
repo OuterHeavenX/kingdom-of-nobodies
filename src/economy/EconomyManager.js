@@ -1,8 +1,8 @@
 import { byId } from '../core/EntityRegistry.js';
-import { ECONOMY, GOODS } from '../core/Config.js';
+import { ECONOMY, GOODS, LIFE, DAYS_PER_YEAR } from '../core/Config.js';
 import { transfer, balance } from './Transactions.js';
 import { qty, removeGoods, addGoods } from './Inventory.js';
-import { BUSINESS_TYPES, isTrading, freshLedger } from './Businesses.js';
+import { BUSINESS_TYPES, isTrading, freshLedger, workingCapital, NEW_BUSINESS_GRACE_DAYS } from './Businesses.js';
 import { adjustPrices, cashReserve, ownerAccount } from './Marketplace.js';
 import { layOff, leaveJob, updateOpenings, wageBill } from './Employment.js';
 import { listForSale } from '../property/Ownership.js';
@@ -69,8 +69,43 @@ export function recentProfit(b, days = 3) {
   return b.history.slice(-days).reduce((s, h) => s + h.profit, 0);
 }
 
+/** Coins an owner keeps for themselves (food, rent) before putting more into the business. */
+const OWNER_CUSHION = 12;
+
+/**
+ * An owner whose business is short of cash puts in more of their own money
+ * (cash in hand, then savings), at most every few days and up to twice the
+ * business's working capital over its life, so a shop that simply has no
+ * customers still closes. Every coin moves through the ledger.
+ */
+export function ownerTopUp(state, b) {
+  const owner = byId(state.citizens, b.ownerId);
+  if (!owner || BUSINESS_TYPES[b.type].civic || !isTrading(b)) return 0;
+  if (state.day - (b.lastTopUpDay ?? -99) < 3) return 0;
+  const capital = workingCapital(b.type);
+  const target = Math.max(Math.round(capital * 0.6), cashReserve(state, b) + 12);
+  const room = capital * 2 - (b.ownerInjected ?? 0);
+  // The owner keeps food money for themselves and each child in their care.
+  const dependants = state.citizens.filter((k) => k.family?.guardianId === owner.id || (k.family?.parentIds?.includes(owner.id) && state.day - k.birthDay < LIFE.adultAge * DAYS_PER_YEAR)).length;
+  const amount = Math.min(target - balance(state, b.id), spendable(state, owner.id) - OWNER_CUSHION - 8 * dependants, room);
+  if (amount < 3) return 0;
+  if (balance(state, owner.id) < amount) raiseCash(state, owner.id, amount);
+  if (!transfer(state, owner.id, b.id, amount, 'capital', `${owner.firstName} put more money into ${b.name}`)) return 0;
+  b.ownerInjected = (b.ownerInjected ?? 0) + amount;
+  b.lastTopUpDay = state.day;
+  remember(state, owner, `Put ${amount} coins of my own into ${b.name} to keep it going.`, 1, 'career');
+  return amount;
+}
+
 function updateLifecycle(state, b, startup) {
   if (startup || BUSINESS_TYPES[b.type].civic) return;
+  // A new business is given time to find its customers before it is judged.
+  if (state.day - b.foundedDay < NEW_BUSINESS_GRACE_DAYS) {
+    if (b.unpaidShifts > 0 || balance(state, b.id) < cashReserve(state, b) + 5) ownerTopUp(state, b);
+    b.unpaidShifts = 0;
+    return;
+  }
+  if (b.status === 'STRUGGLING' || b.unpaidShifts > 0 || balance(state, b.id) < cashReserve(state, b) + 5) ownerTopUp(state, b);
   const cash = balance(state, b.id);
   const losing = recentProfit(b, 3) < 0;
   const noTrade = b.history.slice(-3).every((h) => h.revenue === 0);

@@ -1,4 +1,5 @@
 import { balance } from '../economy/Transactions.js';
+import { councilCooldown } from '../council/Council.js';
 import { GOODS } from '../core/Config.js';
 import { BUSINESS_TYPES, isTrading, retailPrice } from '../economy/Businesses.js';
 import { economySnapshot, recentProfit } from '../economy/EconomyManager.js';
@@ -86,7 +87,7 @@ export function businessDetail(sim, id) {
   <div class="grid2">
     <button class="btn" data-act="focus-plot" data-id="${b.plotId}">📍 Show in village</button>
     <button class="btn" data-act="history" data-kind="business" data-id="${b.id}">📜 History</button>
-    ${isTrading(b) && b.ownerId !== 'council' ? `<button class="btn primary" data-act="council" data-action="supportBusiness" data-id="${b.id}" ${balance(s, 'treasury') < 20 ? 'disabled' : ''}>🤝 Grant 20🪙</button>` : ''}
+    ${isTrading(b) && b.ownerId !== 'council' ? ((wait) => `<button class="btn primary" data-act="council" data-action="supportBusiness" data-id="${b.id}" ${wait || balance(s, 'treasury') < 20 ? 'disabled' : ''} title="${esc(wait ?? (balance(s, 'treasury') < 20 ? 'The treasury cannot afford it.' : ''))}">🤝 ${wait ? 'Granted this season' : 'Grant 20🪙'}</button>`)(councilCooldown(s, 'supportBusiness', b.id)) : ''}
   </div>`;
   return { title: b.name, html };
 }

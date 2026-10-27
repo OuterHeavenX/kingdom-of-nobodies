@@ -36,8 +36,17 @@ const HAIR = ['short', 'long', 'bun', 'bald', 'braid', 'curly'];
 const HAIR_COLORS = ['#3b2a1e', '#6b4226', '#a8763e', '#d9b36c', '#2a2a2a', '#8c3b22'];
 const SKIN = ['#f2cfab', '#e0b48c', '#c68e64', '#9a6844', '#f5d9c0'];
 
+/** Share of adults out of work above which lone job-seekers wait for an opening before coming. */
+export const JOBSEEKER_GATE = 0.2;
+
+/** How strongly joblessness puts off former villagers thinking of coming home (as before for everyone). */
+export const RETURNING_PENALTY = 1.6;
+
+/** How strongly joblessness in the village puts newcomers off. */
+export const JOBLESS_PENALTY = 2.8;
+
 /** How appealing the village looks to outsiders right now (0 = not at all). */
-export function attractiveness(state) {
+export function attractiveness(state, joblessPenalty = JOBLESS_PENALTY) {
   const pop = state.citizens.length;
   if (pop >= state.populationCap) return { score: 0, reasons: ['the village is full'] };
   const free = publicBeds(state) - state.citizens.filter((c) => !c.homePlotId).length;
@@ -53,9 +62,11 @@ export function attractiveness(state) {
   // without this a jobless town kept filling until its children went hungry.
   const joblessShare = jobless / Math.max(4, adults.length);
   const bedPull = Math.min(0.5, free * 0.05) * Math.max(0, 1 - 2 * joblessShare);
-  let score = 0.4 + bedPull + openings * (jobless > 2 ? 0.05 : 0.2) + Math.min(0.3, foodPerHead * 0.05) + (mood - 50) / 100 - 1.6 * joblessShare - (troubled ? 0.4 : 0);
+  // Word of a poor job market travels: with 1.6 here, newcomers kept arriving until about half
+  // the village's adults were out of work, however many jobs were added.
+  let score = 0.4 + bedPull + openings * (jobless > 2 ? 0.05 : 0.2) + Math.min(0.3, foodPerHead * 0.05) + (mood - 50) / 100 - joblessPenalty * joblessShare - (troubled ? 0.4 : 0);
   if (pop < 12) score += 0.3; // a tiny hamlet needs hands
-  return { score: Math.max(0, score), free };
+  return { score: Math.max(0, score), free, openings, joblessShare };
 }
 
 function neededTrade(state) {
@@ -92,12 +103,16 @@ function newPerson(state, { sex, age, lastName, profession, dream, parents = [] 
 
 /** Daily: perhaps a household arrives. */
 export function maybeImmigrate(state) {
-  const { score, free } = attractiveness(state);
+  const { score, free, openings, joblessShare } = attractiveness(state);
   if (!chance(state, Math.min(0.4, score * 0.14))) return null;
   const need = neededTrade(state);
   const lastName = pick(state, LAST);
   const roll = nextRandom(state);
   const size = roll < 0.5 || free < 2 ? 1 : roll < 0.8 || free < 3 ? 2 : Math.min(free, 2 + intRange(state, 1, 2));
+  // A lone job-seeker does not come while nobody is hiring and many are already out of work;
+  // families and people fleeing a war still do.
+  const war = Object.values(state.region?.settlements ?? {}).some((k) => k.besieged || k.mobilised);
+  if (size === 1 && !war && openings === 0 && joblessShare >= JOBSEEKER_GATE) return null;
   const firstSex = nextRandom(state) < 0.5 ? 'F' : 'M';
   const members = [newPerson(state, { sex: firstSex, age: nextRandom(state) < 0.8 ? intRange(state, 18, 32) : intRange(state, 33, 46), lastName, profession: need.profession, dream: need.dream })];
   if (size >= 2) {
@@ -205,7 +220,8 @@ export function maybeReturn(state) {
     const k = state.region.settlements[p.destination];
     const kinHome = [...p.family.parentIds, ...p.family.childIds].some((id) => state.citizens.some((c) => c.id === id));
     const odds = 0.02 + (k.hunger > 0.1 ? 0.12 : 0) + (k.prosperity < 0.85 ? 0.08 : 0) + (kinHome ? 0.05 : 0);
-    if (attractiveness(state).score < 0.3 || !chance(state, odds)) continue;
+    // Those coming home to kin and a place they know mind the job market less than strangers.
+    if (attractiveness(state, RETURNING_PENALTY).score < 0.3 || !chance(state, odds)) continue;
     // Only the household that left together comes back together.
     const group = alive.filter((x) => x.destination === p.destination && x.leftDay === p.leftDay && (x.householdId ?? null) === (p.householdId ?? null));
     return returnHome(state, group, k);

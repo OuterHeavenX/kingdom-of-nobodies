@@ -12,10 +12,16 @@ import { isLive, seasonKey } from './LoanManager.js';
 export function accrueLoan(state, loan) {
   const key = seasonKey(state.day);
   if (!isLive(loan) || loan.accruedSeason >= key || loan.balance <= 0) return 0;
-  const interest = Math.max(1, Math.round(loan.balance * loan.rate / 4));
+  // Exact interest is kept to the fraction and charged in whole coins as it
+  // adds up, so a small loan is not charged a full coin every season (a 1-coin
+  // floor on a 7-coin balance is a 57% yearly rate whatever the agreed rate).
+  const exact = loan.balance * loan.rate / 4 + (loan.interestCarry ?? 0);
+  const interest = Math.floor(exact + 1e-9);
+  loan.interestCarry = Math.round((exact - interest) * 1e6) / 1e6;
+  loan.accruedSeason = key;
+  if (interest <= 0) return 0;
   loan.balance += interest;
   loan.interest += interest;
-  loan.accruedSeason = key;
   ensureFinance(state).stats.interest += interest;
   return interest;
 }

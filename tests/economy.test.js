@@ -133,9 +133,12 @@ test('sustained losses drive a business through STRUGGLING to closure', () => {
 
 test('every advertised levy level, including the zero levy, can be selected', () => {
   const sim = makeSim();
+  // A choice is announced today and takes effect tomorrow (it can be revised until then).
   for (const level of ['low', 'normal', 'high']) {
     assert.equal(sim.council('setTax', level).ok, true, level);
-    assert.equal(sim.state.council.taxLevel, level);
+    assert.equal(sim.state.council.pendingTax?.level ?? sim.state.council.taxLevel, level);
   }
+  sim.runDays(1);
+  assert.equal(sim.state.council.taxLevel, 'high');
   assert.equal(sim.council('setTax', 'toString').ok, false);
 });

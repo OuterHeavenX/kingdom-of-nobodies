@@ -85,7 +85,7 @@ test('acceptance: Ironhold goes hungry, a First Hearth merchant brings Greenvale
   const s = () => sim.state;
   const isTheTrade = (c) => c.merchantHome === 'hearth' && c.merchantId.startsWith('c') && c.origin === 'greenvale' && c.destination === 'ironhold' && ['grain', 'provisions'].includes(c.commodity) && /short of food/.test(c.reason);
   let contract = null, merchantBefore = 0, grainBefore = 0, departTick = 0, reloadedMidJourney = false, delivered = null;
-  for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+  for (const seed of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]) {
     if (delivered) break;
     sim = new Simulation(createKingdom(seed));
     money = totalMoney(s());

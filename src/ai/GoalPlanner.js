@@ -1,7 +1,7 @@
 import { byId } from '../core/EntityRegistry.js';
 import { ECONOMY } from '../core/Config.js';
 import { spendable } from '../finance/BankAccounts.js';
-import { BUSINESS_TYPES, businessById, isTrading } from '../economy/Businesses.js';
+import { BUSINESS_TYPES, businessById, isTrading, workingCapital, maxOpenOfType } from '../economy/Businesses.js';
 import { plotById, plotsForSale, buildingClass, BUILDING_INFO, bedsAt } from '../property/LandRegistry.js';
 import { projectById, estimateMaterialsCost, canStart } from '../property/Construction.js';
 import { ownedPlots } from '../property/Ownership.js';
@@ -91,7 +91,7 @@ const PLANNERS = {
     const ownPlot = v.plotId ? plotById(state, v.plotId) : null;
     // Never treat one's own home as a business site.
     if (ownPlot && (ownPlot.ownerId !== c.id || ownPlot.id === c.homePlotId || ownPlot.building?.type === 'cottage')) { v.plotId = null; }
-    const saturated = state.businesses.filter((x) => x.type === type && isTrading(x)).length >= ECONOMY.maxOpenPerType;
+    const saturated = state.businesses.filter((x) => x.type === type && isTrading(x)).length >= maxOpenOfType(state);
     const steps = [step('Find employment', hasEarned(c))];
     if (project) {
       const what = project.kind === 'demolition' ? 'Clear the old building' : `Build the ${label}`;
@@ -109,16 +109,27 @@ const PLANNERS = {
         else kind = 'demolition';
       }
       const blocked = kind !== 'reopen' && canStart(state, ownPlot, c.id, kind, kind === 'demolition' ? null : BUSINESS_TYPES[type].building);
+      // Work starts only with half the business's working capital put by (opening draws the
+      // rest from savings, and a building still to be raised gives time to earn it). Holding out
+      // for all of it kept the first shops shut and the council paying idle hands in year one.
+      // A risk-taker starts a little leaner.
+      const capital = workingCapital(type);
+      const upFront = Math.ceil(capital / 2);
+      const ready = upFront - Math.round(Math.max(0, trait(c, 'riskTaking')) * upFront * 0.25);
+      steps.push(step(`Save ${ready} coins of working capital (have ${money})`, money >= ready));
       steps.push(step(kind === 'reopen' ? `Reopen the ${label}` : kind === 'demolition' ? 'Demolish the old building' : `Build the ${label}`, false));
-      if (!blocked) actions.push({ kind: 'start_project', plotId: ownPlot.id, projectKind: kind, businessType: type, score: 78, factors: [[`I own ${ownPlot.name} and can start work`, 40]] });
-      return { goal: blocked ? `Wait to start work on ${ownPlot.name} (${blocked})` : steps.at(-1).label, need: 0, steps, actions };
+      if (!blocked && money >= ready) actions.push({ kind: 'start_project', plotId: ownPlot.id, projectKind: kind, businessType: type, score: 78, factors: [[`I own ${ownPlot.name} and have the working capital to start`, 40]] });
+      const goal = blocked ? `Wait to start work on ${ownPlot.name} (${blocked})` : money < ready ? `Save working capital for ${ownPlot.name}` : steps.at(-1).label;
+      return { goal, need: Math.max(0, ready - money), steps, actions };
     }
     if (saturated) {
-      steps.push(step(`Wait for room in the market (${ECONOMY.maxOpenPerType} ${label}s already)`, false));
+      steps.push(step(`Wait for room in the market (${maxOpenOfType(state)} ${label}s already)`, false));
       return { goal: 'Keep working while the market is crowded', need: 0, steps, actions };
     }
     const options = premisesOptions(state, c, type);
     const best = options[0];
+    // Enough for the premises and a little over; the working capital is saved once the land is
+    // owned, before work starts (see above), so buying land is not put off for it.
     const required = best ? best.cost + ECONOMY.startingCapital - Math.round(trait(c, 'riskTaking') * 12) : 999;
     steps.push(step(best ? `Save ${required} coins (have ${money})` : 'Find available land', money >= required));
     steps.push(step('Acquire premises', false), step(`Build the ${label}`, false), step('Open for business', false));

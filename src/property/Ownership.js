@@ -70,12 +70,29 @@ export function listForSale(state, plotId, price = null) {
   return true;
 }
 
-/** Daily: unsold listings slowly come down in price toward 60% of value. */
+/** Days a council listing waits at its value before the council accepts less. */
+export const COUNCIL_PATIENCE_DAYS = 24;
+
+/**
+ * Daily: unsold listings slowly come down in price toward 60% of value.
+ * The council is a patient seller: its listings come down to their value,
+ * and after two years unsold toward 75% of it, so public land does not sit
+ * for decades at a price nobody in the village can pay. Public housing
+ * with tenants is never sold off cheaply.
+ */
 export function softenListings(state) {
   for (const p of state.plots) {
-    if (p.marketStatus !== 'FOR_SALE' || !p.listedDay || p.ownerId === 'council') continue;
-    if ((state.day - p.listedDay) % 3 !== 0) continue;
-    const floor = Math.round(plotValue(p) * 0.6);
+    if (p.marketStatus !== 'FOR_SALE' || p.listedDay == null) continue;
+    const age = state.day - p.listedDay;
+    if (age <= 0 || age % 3 !== 0) continue;
+    const value = plotValue(p);
+    if (p.ownerId === 'council') {
+      const tenanted = p.building?.rental && p.residents.length > 0;
+      const floor = Math.round(value * (age >= COUNCIL_PATIENCE_DAYS && !tenanted ? 0.75 : 1));
+      if (p.price > floor) p.price = Math.max(floor, Math.round(p.price * 0.95));
+      continue;
+    }
+    const floor = Math.round(value * 0.6);
     p.price = Math.max(floor, Math.round(p.price * 0.94));
   }
 }

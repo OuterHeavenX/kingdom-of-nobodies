@@ -176,10 +176,26 @@ export function wholesale(state, buyer, seller, good, n) {
   return affordable;
 }
 
-function suppliersOf(state, good, exclude) {
+/**
+ * Producers of a good with stock to spare, cheapest first. Equal prices go to
+ * the seller with the least trade today, so the oldest business in the list
+ * does not win every tie.
+ */
+export function suppliersOf(state, good, exclude, minStock = 3) {
   return state.businesses
-    .filter((b) => b !== exclude && isTrading(b) && BUSINESS_TYPES[b.type].output === good && qty(b.inventory, good) > 2)
-    .sort((a, b) => wholesalePrice(a, good) - wholesalePrice(b, good));
+    .filter((b) => b !== exclude && isTrading(b) && BUSINESS_TYPES[b.type].output === good && qty(b.inventory, good) >= minStock)
+    .sort((a, b) => wholesalePrice(a, good) - wholesalePrice(b, good) || a.today.revenue - b.today.revenue);
+}
+
+/**
+ * Where a business that uses tools buys one: only from those who make or
+ * sell tools (smiths, stores), cheapest first. Other tool users are never
+ * sellers, so a single tool cannot circle between farms and lumberyards.
+ */
+export function toolSellers(state, buyer) {
+  return state.businesses
+    .filter((x) => x !== buyer && isTrading(x) && BUSINESS_TYPES[x.type].sells.includes('tools') && qty(x.inventory, 'tools') > 0)
+    .sort((a, b) => wholesalePrice(a, 'tools') - wholesalePrice(b, 'tools') || a.today.revenue - b.today.revenue);
 }
 
 /** Keep cash for about two days of wages before spending on stock. */
@@ -221,7 +237,7 @@ export function restockAll(state) {
       }
     }
     if (def.usesTools && qty(b.inventory, 'tools') < 1) {
-      const s = state.businesses.find((x) => x !== b && isTrading(x) && qty(x.inventory, 'tools') > 0);
+      const s = toolSellers(state, b)[0];
       if (s && budget() >= wholesalePrice(s, 'tools')) wholesale(state, b, s, 'tools', 1);
     }
   }
@@ -234,10 +250,13 @@ export function restockAll(state) {
 export function sellGathered(state, c, good) {
   const n = qty(c.inventory, good);
   if (n < 1) return { ok: false, units: 0, paid: 0 };
+  const offerFor = (b) => Math.max(1, Math.round(GOODS[good].base * ECONOMY.wholesaleFactor * (b.priceMult[good] ?? 1)));
+  // The gatherer sells to whoever pays best (ties: the buyer with the least trade today).
   const buyers = state.businesses.filter((b) => isOpenNow(state, b) && BUSINESS_TYPES[b.type].sells.includes(good) &&
-    b.ownerId !== c.id && qty(b.inventory, good) < BUSINESS_TYPES[b.type].target * 2);
+    b.ownerId !== c.id && qty(b.inventory, good) < BUSINESS_TYPES[b.type].target * 2)
+    .sort((a, b) => offerFor(b) - offerFor(a) || a.today.inputs - b.today.inputs);
   for (const b of buyers) {
-    const unit = Math.max(1, Math.round(GOODS[good].base * ECONOMY.wholesaleFactor * (b.priceMult[good] ?? 1)));
+    const unit = offerFor(b);
     const units = Math.min(n, Math.floor((balance(state, b.id) - cashReserve(state, b)) / unit));
     if (units < 1) continue;
     transfer(state, b.id, c.id, unit * units, 'sale', `${units} ${good} from ${c.firstName}`);

@@ -4,7 +4,8 @@ import { byId } from '../core/EntityRegistry.js';
 import { STAGES, REFIT_STAGE, DEMOLITION, BUILD, GOODS, ECONOMY } from '../core/Config.js';
 import { transfer, balance } from '../economy/Transactions.js';
 import { qty, removeGoods, addGoods } from '../economy/Inventory.js';
-import { BUSINESS_TYPES, isTrading, wholesalePrice, createBusiness, businessName } from '../economy/Businesses.js';
+import { BUSINESS_TYPES, isTrading, wholesalePrice, createBusiness, businessName, workingCapital } from '../economy/Businesses.js';
+import { spendable, raiseCash } from '../finance/BankAccounts.js';
 import { plotById, plotHistory, setBuilding, allows, buildingClass, BUILDING_INFO } from './LandRegistry.js';
 import { record } from '../society/Chronicle.js';
 import { remember } from '../ai/MemorySystem.js';
@@ -334,8 +335,11 @@ export function openBusiness(state, owner, plot, type) {
   plot.businessId = b.id;
   plot.building.name = b.name;
   if ((state.government?.policies?.businessLicensing || lawInForce(state, 'licensing')) && transfer(state, owner.id, 'treasury', 6, 'tax', `Licence for ${b.name}`)) b.licensed = true;
-  const capital = Math.min(ECONOMY.startingCapital, balance(state, owner.id) - 2);
-  if (capital > 0) transfer(state, owner.id, b.id, capital, 'capital', `Starting capital for ${b.name}`);
+  // Working capital for the first restock and a few days' wages, drawn from savings in the bank too.
+  const capital = Math.min(workingCapital(type), spendable(state, owner.id) - 4);
+  if (capital > 0 && balance(state, owner.id) < capital) raiseCash(state, owner.id, capital);
+  const paidIn = Math.min(capital, balance(state, owner.id));
+  if (paidIn > 0) transfer(state, owner.id, b.id, paidIn, 'capital', `Starting capital for ${b.name}`);
   if (owner.employment) leaveJob(state, owner, `opened ${b.name}`);
   owner.employment = { businessId: b.id, role: 'owner', wage: 0, since: state.day, unpaid: 0 };
   owner.employmentHistory.push({ businessId: b.id, name: b.name, from: state.day, to: null, role: 'owner' });

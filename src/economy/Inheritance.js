@@ -7,7 +7,7 @@ import { businessById, isTrading } from './Businesses.js';
 import { closeBusiness } from './EconomyManager.js';
 import { leaveJob } from './Employment.js';
 import { listForSale } from '../property/Ownership.js';
-import { plotById, plotHistory } from '../property/LandRegistry.js';
+import { plotById, plotHistory, plotValue } from '../property/LandRegistry.js';
 import { skillFor, PROFESSION_FOR_BUSINESS } from '../citizens/Careers.js';
 import { ageOf, achieve } from '../citizens/Citizen.js';
 import { trait } from '../ai/Personality.js';
@@ -134,8 +134,26 @@ export function settleEstate(state, c) {
     if (primary) moveGoods(c.inventory, primary.inventory, good, n);
     else moveGoods(c.inventory, state.council.pantry, good, qty(c.inventory, good));
   }
-  for (const p of state.plots.filter((x) => x.ownerId === c.id)) {
-    const heir = p.id === c.homePlotId && spouse ? spouse : primary;
+  // Land is shared among the heirs rather than all going to one: the family
+  // home stays with the household (the spouse, else a child who lives there),
+  // and every other plot, most valuable first, goes to whichever heir has so
+  // far received the least (adults before minors on a tie, then eldest first).
+  const plots = state.plots.filter((x) => x.ownerId === c.id);
+  const received = new Map(family.map((h) => [h.id, 0]));
+  const plan = new Map();
+  const home = plots.find((p) => p.id === c.homePlotId);
+  if (home && family.length) {
+    const keeper = spouse ?? family.find((h) => home.residents.includes(h.id) && ageOf(state, h) >= LIFE.adultAge) ?? family.find((h) => home.residents.includes(h.id)) ?? primary;
+    plan.set(home.id, keeper);
+    received.set(keeper.id, plotValue(home));
+  }
+  const rank = (h) => [ageOf(state, h) >= LIFE.adultAge ? 0 : 1, h.birthDay];
+  for (const p of plots.filter((x) => !plan.has(x.id)).sort((a, b) => plotValue(b) - plotValue(a) || a.id.localeCompare(b.id))) {
+    const heir = [...family].sort((a, b) => received.get(a.id) - received.get(b.id) || rank(a)[0] - rank(b)[0] || rank(a)[1] - rank(b)[1] || a.id.localeCompare(b.id))[0] ?? null;
+    if (heir) { plan.set(p.id, heir); received.set(heir.id, received.get(heir.id) + plotValue(p)); }
+  }
+  for (const p of plots) {
+    const heir = plan.get(p.id) ?? null;
     const project = p.projectId ? state.projects.find((j) => j.id === p.projectId) : null;
     if (project) project.ownerId = heir ? heir.id : 'council';
     if (heir) {

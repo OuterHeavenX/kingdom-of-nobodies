@@ -4,7 +4,7 @@ import { byId } from '../core/EntityRegistry.js';
 import { record } from '../society/Chronicle.js';
 import { remember } from '../ai/MemorySystem.js';
 import { bump } from '../society/Reputation.js';
-import { ensureFinance, bankById, raiseCash } from './BankAccounts.js';
+import { ensureFinance, bankById, raiseCash, spendable } from './BankAccounts.js';
 import { assessCredit, creditRecord, seasonalPayment } from './CreditAssessment.js';
 
 // Loans. Issuing a loan moves coins from the bank's reserves to the borrower
@@ -71,7 +71,11 @@ export function setLien(state, plotId, loanId) {
 }
 
 export function clearLien(state, loan) {
-  for (const p of state.plots) if (p.lien === loan.id) delete p.lien;
+  for (const p of state.plots) {
+    if (p.lien === loan.id) delete p.lien;
+    // A court-ordered sale ends with the debt it was ordered for.
+    if (p.forcedSale?.loanId === loan.id) delete p.forcedSale;
+  }
 }
 
 /** Season number used to make interest idempotent: accrued at most once per season. */
@@ -86,9 +90,14 @@ export function collectPayment(state, loan) {
   if (!isLive(loan) || state.day < loan.nextDueDay) return null;
   const council = loan.borrowerId === 'council';
   const borrower = council ? { id: 'treasury', firstName: 'The council', lastName: '', reputation: { reliability: 60 } } : byId(state.citizens, loan.borrowerId);
-  const due = Math.min(loan.balance, loan.payment + (loan.arrears ?? 0));
+  // A payment always covers a season's interest and at least one coin of the
+  // debt, so the balance falls every season it is paid; a last coin or two is
+  // settled with the payment rather than carried on.
+  const seasonInterest = Math.ceil(loan.balance * loan.rate / 4);
+  let due = Math.min(loan.balance, Math.max(loan.payment, seasonInterest + 1) + (loan.arrears ?? 0));
   loan.nextDueDay = state.day + 3;
   if (!borrower) return null;
+  if (loan.balance - due > 0 && loan.balance - due <= 2 && spendable(state, borrower.id) >= loan.balance) due = loan.balance;
   if (!council && balance(state, borrower.id) < due) raiseCash(state, borrower.id, due);
   const paid = Math.min(due, balance(state, borrower.id));
   if (paid > 0 && transfer(state, borrower.id, lenderAccount(loan), paid, 'repayment', `${borrower.firstName}'s repayment on ${loan.id}`)) {

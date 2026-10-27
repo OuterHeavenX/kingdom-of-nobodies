@@ -274,10 +274,19 @@ function onDeath(state, c) {
   raiseCash(state, c.id, depositOf(state, c.id) + balance(state, c.id));
   const { spouse, children } = heirsOf(state, c);
   const heir = spouse ?? children.find((h) => ageOf(state, h) >= LIFE.adultAge) ?? null;
-  for (const loan of f.loans.filter((l) => l.borrowerId === c.id && (isLive(l) || l.status === 'DEFAULTED'))) {
+  // Debts under a court-ordered sale (COLLECTING) are settled from the estate like any other.
+  for (const loan of f.loans.filter((l) => l.borrowerId === c.id && (isLive(l) || l.status === 'DEFAULTED' || l.status === 'COLLECTING'))) {
     const n = Math.min(loan.balance, balance(state, c.id));
     if (n > 0 && transfer(state, c.id, lenderAccount(loan), n, 'repayment', `${c.firstName}'s estate repaying ${loan.id}`)) { loan.balance -= n; loan.paid += n; }
     if (loan.balance <= 0) { loan.balance = 0; loan.status = 'PAID'; loan.closedDay = state.day; clearLien(state, loan); loan.history.push({ day: state.day, text: 'Repaid from the estate.' }); continue; }
+    if (loan.status === 'COLLECTING' && !heir) {
+      // The pledged land is still to be sold: the debt stays on it, and the
+      // sale (by whoever inherits the land, or the council) pays the lender.
+      loan.borrowerName = `the estate of ${c.firstName} ${c.lastName}`;
+      loan.estateOf = c.id;
+      loan.history.push({ day: state.day, text: `${c.firstName} died; the forced sale of the pledged land continues for the estate.` });
+      continue;
+    }
     if (heir) {
       loan.borrowerId = heir.id;
       loan.borrowerName = `${heir.firstName} ${heir.lastName}`;
@@ -302,7 +311,10 @@ lifecycleHooks.death.push(onDeath);
 export function settleBeforeLeaving(state, c) {
   const f = ensureFinance(state);
   raiseCash(state, c.id, depositOf(state, c.id) + balance(state, c.id));
-  for (const loan of f.loans.filter((l) => l.borrowerId === c.id && (isLive(l) || l.status === 'DEFAULTED'))) {
+  // Including a debt whose pledged land is under a court-ordered sale: the
+  // household pays it from what it takes away (the land itself has just been
+  // sold to the council) before the lien is lifted.
+  for (const loan of f.loans.filter((l) => l.borrowerId === c.id && (isLive(l) || l.status === 'DEFAULTED' || l.status === 'COLLECTING'))) {
     const n = Math.min(loan.balance, balance(state, c.id));
     if (n > 0 && transfer(state, c.id, lenderAccount(loan), n, 'repayment', `${c.firstName} settling ${loan.id} before leaving`)) { loan.balance -= n; loan.paid += n; }
     if (loan.balance > 0) {
@@ -332,12 +344,38 @@ function famineCredit(state) {
   municipalLoan(state, 80, { purpose: `to buy grain for ${hungry} hungry villagers`, security, seasons: 6 });
 }
 
+/**
+ * Daily: a court-ordered sale is never left hanging. If the pledged land has
+ * been delisted it is put back on the market; if it no longer exists or has
+ * passed out of the debtor's family to someone with no part in the debt, the
+ * rest is written off and the lien lifted.
+ */
+export function reviewForcedSales(state) {
+  for (const loan of ensureFinance(state).loans.filter((l) => l.status === 'COLLECTING')) {
+    const plot = state.plots.find((p) => p.id === loan.collateralPlotId);
+    const debtor = byId(state.citizens, loan.borrowerId);
+    const held = plot && (plot.lien === loan.id || plot.forcedSale?.loanId === loan.id);
+    if (held && !plot.projectId && plot.marketStatus !== 'FOR_SALE') {
+      plot.marketStatus = 'FOR_SALE';
+      plot.listedDay = plot.listedDay ?? state.day;
+    }
+    if (held && (debtor || loan.estateOf)) continue;
+    const bank = bankById(state, loan.bankId);
+    if (bank) bank.stats.writtenOff += loan.balance;
+    ensureFinance(state).stats.writtenOff += loan.balance;
+    loan.writtenOff = (loan.writtenOff ?? 0) + loan.balance;
+    loan.history.push({ day: state.day, text: `${loan.balance} written off: the forced sale could not go ahead.` });
+    loan.balance = 0; loan.status = 'WRITTEN_OFF'; loan.closedDay = state.day; clearLien(state, loan);
+  }
+}
+
 /** Daily: the whole round of finance. */
 export function dailyFinance(state) {
   ensureFinance(state);
   seasonalInterest(state);
   for (const loan of liveLoans(state)) collectPayment(state, loan);
   reviewDelinquencies(state);
+  reviewForcedSales(state);
   personalBanking(state);
   famineCredit(state);
   if (state.day % 2 === 0) loanApplications(state);
