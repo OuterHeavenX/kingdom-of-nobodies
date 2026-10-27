@@ -269,7 +269,8 @@ export function councilDaily(state) {
   if (balance(state, 'treasury') > COUNCIL.reserve + 120) {
     const b = state.businesses.find((x) => x.status === 'STRUGGLING' && x.ownerId !== 'council' && state.day - (x.lastGrantDay ?? -99) >= 12 &&
       x.history.slice(-6).reduce((t, h) => t + h.customers, 0) >= 3);
-    if (b) { b.lastGrantDay = state.day; COUNCIL_ACTIONS.supportBusiness(state, b.id); }
+    // supportBusiness sets lastGrantDay itself, only when the grant is paid.
+    if (b) COUNCIL_ACTIONS.supportBusiness(state, b.id);
   }
   // The hungriest are fed first when the pantry runs short (not whoever has lived here longest):
   // the penniless and hungry, and anyone close to starving with no food in hand, who pays the
@@ -281,7 +282,7 @@ export function councilDaily(state) {
   // The bedridden and the very old do not get up to eat, even with food at hand.
   const frail = (c) => (c.health?.sickUntil ?? 0) > state.day || state.day - c.birthDay >= 65 * DAYS_PER_YEAR;
   const destitute = state.citizens.filter((c) => c.needs.hunger <= 30 && !c.away && (balance(state, c.id) < 3 || (starving(c) && (!hasFood(c) || frail(c)))))
-    .sort((a, b) => (b.health?.starvingDays ?? 0) - (a.health?.starvingDays ?? 0) || child(b) - child(a) || a.needs.hunger - b.needs.hunger || a.id.localeCompare(b.id));
+    .sort((a, b) => starving(b) - starving(a) || (b.health?.starvingDays ?? 0) - (a.health?.starvingDays ?? 0) || child(b) - child(a) || a.needs.hunger - b.needs.hunger || a.id.localeCompare(b.id));
   for (const c of destitute) {
     const portions = hasFood(c) ? 0 : starving(c) || child(c) ? 2 : 1;
     for (let i = 0; i < portions; i++) {

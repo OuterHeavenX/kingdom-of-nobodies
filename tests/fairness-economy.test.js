@@ -367,3 +367,33 @@ test('migration: newcomers respond to the job market, and lone job-seekers wait 
   assert.equal(lone, 0, 'no lone job-seeker comes while nobody is hiring');
   assert.ok(families > 0, 'families still come');
 });
+
+test('economy: the standing grant policy really pays a struggling business, and its cooldown starts only then', () => {
+  const sim = makeSim(4);
+  const s = sim.state;
+  const b = s.businesses.find((x) => x.ownerId !== 'council' && x.status !== 'CLOSED');
+  b.status = 'STRUGGLING';
+  b.history = Array.from({ length: 6 }, () => ({ customers: 2, revenue: 1 }));
+  delete b.lastGrantDay;
+  transfer(s, 'outside', 'treasury', 600, 'grant', 'test surplus');
+  councilDaily(s);
+  assert.ok(s.chronicle.some((e) => e.text.includes(`granted ${b.name}`)), 'the grant was paid');
+  assert.equal(b.lastGrantDay, s.day);
+});
+
+test('economy: when the pantry runs short, a critically hungry adult is fed before a merely hungry child', () => {
+  const sim = makeSim(4);
+  const s = sim.state;
+  const adult = s.citizens.find((c) => s.day - c.birthDay >= 20 * 12);
+  const kid = { ...structuredClone(adult), id: 'c9999', firstName: 'Kit', birthDay: s.day - 8 * 12, inventory: {} };
+  s.citizens.push(kid);
+  s.accounts[kid.id] = 0;
+  for (const c of s.citizens) { c.needs.hunger = 90; }
+  adult.needs.hunger = 5; adult.health.starvingDays = 0; adult.inventory = {};
+  kid.needs.hunger = 30; kid.health = { ...kid.health, starvingDays: 0 };
+  for (const c of [adult, kid]) { const coins = balance(s, c.id); if (coins > 0) transfer(s, c.id, 'outside', coins, 'grant', 'test'); }
+  s.council.pantry = {};
+  addGoods(s.council.pantry, 'bread', 1);
+  councilDaily(s);
+  assert.ok(qty(adult.inventory, 'bread') > 0 || adult.needs.hunger > 5, 'the starving adult got the last bread');
+});
