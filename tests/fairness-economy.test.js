@@ -128,7 +128,7 @@ test('new business: a founder saves the working capital before starting work on 
   drain(state, dain.id); fund(state, dain.id, 10);
   let plan = planFor(state, dain);
   assert.ok(!plan.actions.some((a) => a.kind === 'start_project'), 'no refit with 10 coins and an empty till ahead');
-  assert.ok(plan.need >= 40, `still to save: ${plan.need}`);
+  assert.ok(plan.need >= 15, `still to save: ${plan.need}`);
   fund(state, dain.id, 60);
   plan = planFor(state, dain);
   assert.ok(plan.actions.some((a) => a.kind === 'start_project'), 'with the capital saved, work can start');

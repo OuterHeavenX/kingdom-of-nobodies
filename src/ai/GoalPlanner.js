@@ -109,11 +109,12 @@ const PLANNERS = {
         else kind = 'demolition';
       }
       const blocked = kind !== 'reopen' && canStart(state, ownPlot, c.id, kind, kind === 'demolition' ? null : BUSINESS_TYPES[type].building);
-      // Work starts only with the business's working capital put by: all of it for premises that
-      // open at once (reopen, refit), half for a building still to be raised (the rest is earned
-      // while it goes up). A risk-taker starts a little leaner.
+      // Work starts only with half the business's working capital put by (opening draws the
+      // rest from savings, and a building still to be raised gives time to earn it). Holding out
+      // for all of it kept the first shops shut and the council paying idle hands in year one.
+      // A risk-taker starts a little leaner.
       const capital = workingCapital(type);
-      const upFront = kind === 'reopen' || kind === 'refit' ? capital : Math.ceil(capital / 2);
+      const upFront = Math.ceil(capital / 2);
       const ready = upFront - Math.round(Math.max(0, trait(c, 'riskTaking')) * upFront * 0.25);
       steps.push(step(`Save ${ready} coins of working capital (have ${money})`, money >= ready));
       steps.push(step(kind === 'reopen' ? `Reopen the ${label}` : kind === 'demolition' ? 'Demolish the old building' : `Build the ${label}`, false));
