@@ -29,7 +29,9 @@ function d1() {
     all: async () => ({ results: db.prepare(sql).all(...args) }),
     run: async () => db.prepare(sql).run(...args),
   });
-  return { prepare: (sql) => stmt(sql) };
+  // D1's batch runs its statements as one transaction.
+  const batch = async (list) => { db.exec('BEGIN'); try { const out = []; for (const st of list) out.push(await st.run()); db.exec('COMMIT'); return out; } catch (e) { db.exec('ROLLBACK'); throw e; } };
+  return { prepare: (sql) => stmt(sql), batch };
 }
 
 function env(extra = {}) {

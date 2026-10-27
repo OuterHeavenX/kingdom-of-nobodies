@@ -27,9 +27,11 @@ function d1() {
     bind: (...a) => stmt(sql, a),
     first: async () => { await out.beforeFirst?.(sql); return db.prepare(sql).get(...args) ?? null; },
     all: async () => ({ results: db.prepare(sql).all(...args) }),
-    run: async () => db.prepare(sql).run(...args),
+    run: async () => { if (out.failOn?.test(sql)) throw new Error('D1_ERROR: database is full'); return db.prepare(sql).run(...args); },
   });
   out.prepare = (sql) => stmt(sql);
+  // D1's batch runs its statements as one transaction.
+  out.batch = async (list) => { db.exec('BEGIN'); try { const res = []; for (const st of list) res.push(await st.run()); db.exec('COMMIT'); return res; } catch (e) { db.exec('ROLLBACK'); throw e; } };
   return out;
 }
 const cloudEnv = (extra = {}) => ({ DB: d1(), ALLOWED_ORIGIN: ORIGIN, GITHUB_CLIENT_ID: 'test-client', GITHUB_CLIENT_SECRET: 'test-secret', ...extra });
@@ -237,6 +239,20 @@ test('save safety: two uploads racing from the same revision cannot both win, an
   assert.equal(next.status, 200, 'later uploads still work');
   const revs = (await (await call(e, 'GET', '/api/saves/main/revisions', token)).json()).revisions.map((m) => m.revision);
   assert.deepEqual(revs, [2, 1], 'the backup history has each revision once');
+});
+
+test('save safety: if the backup-history copy fails, the cloud kingdom is not replaced', async () => {
+  const e = cloudEnv();
+  const token = await signIn(e);
+  const first = serialize(createKingdom(1));
+  assert.equal((await call(e, 'PUT', '/api/saves/main', token, { envelope: first, baseRevision: 0 })).status, 200);
+  e.DB.failOn = /INSERT OR IGNORE INTO save_revisions/;
+  const put = await call(e, 'PUT', '/api/saves/main', token, { envelope: serialize(createKingdom(2)), baseRevision: 1 });
+  assert.equal(put.status, 500, 'the upload fails');
+  e.DB.failOn = null;
+  const back = await (await call(e, 'GET', '/api/saves/main', token)).json();
+  assert.equal(back.meta.revision, 1, 'the cloud still holds revision 1');
+  assert.equal(back.envelope, first, 'byte for byte: nothing was overwritten without its backup');
 });
 
 // --- 2. Saves written by a newer build ------------------------------------------------------

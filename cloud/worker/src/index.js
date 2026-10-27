@@ -189,16 +189,20 @@ async function putSave(env, user, slot, req) {
   // Compare-and-swap: the row is replaced only if it still holds the revision
   // this request was checked against, so two uploads racing from the same base
   // cannot both succeed (the loser gets the usual 409 and the player chooses).
+  // The replaced copy joins the backup history in the same batch (one
+  // transaction): if either write fails, neither happens and the cloud kingdom
+  // stays as it was. Both statements are guarded by the revision, so a lost
+  // race copies nothing.
   const res = current
-    ? await env.DB.prepare('UPDATE saves SET revision = ?, saved_at = ?, uploaded_at = ?, device = ?, version = ?, day = ?, year = ?, population = ?, checksum = ?, bytes = ?, kingdom_name = ?, body = ? WHERE user_id = ? AND slot = ? AND revision = ?').bind(...cols, user.id, slot, current.revision).run()
+    ? (await env.DB.batch([
+      env.DB.prepare('INSERT OR IGNORE INTO save_revisions (user_id, slot, revision, saved_at, uploaded_at, device, version, day, year, population, checksum, bytes, kingdom_name, body) SELECT user_id, slot, revision, saved_at, uploaded_at, device, version, day, year, population, checksum, bytes, kingdom_name, body FROM saves WHERE user_id = ? AND slot = ? AND revision = ?').bind(user.id, slot, current.revision),
+      env.DB.prepare('UPDATE saves SET revision = ?, saved_at = ?, uploaded_at = ?, device = ?, version = ?, day = ?, year = ?, population = ?, checksum = ?, bytes = ?, kingdom_name = ?, body = ? WHERE user_id = ? AND slot = ? AND revision = ?').bind(...cols, user.id, slot, current.revision),
+    ]))[1]
     : await env.DB.prepare('INSERT INTO saves (revision, saved_at, uploaded_at, device, version, day, year, population, checksum, bytes, kingdom_name, body, user_id, slot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(user_id, slot) DO NOTHING').bind(...cols, user.id, slot).run();
   if (!changesOf(res)) {
     const latest = await env.DB.prepare('SELECT * FROM saves WHERE user_id = ? AND slot = ?').bind(user.id, slot).first();
     return json({ conflict: true, meta: metaOf(latest) }, 409);
   }
-  // The replaced copy joins the backup history (from the row this request read, so it is exactly what was replaced).
-  if (current) await env.DB.prepare('INSERT OR IGNORE INTO save_revisions (user_id, slot, revision, saved_at, uploaded_at, device, version, day, year, population, checksum, bytes, kingdom_name, body) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-    .bind(user.id, slot, current.revision, current.saved_at, current.uploaded_at, current.device, current.version, current.day, current.year, current.population, current.checksum, current.bytes, current.kingdom_name, current.body).run();
   // Keep a bounded backup history.
   await env.DB.prepare('DELETE FROM save_revisions WHERE user_id = ? AND slot = ? AND revision <= ?').bind(user.id, slot, revision - 1 - KEEP_REVISIONS).run();
   // What this request wrote (a later upload may already have replaced it).
