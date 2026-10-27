@@ -4,7 +4,7 @@ import { sendGift } from '../diplomacy/Diplomacy.js';
 import { leaveJob } from '../economy/Employment.js';
 import { needsCourthouse } from '../law/Courts.js';
 import { byId } from '../core/EntityRegistry.js';
-import { COUNCIL, ECONOMY, FOOD_GOODS, GOODS, TIME } from '../core/Config.js';
+import { COUNCIL, ECONOMY, FOOD_GOODS, GOODS, TIME, DAYS_PER_YEAR } from '../core/Config.js';
 import { transfer, balance } from '../economy/Transactions.js';
 import { qty, moveGoods, addGoods } from '../economy/Inventory.js';
 import { isTrading, BUSINESS_TYPES, wholesalePrice, createBusiness, businessName } from '../economy/Businesses.js';
@@ -21,6 +21,49 @@ import { adjust } from '../citizens/Relationships.js';
 const fail = (reason) => ({ ok: false, message: reason });
 const done = (message) => ({ ok: true, message });
 
+/**
+ * Days before the council can repeat a favour for the same target: aid to one
+ * villager and a grant to one business once a season, a diplomatic gift to one
+ * kingdom once a year, and a change of the levy once a season.
+ */
+export const COUNCIL_COOLDOWNS = { aid: DAYS_PER_YEAR / 4, supportBusiness: DAYS_PER_YEAR / 4, gift: DAYS_PER_YEAR, setTax: DAYS_PER_YEAR / 4 };
+
+const lastUse = (state, action, targetId) => {
+  if (action === 'supportBusiness') return state.businesses.find((b) => b.id === targetId)?.lastGrantDay ?? null;
+  if (action === 'setTax') return state.council.taxChangedDay ?? null;
+  return state.council.cooldowns?.[`${action}:${targetId}`] ?? null;
+};
+
+/** Why an action cannot be repeated yet for this target (null when it can). The panels show this on the button. */
+export function councilCooldown(state, action, targetId = null) {
+  const wait = COUNCIL_COOLDOWNS[action];
+  const last = wait ? lastUse(state, action, targetId) : null;
+  if (last === null || state.day - last >= wait) return null;
+  const next = last + wait;
+  const what = action === 'aid' ? 'This villager was given aid' : action === 'supportBusiness' ? 'This business was given a grant'
+    : action === 'gift' ? 'A gift was sent to this kingdom' : 'The levy was changed';
+  return `${what} on day ${last}; again from day ${next}.`;
+}
+
+function noteCooldown(state, action, targetId) {
+  const cd = state.council.cooldowns ?? (state.council.cooldowns = {});
+  cd[`${action}:${targetId}`] = state.day;
+  // Old entries are forgotten once their wait is over, so the record stays small.
+  for (const [k, day] of Object.entries(cd)) if (state.day - day >= DAYS_PER_YEAR) delete cd[k];
+}
+
+/** Start of each day: an announced change of the levy takes effect (unless an elected leader now sets taxes). */
+export function applyPendingTax(state) {
+  const p = state.council.pendingTax;
+  if (!p || p.day >= state.day) return;
+  delete state.council.pendingTax;
+  if (state.government?.leaderId || p.level === state.council.taxLevel) return;
+  state.council.taxLevel = p.level;
+  state.council.taxChangedDay = state.day;
+  if (state.government) state.government.policies.taxLevel = p.level;
+  record(state, 'council', `The business levy is now ${p.level} (${ECONOMY.tax[p.level]} coins a day per business).`, {}, 2);
+}
+
 export const COUNCIL_ACTIONS = {
   /** Pay for a scouting party to map the region. */
   scout(state) {
@@ -30,7 +73,10 @@ export const COUNCIL_ACTIONS = {
 
   /** Send a diplomatic gift to a kingdom. */
   gift(state, kingdomId) {
+    const wait = councilCooldown(state, 'gift', kingdomId);
+    if (wait) return fail(wait);
     const res = sendGift(state, kingdomId);
+    if (res.ok) noteCooldown(state, 'gift', kingdomId);
     return res.ok ? done(res.message) : fail(res.message);
   },
 
@@ -62,7 +108,10 @@ export const COUNCIL_ACTIONS = {
   aid(state, citizenId) {
     const c = byId(state.citizens, citizenId);
     if (!c) return fail('Choose a villager first.');
+    const wait = councilCooldown(state, 'aid', c.id);
+    if (wait) return fail(wait);
     if (!transfer(state, 'treasury', c.id, COUNCIL.aidAmount, 'aid', `Council aid to ${c.firstName}`)) return fail('The treasury cannot afford it.');
+    noteCooldown(state, 'aid', c.id);
     c.mood = Math.min(100, c.mood + 10);
     remember(state, c, `The council granted me ${COUNCIL.aidAmount} coins.`, 2, 'council');
     record(state, 'council', `The council granted ${c.firstName} ${COUNCIL.aidAmount} coins of aid.`, { citizens: [c.id] }, 1);
@@ -88,13 +137,28 @@ export const COUNCIL_ACTIONS = {
     return done('Market square established.');
   },
 
+  /**
+   * A new tax level is announced today and takes effect at the start of
+   * tomorrow, for the levy, the tithe and the mood alike; the levy can be
+   * changed at most once a season. (Until tomorrow the announcement can still
+   * be revised.) Midnight toggling therefore cannot collect one level while
+   * villagers feel another.
+   */
   setTax(state, level) {
     if (!Object.hasOwn(ECONOMY.tax, level)) return fail('Unknown tax level.');
     if (state.government?.leaderId) return fail(`Taxes are now set by the elected ${state.government.title}.`);
-    state.council.taxLevel = level;
-    if (state.government) state.government.policies.taxLevel = level;
-    record(state, 'council', `The council set the business levy to ${level} (${ECONOMY.tax[level]} coins a day per business).`, {}, 2);
-    return done(`Taxes set to ${level}.`);
+    const pending = state.council.pendingTax;
+    if (pending && pending.day === state.day) {
+      if (level === state.council.taxLevel) { delete state.council.pendingTax; return done(`The levy stays ${level}.`); }
+      pending.level = level;
+      return done(`Taxes will be ${level} from tomorrow.`);
+    }
+    const wait = councilCooldown(state, 'setTax');
+    if (wait) return fail(wait);
+    if (level === state.council.taxLevel) return done(`Taxes are already ${level}.`);
+    state.council.pendingTax = { level, day: state.day };
+    record(state, 'council', `The council announced the business levy will be ${level} (${ECONOMY.tax[level]} coins a day per business) from tomorrow.`, {}, 2);
+    return done(`Taxes will be ${level} from tomorrow.`);
   },
 
   /** A festival buys real food from local businesses and gives everyone time together. */
@@ -128,7 +192,10 @@ export const COUNCIL_ACTIONS = {
   supportBusiness(state, businessId) {
     const b = state.businesses.find((x) => x.id === businessId);
     if (!b || !isTrading(b)) return fail('Choose an open business.');
+    const wait = councilCooldown(state, 'supportBusiness', b.id);
+    if (wait) return fail(wait);
     if (!transfer(state, 'treasury', b.id, COUNCIL.businessGrant, 'grant', `Council grant to ${b.name}`)) return fail('The treasury cannot afford it.');
+    b.lastGrantDay = state.day;
     b.struggleDays = Math.max(0, b.struggleDays - 2);
     const owner = byId(state.citizens, b.ownerId);
     if (owner) remember(state, owner, `The council granted ${b.name} ${COUNCIL.businessGrant} coins.`, 2, 'council');
@@ -188,6 +255,7 @@ export function councilInfrastructure(state) {
 }
 
 export function councilDaily(state) {
+  applyPendingTax(state);
   collectTithe(state);
   trimWorksCrew(state);
   for (const b of state.businesses) {
@@ -203,8 +271,10 @@ export function councilDaily(state) {
       x.history.slice(-6).reduce((t, h) => t + h.customers, 0) >= 3);
     if (b) { b.lastGrantDay = state.day; COUNCIL_ACTIONS.supportBusiness(state, b.id); }
   }
-  for (const c of state.citizens) {
-    if (balance(state, c.id) >= 3 || c.needs.hunger > 30) continue;
+  // The hungriest are fed first when the pantry runs short (not whoever has lived here longest).
+  const destitute = state.citizens.filter((c) => balance(state, c.id) < 3 && c.needs.hunger <= 30)
+    .sort((a, b) => a.needs.hunger - b.needs.hunger || a.id.localeCompare(b.id));
+  for (const c of destitute) {
     const good = FOOD_GOODS.find((g) => qty(state.council.pantry, g) > 0);
     if (!good) break;
     moveGoods(state.council.pantry, c.inventory, good, 1);
@@ -307,7 +377,9 @@ function restockPantry(state) {
   const target = 6 + state.citizens.length;
   let need = target - FOOD_GOODS.reduce((s, g) => s + qty(state.council.pantry, g), 0);
   if (need <= 0 || balance(state, 'treasury') < 15) return;
-  const farms = state.businesses.filter((b) => isTrading(b) && b.type === 'farm' && qty(b.inventory, 'grain') > 4);
+  // The council buys from the cheapest farm first (ties: the farm that has sold least today).
+  const farms = state.businesses.filter((b) => isTrading(b) && b.type === 'farm' && qty(b.inventory, 'grain') > 4)
+    .sort((a, b) => wholesalePrice(a, 'grain') - wholesalePrice(b, 'grain') || a.today.revenue - b.today.revenue);
   for (const f of farms) {
     const unit = wholesalePrice(f, 'grain');
     const n = Math.min(need, qty(f.inventory, 'grain') - 4, Math.floor((balance(state, 'treasury') - 10) / unit));

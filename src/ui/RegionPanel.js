@@ -1,4 +1,5 @@
 import { balance } from '../economy/Transactions.js';
+import { councilCooldown } from '../council/Council.js';
 import { dateLabel } from '../core/Calendar.js';
 import { HEARTH, KINGDOMS, ROUTES, LANDMARKS, SCENERY, SETTLEMENT_POS, COMMODITIES } from '../region/RegionData.js';
 import { routeKnown, routeClosed, routeQuality, settlementName, exploredShare, routeById } from '../region/RegionManager.js';
@@ -188,7 +189,7 @@ function diplomacyView(sim) {
     <div class="card"><h3>Treaties</h3>${treaties || '<p class="muted">No treaties in force.</p>'}${embargoes ? `<h3 style="margin-top:10px">Embargoes</h3>${embargoes}` : ''}</div>
     <div class="card"><h3>Migration</h3>${flows || '<p class="muted">Nobody has moved between the settlements yet.</p>'}</div>
     <div class="card"><h3>Diplomatic history</h3>${d.history.slice(-10).reverse().map((h) => `<div class="belief">${esc(dateLabel(h.day))}: ${esc(h.text)}</div>`).join('') || '<p class="muted">Nothing yet.</p>'}</div>
-    <div class="card"><h3>Send a gift</h3><p class="muted" style="font-size:12px">40 coins from the treasury warm relations with a kingdom.</p><div class="grid2">${Object.keys(KINGDOMS).map((id) => `<button class="btn" data-act="council" data-action="gift" data-id="${id}">🎁 ${esc(KINGDOMS[id].name)}</button>`).join('')}</div></div>`;
+    <div class="card"><h3>Send a gift</h3><p class="muted" style="font-size:12px">40 coins from the treasury warm relations with a kingdom.</p><div class="grid2">${Object.keys(KINGDOMS).map((id) => { const wait = councilCooldown(s, 'gift', id); return `<button class="btn" data-act="council" data-action="gift" data-id="${id}" ${wait ? 'disabled' : ''} title="${esc(wait ?? '')}">🎁 ${esc(KINGDOMS[id].name)}${wait ? ' · sent this year' : ''}</button>`; }).join('')}</div><p class="muted" style="font-size:11px">One gift to each kingdom a year.</p></div>`;
 }
 
 function exploreView(sim) {
