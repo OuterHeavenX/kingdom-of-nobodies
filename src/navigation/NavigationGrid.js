@@ -13,6 +13,9 @@ export { markNavDirty };
 export const CELL = 2;
 export const SIZE = (WORLD.max - WORLD.min) / CELL; // cells per side
 const FOREST = [13, -30, 32, -21];
+/** Extra solid rectangles [minX, minZ, maxX, maxZ] from later systems (a monument standing off any plot). */
+export const navHooks = { solids: [] };
+const extraSolids = (state) => navHooks.solids.flatMap((fn) => fn(state) ?? []);
 
 
 export const cellOf = (x, z) => {
@@ -33,6 +36,7 @@ export function navSignature(state) {
   let sig = state.roads.length + ':';
   for (const r of state.roads) sig += r.kind[0];
   for (const p of state.plots) sig += `${p.building?.type ?? ''}${p.building?.level ?? ''}${p.projectId ? '*' : ''}|`;
+  for (const r of extraSolids(state)) sig += `#${r.join(',')}`;
   return sig;
 }
 
@@ -67,6 +71,7 @@ function build(state) {
   // Any cell a wall touches is blocked (inflate by half a cell), so a route between open cells never clips a corner.
   const pad = CELL / 2;
   for (const p of state.plots) for (const [minX, minZ, maxX, maxZ] of solidRects(p)) fill(cost, [minX - pad, minZ - pad, maxX + pad, maxZ + pad], Infinity);
+  for (const [minX, minZ, maxX, maxZ] of extraSolids(state)) fill(cost, [minX - pad / 2, minZ - pad / 2, maxX + pad / 2, maxZ + pad / 2], Infinity);
   return cost;
 }
 

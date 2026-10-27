@@ -1,0 +1,109 @@
+/* v0.5.3 — The Unseen Influence: dark emerald, antique gold, a faint glow.
+   Everything here is the player's private layer; it sits over the world
+   without hiding it. */
+:root {
+  --hh-emerald: #0b2e24; --hh-emerald-2: #0f3b2e; --hh-emerald-3: #155240; --hh-line: #2c6b55;
+  --hh-gold: #d9b45a; --hh-gold-2: #f1d991; --hh-gold-dim: #a8873c; --hh-ink: #f3ead2;
+}
+
+/* ---------- The floating eye ---------- */
+.unseen-eye { position: absolute; z-index: 5; right: max(14px, env(safe-area-inset-right)); bottom: 16px; width: 54px; height: 54px; padding: 0;
+  display: flex; align-items: center; justify-content: center; border-radius: 50%; color: var(--hh-gold-2);
+  background: radial-gradient(circle at 50% 40%, #1d6a52, var(--hh-emerald) 70%); border: 1.5px solid var(--hh-gold);
+  box-shadow: 0 0 0 4px #d9b45a1f, 0 6px 18px #0009, inset 0 0 12px #f1d99133; touch-action: manipulation; }
+.unseen-eye.left { right: auto; left: max(14px, env(safe-area-inset-left)); }
+.unseen-eye.active { background: radial-gradient(circle at 50% 40%, #2a8a6a, var(--hh-emerald-2) 70%); box-shadow: 0 0 0 5px #d9b45a44, 0 0 22px #f1d99155; }
+.unseen-eye:active { transform: scale(.95); }
+.unseen-eye .eye-glyph { display: flex; filter: drop-shadow(0 0 4px #f1d99188); }
+.unseen-eye .eye-motes { position: absolute; inset: -6px; pointer-events: none; }
+.unseen-eye .eye-motes i { position: absolute; width: 4px; height: 4px; border-radius: 50%; background: var(--hh-gold-2); box-shadow: 0 0 6px var(--hh-gold); opacity: 0;
+  animation: hh-mote 4.8s ease-in-out infinite; }
+.unseen-eye .eye-motes i:nth-child(1) { left: 12%; bottom: 20%; animation-delay: 0s; }
+.unseen-eye .eye-motes i:nth-child(2) { left: 78%; bottom: 30%; animation-delay: 1.2s; }
+.unseen-eye .eye-motes i:nth-child(3) { left: 46%; bottom: 6%; animation-delay: 2.4s; }
+.unseen-eye .eye-motes i:nth-child(4) { left: 88%; bottom: 66%; animation-delay: 3.6s; }
+@keyframes hh-mote { 0% { opacity: 0; transform: translateY(0) scale(.6); } 25% { opacity: .9; } 70% { opacity: .5; } 100% { opacity: 0; transform: translateY(-26px) scale(1); } }
+.unseen-eye .eye-badge { position: absolute; top: -3px; right: -3px; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 10px; background: var(--hh-gold); color: #1d1606;
+  font-size: 11px; font-weight: 800; line-height: 19px; text-align: center; box-shadow: 0 1px 4px #0008; }
+/* The eye stays clear of the docked side panel on wide screens. */
+@media (min-width: 900px), (orientation: landscape) and (max-height: 540px) { .unseen-eye { bottom: 18px; } }
+
+/* ---------- The Year 200 notice ---------- */
+.whisper-notice { position: absolute; z-index: 9; left: 50%; top: 14%; transform: translateX(-50%); width: min(92%, 360px); animation: hh-rise .9s ease-out; }
+.wn-card { position: relative; padding: 18px 18px 14px; border-radius: 18px; text-align: center; color: var(--hh-ink);
+  background: radial-gradient(120% 90% at 50% 0%, #1b5a46f2, #0b2e24f5 70%); border: 1px solid var(--hh-gold); box-shadow: 0 0 0 6px #d9b45a14, 0 18px 40px #000a; }
+.wn-card h3 { margin: 6px 0 8px; font: 700 18px/1.25 Georgia, serif; color: var(--hh-gold-2); letter-spacing: .3px; }
+.wn-card p { margin: 0 0 14px; font: italic 14.5px/1.5 Georgia, serif; color: #eae1c4; }
+.wn-eye { display: inline-flex; color: var(--hh-gold); filter: drop-shadow(0 0 6px #f1d99199); }
+.wn-actions { display: flex; flex-direction: column; gap: 8px; }
+@keyframes hh-rise { from { opacity: 0; transform: translate(-50%, -10px); } }
+
+/* ---------- The sheet in Unseen mode ---------- */
+.sheet.unseen { background: linear-gradient(180deg, var(--hh-emerald-2), var(--hh-emerald) 40%); border-top-color: var(--hh-gold-dim); }
+.sheet.unseen .sheet-head h2 { color: var(--hh-gold-2); }
+.sheet.unseen .sheet-grip span { background: var(--hh-gold-dim); }
+.sheet.unseen .icon-btn { background: #12443a; border-color: var(--hh-line); }
+.hh-panel { display: flex; flex-direction: column; gap: 10px; color: var(--hh-ink); }
+.hh-panel .card, .hh-card { background: #10392dcc; border-color: var(--hh-line); }
+.hh-panel .card h3 { color: var(--hh-gold); }
+.hh-panel .card p { color: #e8e2cc; }
+.hh-panel .muted { color: #a9c2b5 !important; }
+.hh-panel .belief { border-bottom-color: #22584a; }
+.hh-panel .item { background: #133f33; border-color: var(--hh-line); }
+.hh-panel .item:active { background: #18503f; }
+.hh-panel .quote { background: #0d3127; border-left-color: var(--hh-gold); color: #f1e8cc; }
+.hh-panel .chip { background: #14463a; border-color: var(--hh-line); }
+.hh-panel .chip.active { background: #6b5a26; border-color: var(--hh-gold); }
+.hh-head { display: flex; gap: 12px; align-items: center; padding: 10px 12px; border-radius: 14px; background: #0c3328; border: 1px solid var(--hh-line); }
+.hh-eye { display: flex; color: var(--hh-gold); filter: drop-shadow(0 0 4px #f1d99166); }
+.hh-whispers { flex: 1; min-width: 0; font-size: 13px; }
+.hh-whispers small { display: block; margin-top: 4px; font-size: 11.5px; }
+.hh-meter { height: 8px; margin-top: 5px; border-radius: 6px; background: #06201a; overflow: hidden; border: 1px solid #1f5446; }
+.hh-meter i { display: block; height: 100%; background: linear-gradient(90deg, #a8873c, #f1d991); box-shadow: 0 0 8px #f1d99188; }
+.hh-seg { background: #082219; }
+.hh-seg button { color: #a9c2b5; min-height: 40px; }
+.hh-seg button.active { background: #1b5a46; color: var(--hh-gold-2); box-shadow: inset 0 0 0 1px #d9b45a66; }
+.hh-cost { color: var(--hh-gold); letter-spacing: 1px; font-size: 12px; white-space: nowrap; }
+.hh-card .row.between { gap: 8px; }
+.hh-btn, .btn.hh-gold { background: linear-gradient(180deg, #e2c06a, #b48d34); color: #1d1606; border-color: #f1d991; font-weight: 750; }
+.hh-btn:disabled { background: #1b4a3c; color: #8fb2a2; border-color: #2c6b55; }
+.btn.ghost { background: transparent; border-color: #5d7f71; color: inherit; }
+.hh-note { margin: 0; font-size: 12.5px; line-height: 1.45; }
+.hh-targets { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.hh-target { min-height: 48px; }
+.hh-target .side { color: var(--hh-gold); font-size: 18px; }
+.hh-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.hh-actions .btn { flex: 1 1 auto; min-height: 40px; }
+.hh-inscriptions { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 8px; }
+.hh-insc { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 8px; min-height: 44px; border-radius: 12px; text-align: center;
+  background: #0d3127; border: 1px solid var(--hh-line); color: var(--hh-ink); }
+.hh-insc.active { border-color: var(--hh-gold); box-shadow: 0 0 0 2px #d9b45a44, inset 0 0 14px #f1d99122; }
+.hh-insc strong { font-size: 13px; color: var(--hh-gold-2); }
+.hh-insc small { font-size: 11px; line-height: 1.35; color: #b9cfc3; font-style: italic; }
+.glyphs { color: var(--hh-gold); flex: 0 0 auto; filter: drop-shadow(0 0 3px #f1d99155); }
+.hh-stone .glyphs { padding: 6px; border-radius: 10px; background: #071d17; border: 1px solid #23594a; }
+.hh-strip { display: flex; height: 12px; border-radius: 7px; overflow: hidden; background: #06201a; margin-top: 4px; }
+.hh-strip i { display: block; min-width: 3px; }
+.hh-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 7px; font-size: 12px; color: #d6dccd; }
+.hh-legend b { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.hh-chronicle { display: flex; flex-direction: column; gap: 0; padding-top: 4px; padding-bottom: 4px; }
+.hh-entry { padding: 8px 0 8px 10px; border-bottom: 1px solid #22584a; border-left: 2px solid transparent; }
+.hh-entry:last-child { border-bottom: 0; }
+.hh-entry.mine { border-left-color: var(--hh-gold); background: linear-gradient(90deg, #d9b45a14, transparent 60%); }
+.hh-entry small { color: #9ebcae; font-size: 11px; }
+.hh-entry p { margin: 2px 0 0; font-size: 13px; line-height: 1.4; }
+.hh-after { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; font-size: 12px; color: #b9cfc3; }
+.hh-gold-bg { background: radial-gradient(circle, #f1d991, #a8873c) !important; color: #1d1606 !important; }
+.hh-locked { text-align: center; }
+.hh-entry-card { background: linear-gradient(135deg, #0f3b2e, #10392d 60%, #1b4a2c); border-color: var(--hh-gold-dim); }
+.hh-entry-card strong { color: var(--hh-gold-2); display: inline-flex; align-items: center; gap: 6px; }
+.hh-entry-card p { color: #e8e2cc; }
+.hh-entry-card .segmented { background: #082219; }
+.hh-entry-card .segmented button { padding: 6px 9px; font-size: 12px; min-height: 32px; }
+.hh-eye-inline { display: inline-flex; color: var(--hh-gold); }
+.view-banner .btn.hh-gold, .view-banner .btn.ghost { min-height: 32px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .unseen-eye .eye-motes i { animation: none; opacity: .55; }
+  .whisper-notice { animation: none; }
+}

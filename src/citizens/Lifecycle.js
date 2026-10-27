@@ -34,7 +34,8 @@ export function dailyMortality(state, c) {
   yearly = Math.min(0.95, yearly);
   let daily = 1 - Math.pow(1 - yearly, 1 / DAYS_PER_YEAR);
   if (c.health.starvingDays > 0) daily += LIFE.starvationDailyRisk * c.health.starvingDays;
-  if (c.health.sickUntil > state.day) daily += age >= 60 || age < 3 ? 0.012 : 0.002;
+  if (c.health.sickUntil > state.day) daily += (age >= 60 || age < 3 ? 0.012 : 0.002) * (healthHooks.illness?.(state, c) ?? 1);
+  daily *= healthHooks.protect?.(state, c) ?? 1;
   return Math.min(1, daily);
 }
 

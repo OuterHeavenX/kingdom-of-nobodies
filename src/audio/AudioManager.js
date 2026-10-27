@@ -132,6 +132,9 @@ export class AudioManager {
     if (e) { this.lastEnv = e; this.ambience.update(ambienceMix(e)); }
     // A town bell at noon where there is a chapel or temple, in the older ages.
     const s = this.getState();
+    // Near the stone at night, now and then, a soft whisper of air.
+    const st = s?.divine?.stone;
+    if (st && e && Math.hypot(e.x - st.x, e.z - st.z) < 28 && (e.hour >= 20 || e.hour < 5) && Math.random() < 0.08) this.sfx('whisper', { x: st.x, z: st.z }, 'ambience');
     if (s && e && e.faith && e.era <= 2) {
       const hour = Math.floor(s.minute / 60);
       if (hour === 12 && this.lastHour !== 12) this.sfx('townbell', e.faithAt);
@@ -233,7 +236,45 @@ export class AudioManager {
     else if (/officially opened|purchased|sold .* for/.test(t)) this.sfx('coins', plotAt);
     else if (/caught fire|is ablaze|fire broke out/i.test(t)) this.sfx('crash', plotAt);
     else if (/festival|celebrat/i.test(t) && entry.importance >= 2) this.sfx('cheer', plotAt);
+    else if (/standing stone/.test(t) && entry.importance >= 3) { this.sfx('discovery'); this.motif(); }
+    else if (/consecrated/.test(t)) this.sfx('templebell', plotAt);
+    else if (/vigil|gathered at|prayed at the stone|pilgrimage|preached/.test(t)) this.sfx('chime', plotAt);
     if (entry.importance >= 3) this.ui('notify');
+  }
+
+  /**
+   * v0.5.3: the Hidden Hand's sounds. `motif` is a short phrase in the voice
+   * of the age (flute, harp and bells; piano and strings; orchestral; ambient
+   * synthesizers), played sparingly on the music bus; the rest are effects.
+   * Silent unless the player has turned sound on; volume and mutes apply.
+   */
+  hiddenHand(kind = 'motif', at = null) {
+    if (!this.running) return false;
+    if (kind === 'blessing') return this.sfx('blessing', at, 'ui');
+    if (kind === 'omen') return this.sfx('omen');
+    if (kind === 'tone') return this.sfx('omen', at);
+    if (kind === 'stone') { this.sfx('discovery'); return this.motif(true); }
+    return this.motif();
+  }
+
+  /** The Hidden Hand's motif, at most once every half minute (unless `force`). */
+  motif(force = false) {
+    const now = this.ctx.currentTime;
+    if (!force && now - (this.lastMotif ?? -99) < 30) return false;
+    this.lastMotif = now;
+    const era = this.getState()?.civ?.age ?? 1;
+    const voices = [null, ['flute', 'harp', 'bell'], ['piano', 'strings', 'bell'], ['strings', 'cello', 'harp'], ['pad', 'strings', 'epiano'], ['synth', 'pad', 'bell']][Math.max(1, Math.min(5, era))];
+    const out = this.ctx.createGain();
+    out.gain.value = this.settings.reduced ? 0.5 : 0.8;
+    out.connect(this.mixer.bus.music);
+    const t = now + 0.05;
+    // A rising question that never quite resolves.
+    [[62, 0, 1.2], [65, 0.55, 1.1], [69, 1.1, 1.4], [72, 1.8, 1.8], [70, 2.7, 2.6]].forEach(([m, d, len]) => VOICES[voices[0]](this.ctx, out, t + d, midiHz(m), len, 0.32));
+    VOICES[voices[1]](this.ctx, out, t, midiHz(50), 4.2, 0.18);
+    VOICES[voices[1]](this.ctx, out, t + 1.8, midiHz(46), 3.4, 0.16);
+    VOICES[voices[2]](this.ctx, out, t + 2.7, midiHz(86), 2.4, 0.12);
+    setTimeout(() => { try { out.disconnect(); } catch { /* ignore */ } }, 9000);
+    return true;
   }
 
   /** A firework shell over (x, z), bursting in `delay` seconds. */

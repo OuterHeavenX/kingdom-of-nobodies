@@ -1,5 +1,5 @@
 import { personalFinance } from './FinancePanel.js';
-import { beliefLine } from './ReligionPanel.js';
+import { beliefLine, worldviewCard } from './ReligionPanel.js';
 import { KINGDOMS } from '../region/RegionData.js';
 import { balance } from '../economy/Transactions.js';
 import { GOODS } from '../core/Config.js';
@@ -161,7 +161,7 @@ export function citizenDetail(sim, id) {
   </div>
 
   ${personalFinance(sim, c)}
-  ${c.belief ? `<div class="card"><h3>Belief</h3><p style="margin:0">${esc(beliefLine(c))}</p>${c.militia ? '<p class="muted">Serving in the militia.</p>' : ''}${c.refugee ? `<p class="muted">Came as a refugee from ${esc(c.refugee.from)}.</p>` : ''}</div>` : ''}
+  ${worldviewCard(sim, c)}
   <div class="grid2">
     <button class="btn" data-act="focus-citizen" data-id="${c.id}">📍 Follow in village</button>
     <button class="btn" data-act="history" data-kind="citizen" data-id="${c.id}">📜 Their history</button>

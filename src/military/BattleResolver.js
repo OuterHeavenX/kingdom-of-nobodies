@@ -119,7 +119,7 @@ function militiaLosses(state, army, lost, battle) {
   for (const id of [...army.citizenIds]) {
     const c = byId(state.citizens, id);
     if (!c) continue;
-    if (nextRandom(state) < share * 0.35) fallen.push(c);
+    if (nextRandom(state) < share * 0.35 * (casualtyHooks.guard?.(state, c) ?? 1)) fallen.push(c);
     else remember(state, c, `Fought at the ${battle.name}.`, 3, 'life');
   }
   for (const c of fallen) {
@@ -131,5 +131,5 @@ function militiaLosses(state, army, lost, battle) {
 }
 
 /** Set by the war system (Lifecycle.die) to avoid a circular import. */
-export const casualtyHooks = { die: null };
+export const casualtyHooks = { die: null, guard: null };
 const warDeath = (state, c, cause) => casualtyHooks.die?.(state, c, cause);

@@ -6,7 +6,7 @@
 export const FORMAT = 'kingdom-of-nobodies';
 export const MAX_SAVE_BYTES = 6 * 1024 * 1024;
 export const MIN_VERSION = 2;
-export const MAX_VERSION = 8; // keep in step with SAVE_VERSION (v0.5.2 saves are version 8)
+export const MAX_VERSION = 9; // keep in step with SAVE_VERSION (v0.5.3 saves are version 9)
 
 export function checksum(text) {
   let h = 2166136261;

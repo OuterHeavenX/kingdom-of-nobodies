@@ -12,8 +12,11 @@ export const LEVELS = [[0.8, 'Master'], [0.6, 'Expert'], [0.4, 'Journeyman'], [0
 export const levelOf = (v) => LEVELS.find(([min]) => v >= min)[1];
 
 /** Gain experience in a skill. Better-educated people learn a little faster. */
+/** Optional per-citizen learning-rate multipliers (state is not passed to gainSkill, so hooks read the citizen). */
+export const skillHooks = [];
+
 export function gainSkill(c, skill, amount) {
-  const rate = 0.75 + (c.education?.level ?? 0.3) * 0.5;
+  const rate = (0.75 + (c.education?.level ?? 0.3) * 0.5) * skillHooks.reduce((m, fn) => m * (fn(c, skill) ?? 1), 1);
   c.skills[skill] = Math.min(1, Math.round(((c.skills[skill] ?? 0.05) + amount * rate) * 1000) / 1000);
   return c.skills[skill];
 }

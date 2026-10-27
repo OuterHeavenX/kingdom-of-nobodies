@@ -37,13 +37,16 @@ export function offeredWage(c, b) {
 }
 
 /** The employer weighs skills, reliability, relationship and whether they can afford the wage. */
+/** Optional adjustments to how an applicant is judged (each returns points added to the score). */
+export const hiringHooks = [];
+
 export function applyForJob(state, c, b) {
   if (!isTrading(b) || b.openings < 1) return { ok: false, reason: `${b.name} is no longer hiring` };
   const wage = offeredWage(c, b);
   if (balance(state, b.id) < wage * 3 + wageBill(state, b)) return { ok: false, reason: `${b.name} cannot afford another wage` };
   const owner = byId(state.citizens, b.ownerId);
   const trust = owner ? peekRel(state, owner.id, c.id)?.trust ?? 45 : 50;
-  const score = skillFor(c, b.type) * 40 + c.reputation.reliability * 0.5 + trust * 0.3;
+  const score = skillFor(c, b.type) * 40 + c.reputation.reliability * 0.5 + trust * 0.3 + hiringHooks.reduce((s, fn) => s + (fn(state, c, b) ?? 0), 0);
   if (score < 30) return { ok: false, reason: `${owner?.firstName ?? 'The council'} doubted my reliability` };
   hire(state, c, b, wage);
   return { ok: true, wage };

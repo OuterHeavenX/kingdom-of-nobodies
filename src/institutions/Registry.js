@@ -8,11 +8,14 @@ export const isBankId = (id) => typeof id === 'string' && id.startsWith('bnk');
 export const isGuildId = (id) => typeof id === 'string' && id.startsWith('gld');
 export const isFaithId = (id) => typeof id === 'string' && id.startsWith('fth');
 export const isInstitutionId = (id) => isBankId(id) || isGuildId(id) || isFaithId(id);
+/** Voluntary societies (v0.5.3) keep a purse but never own land, so they are not land-holding institutions. */
+export const isSocietyId = (id) => typeof id === 'string' && id.startsWith('soc');
 
 export function institutionById(state, id) {
   if (isBankId(id)) return state.finance?.banks.find((b) => b.id === id) ?? null;
   if (isGuildId(id)) return state.guilds?.list.find((g) => g.id === id) ?? null;
   if (isFaithId(id)) return state.faith?.communities.find((f) => f.id === id) ?? null;
+  if (isSocietyId(id)) return state.divine?.societies.find((x) => x.id === id) ?? null;
   return null;
 }
 

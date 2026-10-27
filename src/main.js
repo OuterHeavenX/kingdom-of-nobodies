@@ -1,6 +1,7 @@
 import './styles/main.css';
 import './styles/panels.css';
 import './styles/mobile.css';
+import './styles/unseen.css';
 import { Game } from './core/Game.js';
 
 // Entry point: start the game behind the title screen, report real loading
@@ -11,7 +12,7 @@ const status = document.getElementById('boot-status');
 const bar = document.getElementById('boot-bar');
 /* global __BUILD__ */
 const BUILD = typeof __BUILD__ === 'string' ? __BUILD__ : 'dev';
-document.getElementById('boot-version').textContent = `v0.5.2 · build ${BUILD}`;
+document.getElementById('boot-version').textContent = `v0.5.3 · build ${BUILD}`;
 const progress = (text, fraction) => { if (status) status.textContent = text; if (bar) bar.style.width = `${Math.round(fraction * 100)}%`; };
 progress('Loading the engine…', 0.25);
 

@@ -45,6 +45,8 @@ const facingYaw = (plot) => ({ south: 0, north: Math.PI, west: -Math.PI / 2, eas
 export function siteSignature(state) {
   let sig = `${state.roads?.length ?? 0}:${state.council?.marketplace ? 'm' : ''}:`;
   for (const p of state.plots) sig += `${p.building?.type ?? ''}${p.building?.era ?? ''}${p.projectId ? '*' : ''}${p.facing?.[0] ?? ''}|`;
+  const st = state.divine?.stone;
+  if (st) sig += `#stone:${st.x},${st.z}:${Object.keys(st.site ?? {}).length}`;
   return sig;
 }
 
@@ -64,11 +66,14 @@ export function villageSites(state) {
   const roads = (state.roads ?? []).map((r) => roadRect(r));
   const market = state.council?.marketplace ? [0, 1, 2, 3].map((i) => { const a = Math.PI / 4 + (i * Math.PI) / 2; return [Math.cos(a) * 7, Math.sin(a) * 7]; }) : [];
   const inside = (x, z, r, [a, b, c, d]) => x > a - r && x < c + r && z > b - r && z < d + r;
+  const stone = state.divine?.stone ?? null;
+  const stoneR = stone ? (stone.site?.museum || stone.site?.observatory ? 9.5 : stone.site?.garden ? 4.4 : 3.2) : 0;
   const free = (x, z, r = 0.5) => {
     if (Math.abs(x) > 86 || Math.abs(z) > 86) return false;
     if (z > RIVER.zMin - 1.5 - r && z < RIVER.zMax + 1.5 + r) return false;
     if (Math.hypot(x, z) < 4.9 + r) return false; // the square, its fire and benches
     if (Math.hypot(x + 4.6, z + 4.6) < 1.6 + r) return false; // the Founders' Memorial
+    if (stone && Math.hypot(x - stone.x, z - stone.z) < stoneR + r) return false; // the carved stone and what stands around it
     for (const [lx, lz] of LAMPS) if (Math.hypot(x - lx, z - lz) < 0.6 + r) return false;
     for (const [mx, mz] of market) if (Math.hypot(x - mx, z - mz) < 1.9 + r) return false;
     for (const s of solids) if (inside(x, z, r + 0.3, s)) return false;

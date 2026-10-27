@@ -14,6 +14,7 @@ import { activeCommunities, membersOf, charity, dailyFaith, consoleBereaved } fr
 import { beliefOf, TRADITIONS } from '../src/institutions/FaithManager.js';
 import { openCampaign } from '../src/politics/Government.js';
 import { platformFor, defaultPolicies } from '../src/politics/Policies.js';
+import { plotsForSale, allows } from '../src/property/LandRegistry.js';
 
 const fixture = () => deserialize(readFileSync(new URL('./fixtures/m4-save.json', import.meta.url), 'utf8'));
 const toSeasonStart = (s) => { while ((s.day - 1) % 3 !== 0) s.day++; };
@@ -79,6 +80,12 @@ test('acceptance: the Merchants\' Guild builds a hall and backs the low-tariff c
   for (const id of g.members.slice(0, 4)) transfer(s, 'outside', id, 200, 'grant', 'test: a good year of trade');
   for (const id of g.members.slice(0, 4)) transfer(s, id, g.id, 100, 'dues', 'test: subscriptions for the hall');
   while (g.members.length < 4) { const c = s.citizens.find((x) => !g.members.includes(x.id) && !activeGuilds(s).some((y) => y.members.includes(x.id)) && ageOf(s, x) >= 18); c.profession = 'Merchant'; g.members.push(c.id); }
+  // The hall needs land on the market: if every suitable plot happens to be taken in this run of
+  // history, the owner of a vacant one puts it up for sale (the guild still has to buy and build).
+  if (!plotsForSale(s, 'guildhall', g.id).some((p) => !p.building)) {
+    const vacant = s.plots.find((p) => allows(p, 'guildhall') && !p.building && !p.projectId);
+    if (vacant) vacant.marketStatus = 'FOR_SALE';
+  }
   const hasHall = () => g.plotId && s.plots.find((p) => p.id === g.plotId)?.building?.type === 'guildhall';
   for (let i = 0; i < 60 && !hasHall(); i++) sim.runDays(1);
   assert.ok(hasHall(), 'the guild hall was built');
