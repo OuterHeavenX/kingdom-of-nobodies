@@ -27,6 +27,7 @@ import { dailyDisasters, updateFires } from '../events/Disasters.js';
 import { dailyDiscovery } from '../events/Discoveries.js';
 import { yearlyReview } from '../history/Eras.js';
 import { compactState } from '../history/Compaction.js';
+import { archiveClosedBusinesses } from './BusinessArchive.js';
 import { isNewYear, isNewSeason } from '../core/Calendar.js';
 import { councilInfrastructure } from '../council/Council.js';
 import { considerRoads, approveRoads } from '../navigation/RoadConstruction.js';
@@ -126,7 +127,7 @@ export class Simulation {
       }
     }
     yearlyReview(s);
-    if (isNewYear(s.day)) compactState(s);
+    if (isNewYear(s.day)) { compactState(s); archiveClosedBusinesses(s); }
     dailyGovernment(s);
     dailyDisasters(s);
     dailyDiscovery(s);

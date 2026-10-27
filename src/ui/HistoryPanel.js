@@ -77,7 +77,7 @@ function timeline(sim, view) {
   }).join('');
   const summary = year ? s.yearly.find((y) => y.year === year) : null;
   const subject = filter.citizen ? person(s, filter.citizen) : null;
-  const subjectName = subject ? `${subject.firstName} ${subject.lastName}` : filter.business ? s.businesses.find((b) => b.id === filter.business)?.name : filter.plot ? s.plots.find((p) => p.id === filter.plot)?.name : null;
+  const subjectName = subject ? `${subject.firstName} ${subject.lastName}` : filter.business ? (s.businesses.find((b) => b.id === filter.business) ?? s.businessArchive?.[filter.business])?.name : filter.plot ? s.plots.find((p) => p.id === filter.plot)?.name : null;
   const chips = [`<button class="chip ${!filter.category ? 'active' : ''}" data-act="chronicle-filter" data-id="">All</button>`,
     ...CATEGORIES.map((c) => `<button class="chip ${filter.category === c ? 'active' : ''}" data-act="chronicle-filter" data-id="${c}">${ICONS[c]} ${capital(c)}</button>`)].join('');
   const html = `${modeChips('timeline')}

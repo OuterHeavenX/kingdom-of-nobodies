@@ -128,7 +128,8 @@ export function checkBreakups(state) {
     const b = byId(state.citizens, otherId);
     if (!b) continue;
     const ab = rel(state, a.id, b.id), ba = rel(state, b.id, a.id);
-    if (ab.trust < SOCIAL.breakupTrust || ba.trust < SOCIAL.breakupTrust || ab.rivalry > 55 || ba.rivalry > 55 || ab.affection < 30) {
+    // Either one falling out of love ends it, whichever of the two that is.
+    if (Math.min(ab.trust, ba.trust) < SOCIAL.breakupTrust || Math.max(ab.rivalry, ba.rivalry) > 55 || Math.min(ab.affection, ba.affection) < 30) {
       const wasPartner = a.romance.partnerId === b.id;
       for (const [x, y] of [[a, b], [b, a]]) {
         x.romance.partnerId = null; x.romance.courtingId = null; x.romance.engagedTo = null; x.family.partnerId = null;
