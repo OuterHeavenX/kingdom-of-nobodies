@@ -10,6 +10,7 @@ import { ensureDiplomacy, relationScore, hasTreaty, signTreaty, embargoBetween, 
 // (WarManager counts allies before declaring war), and when the attack comes
 // an ally must answer the call or break the treaty.
 
+export const AGGRESSION_FADE = 0.025; // per season
 const rulerOf = (state, party) => (party === HEARTH ? null : state.foreign?.people[state.region.settlements[party]?.leader?.citizenId] ?? null);
 
 /** Does a party's government want a military treaty with another? */
@@ -38,6 +39,9 @@ function sharedRival(state, a, b) {
 export function seasonalAlliances(state) {
   if (!isNewSeason(state.day)) return;
   const d = ensureDiplomacy(state);
+  // A record of aggression fades: about one war forgotten in ten years of peace.
+  const agg = state.military?.aggressions ?? {};
+  for (const p of Object.keys(agg)) agg[p] = Math.max(0, Math.round((agg[p] - AGGRESSION_FADE) * 1000) / 1000);
   for (let i = 0; i < PARTIES.length; i++) for (let j = i + 1; j < PARTIES.length; j++) {
     const a = PARTIES[i], b = PARTIES[j];
     if (embargoBetween(state, a, b) || state.military?.wars.some((w) => w.status === 'ACTIVE' && ((w.attackers.includes(a) && w.defenders.includes(b)) || (w.attackers.includes(b) && w.defenders.includes(a))))) continue;
@@ -46,7 +50,7 @@ export function seasonalAlliances(state) {
     if (!hasTreaty(state, a, b, 'defense') && (rival || aggressor || relationScore(state, a, b) > 55) && militaryWilling(state, a, b, 'defense') && militaryWilling(state, b, a, 'defense') && chance(state, 0.5)) {
       const t = signTreaty(state, 'defense', a, b);
       if (t) {
-        t.reason = aggressor ? `a coalition against ${partyName(aggressor)}, which has started ${state.military.aggressions[aggressor]} wars` : rival ? `a shared rival in ${partyName(rival)}` : 'long friendship';
+        t.reason = aggressor ? `a coalition against ${partyName(aggressor)}, which has started ${Math.round(state.military.aggressions[aggressor])} wars of late` : rival ? `a shared rival in ${partyName(rival)}` : 'long friendship';
         diplomacyNote(state, `${partyName(a)} and ${partyName(b)} formed a defensive alliance: ${t.reason}.`, 2);
       }
     } else if (hasTreaty(state, a, b, 'defense') && !hasTreaty(state, a, b, 'assistance_mil') && relationScore(state, a, b) > 65 && militaryWilling(state, a, b, 'assistance_mil') && militaryWilling(state, b, a, 'assistance_mil') && chance(state, 0.3)) {

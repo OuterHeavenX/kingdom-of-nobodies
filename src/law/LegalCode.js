@@ -26,6 +26,11 @@ export const LAWS = {
   land: { name: 'Land Development Act', issue: 'works', description: 'Land is for building on, not hoarding.', requirement: 'Land bought must be built on within two years.', remedy: 'Idle land is bought back by the council at the price paid.' },
 };
 
+/** A rejected bill waits this long before it can be proposed again. */
+export const BILL_COOLDOWN_DAYS = DAYS_PER_YEAR * 3;
+/** A member supports a bill (proposes it, votes aye) when their stance is at least this. */
+export const SUPPORT_STANCE = 0;
+
 /** Laws added by later systems supply their own reasons and stances, keyed by law. */
 export const lawHooks = { reason: {}, stance: {} };
 
@@ -65,11 +70,9 @@ function stanceOn(state, c, key) {
 function reasonFor(state, key) {
   const law = ensureLaw(state);
   if (lawByKey(state, key)?.status === 'ACTIVE' || law.proposals.some((p) => p.key === key && p.status === 'PENDING')) return null;
-  if (lawHooks.reason[key]) {
-    // A bill that failed is not brought back for three years.
-    if (law.proposals.some((p) => p.key === key && p.status === 'REJECTED' && state.day - p.decidedDay < DAYS_PER_YEAR * 3)) return null;
-    return lawHooks.reason[key](state);
-  }
+  // A bill that failed is not brought back for three years, whichever law it was.
+  if (law.proposals.some((p) => p.key === key && p.status === 'REJECTED' && state.day - p.decidedDay < BILL_COOLDOWN_DAYS)) return null;
+  if (lawHooks.reason[key]) return lawHooks.reason[key](state);
   if (key === 'contracts') {
     const dismissed = law.cases.filter((c) => c.kind === 'contract' && c.judgment?.outcome === 'dismissed' && /no law/.test(c.judgment.reason)).length;
     const deliveries = state.trade?.stats?.deliveries ?? 0;
@@ -99,8 +102,8 @@ export function considerLaws(state) {
   for (const key of Object.keys(LAWS)) {
     const reason = reasonFor(state, key);
     if (!reason) continue;
-    // A leader only proposes what they themselves can support.
-    if (leader && stanceOn(state, leader, key) < -0.1) continue;
+    // A leader only proposes what they themselves would vote for; the next bill gets its turn.
+    if (leader && stanceOn(state, leader, key) < SUPPORT_STANCE) continue;
     const proposal = { id: 'lp' + (law.proposals.length + 1), key, name: LAWS[key].name, reason, proposedDay: state.day, proposedBy: leader ? `${leader.firstName} ${leader.lastName}` : 'the council', status: 'PENDING', votes: {} };
     law.proposals.push(proposal);
     vote(state, proposal);
@@ -122,8 +125,8 @@ function vote(state, proposal) {
   let ayes = 0, noes = 0;
   for (const v of voters) {
     const s = stanceOn(state, v, proposal.key);
-    proposal.votes[v.id] = s >= 0 ? 'aye' : 'no';
-    if (s >= 0) ayes++; else noes++;
+    proposal.votes[v.id] = s >= SUPPORT_STANCE ? 'aye' : 'no';
+    if (s >= SUPPORT_STANCE) ayes++; else noes++;
   }
   const passed = ayes > noes;
   proposal.status = passed ? 'PASSED' : 'REJECTED';

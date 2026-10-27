@@ -8,7 +8,7 @@ import { ageOf, achieve } from '../citizens/Citizen.js';
 import { remember } from '../ai/MemorySystem.js';
 import { record } from '../society/Chronicle.js';
 import { isNewSeason } from '../core/Calendar.js';
-import { HEARTH, KINGDOMS, FOOD_COMMODITIES } from '../region/RegionData.js';
+import { HEARTH, KINGDOMS, FOOD_COMMODITIES, COMMODITIES } from '../region/RegionData.js';
 import { available } from '../region/Settlement.js';
 import { buyFood, foodIn, takeFood } from '../institutions/CommunityEvents.js';
 import { ensureMilitary, createArmy, liveArmies, note } from './Army.js';
@@ -104,7 +104,9 @@ export function raiseArmy(state, party, war, target, { share = 1 } = {}) {
     const iron = Math.min(want, Math.floor(available(k, 'iron')));
     const tools = Math.min(want - iron, Math.floor(available(k, 'tools')));
     k.inventory.iron -= iron; k.inventory.tools -= tools;
-    f.equipment = Math.min(0.95, Math.max(0.2, f.equipment + ((iron + tools) / Math.max(1, want) - 0.5) * 0.15));
+    // A kingdom without its own mines buys arms abroad for the shortfall, if its treasury allows.
+    const bought = buyArms(state, party, want - iron - tools);
+    f.equipment = Math.min(0.95, Math.max(0.2, f.equipment + ((iron + tools + bought) / Math.max(1, want) - 0.5) * 0.15));
     commander = state.foreign?.people ? Object.values(state.foreign.people).filter((p) => p.kingdom === party && p.status === 'alive' && p.role === 'notable').sort((a, b) => b.standing - a.standing)[0]?.id ?? null : null;
   }
   if (soldiers < 6) return null;
@@ -113,6 +115,21 @@ export function raiseArmy(state, party, war, target, { share = 1 } = {}) {
   const army = createArmy(state, { owner: party, soldiers, commander, training: f.training, equipment: f.equipment, morale: f.morale, supplies, warId: war.id, target, citizenIds });
   note(army, state, `Raised ${soldiers} soldiers${citizenIds.length ? ` (${citizenIds.length} villagers leading companies of their neighbours)` : ''}, carrying ${supplies} rations.`);
   return army;
+}
+
+export const IMPORTED_ARMS_CEILING = 0.8;
+
+/**
+ * Buy `units` of arms (iron and tools) from the lands beyond the region at the
+ * kingdom's own market price, keeping a reserve in the treasury. Returns the units bought.
+ */
+export function buyArms(state, party, units, reserve = 400) {
+  if (party === HEARTH || units <= 0) return 0;
+  const k = state.region.settlements[party];
+  const price = Math.max(COMMODITIES.iron.base, k.prices?.iron ?? COMMODITIES.iron.base);
+  const n = Math.min(units, Math.floor((balance(state, accountOf(party)) - reserve) / price));
+  if (n <= 0 || !transfer(state, accountOf(party), 'outside', Math.ceil(n * price), 'expense', `${KINGDOMS[party].name} arms bought abroad`)) return 0;
+  return n;
 }
 
 /** Disband an army: soldiers go home to their work, militia villagers to their village. */
@@ -124,7 +141,8 @@ export function disband(state, army, why) {
   f.mobilised = Math.max(0, f.mobilised - army.startSoldiers);
   if (army.owner !== HEARTH) {
     const k = state.region.settlements[army.owner];
-    k.mobilised = Math.max(0, (k.mobilised ?? 0) - army.startSoldiers);
+    // Losses and desertions were taken off as they happened; the survivors come home now.
+    k.mobilised = Math.max(0, (k.mobilised ?? 0) - army.soldiers);
     // Unused food goes back into the stores.
     if (army.supplies > 0) k.inventory.grain = (k.inventory.grain ?? 0) + army.supplies;
   } else if (army.supplies > 0) addGoods(state.council.pantry, 'grain', Math.floor(army.supplies));
@@ -198,9 +216,16 @@ export function peacetimeForces(state) {
       f.training = Math.min(0.9, Math.round((f.training + 0.01) * 1000) / 1000);
       f.drills++;
     } else f.training = Math.max(0.2, Math.round((f.training - 0.01) * 1000) / 1000);
-    // Smiths keep the armouries stocked: equipment drifts toward what iron and tools allow.
+    // Smiths keep the armouries stocked: equipment drifts up when the kingdom has metal
+    // enough for its garrison (from its own mines, or bought abroad), and down when it has not.
+    // Arms bought abroad keep an armoury in fair order, but not as well as a kingdom's own smiths.
+    const need = Math.max(1, Math.ceil(garrison / 10));
     const metal = available(k, 'iron') + available(k, 'tools');
-    f.equipment = Math.round(Math.max(0.2, Math.min(0.95, f.equipment + (metal > 20 ? 0.01 : -0.01))) * 1000) / 1000;
+    const own = metal >= need * 2;
+    const ceiling = own ? 0.95 : IMPORTED_ARMS_CEILING;
+    const stocked = own || (f.equipment < ceiling && buyArms(state, party, need) >= need);
+    const drift = stocked ? 0.01 : f.equipment >= ceiling && !own ? 0 : -0.01;
+    f.equipment = Math.round(Math.max(0.2, Math.min(0.95, f.equipment + drift)) * 1000) / 1000;
   }
 }
 

@@ -162,7 +162,7 @@ function startRebuild(state, app) {
   const { who, reason, newLabel, stages, era: target } = app;
   const cost = app.cost.total;
   const res = startProject(state, {
-    plotId: plot.id, ownerId: plot.ownerId, kind: 'rebuild', buildingType: b.type, stages, targetEra: target, contractors: target >= 3,
+    plotId: plot.id, ownerId: app.applicantId ?? plot.ownerId, kind: 'rebuild', buildingType: b.type, stages, targetEra: target, contractors: target >= 3,
     note: `replacing the ${formLabel(b).toLowerCase()} with ${/^[aeiou]/i.test(newLabel) ? 'an' : 'a'} ${newLabel.toLowerCase()}`,
   });
   if (!res.ok) return null;
@@ -173,7 +173,13 @@ function startRebuild(state, app) {
   return res.project;
 }
 
-applicationExecutors.rebuild = (state, app) => (startRebuild(state, app) ? null : 'the work could not start');
+/** An approved rebuild goes ahead only for the applicant, on land they still own, with the money to pay. */
+applicationExecutors.rebuild = (state, app) => {
+  const plot = plotById(state, app.plotIds[0]);
+  if (!plot || plot.ownerId !== app.applicantId) return `${plot?.name ?? 'the plot'} no longer belongs to the applicant`;
+  if (balance(state, ownerAccount(app.applicantId)) < app.cost.total * (ownerKind(state, app.applicantId) === 'citizen' ? 0.9 : 1)) return 'the applicant can no longer pay for it';
+  return startRebuild(state, app) ? null : 'the work could not start';
+};
 
 /** A finished rebuild: modern premises take more staff; the first building of each era is remembered. */
 export function onRebuilt(state, plot, project) {

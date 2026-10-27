@@ -95,7 +95,7 @@ export function pressSieges(state, wars) {
         endSiege(state, siege, 'repulsed', `The defenders of ${settlementName(siege.target)} threw back the assault; the besiegers fell back.`);
         outcomes.push({ kind: 'withdrawal', siege, war, army });
       }
-      if (siege.target !== HEARTH) state.region.settlements[siege.target].population = Math.max(40, state.region.settlements[siege.target].population - (garrisonSoldiers - garrison.soldiers));
+      // The garrison's losses already came out of the town's population in the battle.
       continue;
     }
     if (siege.days % 5 === 0) outcomes.push({ kind: 'parley', siege, war });

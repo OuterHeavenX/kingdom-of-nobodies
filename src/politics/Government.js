@@ -17,7 +17,7 @@ import { startProject } from '../property/Construction.js';
 import { allows } from '../property/LandRegistry.js';
 import { settlementStage } from '../population/Expansion.js';
 import { defaultPolicies, platformFor, platformPromises, POLICIES } from './Policies.js';
-import { priorities, alignment, candidateAppeal, updateFactions, factionAlignment, FACTIONS } from './Opinion.js';
+import { priorities, alignment, candidateAppeal, personalTie, updateFactions, factionAlignment, FACTIONS } from './Opinion.js';
 
 // The village government. Once enough adults live here, residents elect a
 // leader whose title grows with the settlement. Candidates stand on platforms
@@ -99,7 +99,8 @@ function candidacyScore(state, c) {
   if (c.dream.type === 'leader') s += 30;
   if (trait(c, 'shy') > 0.4) s -= 20;
   if (age > 72) s -= 25;
-  if (c.id === state.government.leaderId) s += state.government.approval > 35 ? 35 : -40;
+  // A popular incumbent usually stands again, though long years in office wear on anyone.
+  if (c.id === state.government.leaderId) s += state.government.approval > 35 ? 35 - 8 * Math.max(0, (state.government.terms ?? 1) - 1) : -40;
   return s;
 }
 
@@ -142,9 +143,12 @@ export function castVote(state, voter) {
   const camp = state.government?.campaign;
   if (!camp || camp.ballots[voter.id] || ageOf(state, voter) < LIFE.adultAge) return null;
   const prio = priorities(state, voter);
+  // Personal ties are weighed relative to this voter's average tie to the people on the ballot.
+  const people = camp.candidates.map((x) => person(state, x.id)).filter(Boolean);
+  const tieMean = people.reduce((s, c) => s + personalTie(state, voter, c), 0) / Math.max(1, people.length);
   let best = null, bestScore = -Infinity;
   for (const cand of camp.candidates) {
-    const s = candidateAppeal(state, voter, cand, prio);
+    const s = candidateAppeal(state, voter, cand, prio, tieMean);
     if (s > bestScore || (s === bestScore && cand.id < best.id)) { bestScore = s; best = cand; }
   }
   if (!best) return null;
@@ -173,6 +177,8 @@ export function tally(state) {
   gov.elections.push(result);
   if (gov.elections.length > 60) gov.elections.splice(0, gov.elections.length - 60);
   const previous = gov.leaderId;
+  // Consecutive terms served by the same leader (voters weigh them as fatigue).
+  gov.terms = previous === winner.id ? (gov.terms ?? 1) + 1 : 1;
   gov.leaderId = winner.id;
   gov.actingLeaderId = null;
   gov.councillors = ranked.slice(1, 3).map((x) => x.id);
@@ -187,7 +193,7 @@ export function tally(state) {
   achieve(state, w, 'elected', `Elected ${gov.title} in Year ${result.year} with ${votes[winner.id]} of ${cast} votes`, { title: gov.title });
   w.mood = Math.min(100, w.mood + 20);
   remember(state, w, `Won the election for ${gov.title}.`, 3, 'politics');
-  bump(w, 'standing', 8);
+  bump(w, 'standing', previous === w.id ? 3 : 8);
   for (const x of ranked.slice(1)) { const loser = person(state, x.id); remember(state, loser, `Lost the election to ${w.firstName}.`, 2, 'politics'); loser.mood = Math.max(0, loser.mood - 10); }
   grantPrivileges(state, winner.id, camp.guildBacking ?? {});
   const changes = platformPromises(gov.policies, before);
@@ -204,15 +210,19 @@ export function tally(state) {
 export function updateApproval(state) {
   const gov = state.government;
   const leader = currentLeader(state);
-  if (!leader) { gov.approval = 50; return; }
-  let total = 0, n = 0;
+  if (!leader) { gov.approval = 50; gov.performance = 50; return; }
+  let total = 0, record = 0, n = 0;
   for (const c of adults(state)) {
     const r = state.relationships[`${c.id}|${leader.id}`];
-    const opinion = 50 + alignment(priorities(state, c), gov.policies) * 6 + (c.mood - 55) * 0.4 + ((r?.friendship ?? 20) - 20) * 0.2 + ((r?.trust ?? 45) - 45) * 0.3 - (r?.rivalry ?? 0) * 0.3;
+    // The leader's record: how well policy serves this person and how life is going.
+    const performance = 50 + alignment(priorities(state, c), gov.policies) * 6 + (c.mood - 55) * 0.4;
+    const opinion = performance + ((r?.friendship ?? 20) - 20) * 0.2 + ((r?.trust ?? 45) - 45) * 0.3 - (r?.rivalry ?? 0) * 0.3;
     c.opinionOfLeader = Math.max(0, Math.min(100, Math.round(opinion)));
-    total += c.opinionOfLeader; n++;
+    total += c.opinionOfLeader; record += Math.max(0, Math.min(100, performance)); n++;
   }
   gov.approval = n ? Math.round(total / n) : 50;
+  // Approval without the personal ties, which voters already weigh candidate by candidate.
+  gov.performance = n ? Math.round(record / n) : 50;
   gov.approvalHistory = [...(gov.approvalHistory ?? []), gov.approval].slice(-24);
 }
 
@@ -221,7 +231,7 @@ function leaderReview(state) {
   const gov = state.government;
   const leader = currentLeader(state);
   if (!leader) return;
-  gainSkill(leader, 'leadership', 0.02);
+  gainSkill(leader, 'leadership', 0.02 * (1 - (leader.skills.leadership ?? 0)));
   const t = balance(state, 'treasury');
   const prio = priorities(state, leader);
   const p = gov.policies;

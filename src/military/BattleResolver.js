@@ -44,30 +44,44 @@ export function strengthOf(state, army, { defending = false, terrain = 'plains',
   return { value: Math.round(value), factors };
 }
 
+/** Take `lost` soldiers from a kingdom's people, never raising a small population to a floor. */
+export function populationLoss(k, lost) {
+  k.population = Math.max(Math.min(k.population, 40), k.population - lost);
+}
+
 /**
- * Resolve a battle between two armies. `defender` holds the ground (a field
- * on a route, or the walls of a settlement when `fortified` names it).
+ * Resolve a battle between two armies, each joined by any allied armies
+ * encamped with it (`attackerAllies`, `defenderAllies`): a coalition fights
+ * together, its strength summed and its losses shared. At a town's walls
+ * (`fortified` names it) the defender has the walls; in the field only the
+ * side named by `ground` (the one that came first and chose its position;
+ * the defender by default) has the terrain.
  */
-export function resolveBattle(state, attacker, defender, { routeId = null, fortified = null, war = null } = {}) {
+export function resolveBattle(state, attacker, defender, { routeId = null, fortified = null, war = null, attackerAllies = [], defenderAllies = [], ground = 'defender' } = {}) {
   const m = ensureMilitary(state);
   const route = routeId ? routeById(routeId) : null;
   const terrain = route?.terrain ?? 'plains';
-  const A = strengthOf(state, attacker, { terrain });
-  const D = strengthOf(state, defender, { defending: true, terrain, fortified });
+  const attackers = [attacker, ...attackerAllies.filter((x) => x !== attacker)], defenders = [defender, ...defenderAllies.filter((x) => x !== defender)];
+  const side = (armies, holds) => armies.map((x) => strengthOf(state, x, { defending: holds, terrain, fortified: holds ? fortified : null }));
+  const AS = side(attackers, !fortified && ground === 'attacker'), DS = side(defenders, !!fortified || ground !== 'attacker');
+  const A = AS[0], D = DS[0];
+  const total = (xs) => xs.reduce((s, x) => s + x.value, 0);
   const rollA = 0.85 + nextRandom(state) * 0.3, rollD = 0.85 + nextRandom(state) * 0.3;
-  const a = A.value * rollA, d = D.value * rollD;
-  const attackerWins = a > d;
+  const a = total(AS) * rollA, d = total(DS) * rollD;
+  const attackerWins = a > d || (a === d && nextRandom(state) < 0.5);
   const ratio = attackerWins ? a / Math.max(1, d) : d / Math.max(1, a);
   const winner = attackerWins ? attacker : defender, loser = attackerWins ? defender : attacker;
+  const winners = attackerWins ? attackers : defenders, losers = attackerWins ? defenders : attackers;
   // Losses: the beaten side loses more, especially when the battle was lopsided.
   const loserShare = Math.min(0.4, 0.12 + (ratio - 1) * 0.15);
   const winnerShare = Math.max(0.03, 0.12 - (ratio - 1) * 0.05);
-  const before = { [attacker.id]: attacker.soldiers, [defender.id]: defender.soldiers };
-  const lostL = Math.max(1, Math.round(loser.soldiers * loserShare));
-  const lostW = Math.max(0, Math.round(winner.soldiers * winnerShare));
-  loser.soldiers -= lostL; winner.soldiers -= lostW;
-  loser.morale = Math.max(0.05, Math.round((loser.morale - 0.25) * 100) / 100);
-  winner.morale = Math.min(1, Math.round((winner.morale + 0.08) * 100) / 100);
+  const before = Object.fromEntries([...attackers, ...defenders].map((x) => [x.id, x.soldiers]));
+  const losses = new Map();
+  for (const x of losers) losses.set(x, x === loser ? Math.max(1, Math.round(x.soldiers * loserShare)) : Math.round(x.soldiers * loserShare));
+  for (const x of winners) losses.set(x, Math.max(0, Math.round(x.soldiers * winnerShare)));
+  for (const [x, n] of losses) x.soldiers -= n;
+  for (const x of losers) x.morale = Math.max(0.05, Math.round((x.morale - 0.25) * 100) / 100);
+  for (const x of winners) x.morale = Math.min(1, Math.round((x.morale + 0.08) * 100) / 100);
   const place = fortified ? `the walls of ${settlementName(fortified)}` : route ? `the ${route.name}` : 'open ground';
   const name = `Battle of ${fortified ? settlementName(fortified) : route ? route.name.replace(/^the /i, '') : 'the Field'}`;
   const battle = {
@@ -78,20 +92,29 @@ export function resolveBattle(state, attacker, defender, { routeId = null, forti
     ],
     winner: winner.owner, loser: loser.owner, decisive: ratio > 1.5,
   };
+  const allied = [...attackers.slice(1).map((x, i) => [x, 'attacker', AS[i + 1]]), ...defenders.slice(1).map((x, i) => [x, 'defender', DS[i + 1]])];
+  if (allied.length) battle.allies = allied.map(([x, role, st]) => ({ party: x.owner, armyId: x.id, role, before: before[x.id], after: x.soldiers, strength: st.value }));
   m.battles.push(battle);
   if (m.battles.length > 40) m.battles.shift();
-  if (war) { war.battles.push(battle.id); war.score[winner.owner] = (war.score[winner.owner] ?? 0) + (battle.decisive ? 3 : 2); war.casualties[attacker.owner] = (war.casualties[attacker.owner] ?? 0) + (before[attacker.id] - attacker.soldiers); war.casualties[defender.owner] = (war.casualties[defender.owner] ?? 0) + (before[defender.id] - defender.soldiers); }
+  if (war) {
+    war.battles.push(battle.id);
+    war.score[winner.owner] = (war.score[winner.owner] ?? 0) + (battle.decisive ? 3 : 2);
+    for (const [x, n] of losses) war.casualties[x.owner] = (war.casualties[x.owner] ?? 0) + n;
+  }
   // Soldiers are people: a kingdom's losses come out of its population.
-  for (const [army, lost] of [[loser, lostL], [winner, lostW]]) {
+  for (const [army, lost] of losses) {
     if (army.owner !== HEARTH) {
       const k = state.region.settlements[army.owner];
-      k.population = Math.max(40, k.population - lost);
-      k.mobilised = Math.max(0, (k.mobilised ?? 0) - lost);
+      populationLoss(k, lost);
+      // A town's garrison was never mobilised; a field army's losses leave the muster roll.
+      if (army.id !== 'garrison') k.mobilised = Math.max(0, (k.mobilised ?? 0) - lost);
     } else militiaLosses(state, army, lost, battle);
-    note(army, state, `${army === winner ? 'Won' : 'Lost'} the ${name}; ${lost} soldiers lost.`);
+    note(army, state, `${winners.includes(army) ? 'Won' : 'Lost'} the ${name}; ${lost} soldiers lost.`);
   }
   const why = explain(battle);
-  record(state, 'diplomacy', `The ${name} (Year ${battle.year}): ${partyName(winner.owner)} ${battle.decisive ? 'decisively defeated' : 'defeated'} ${partyName(loser.owner)} at ${place}. ${partyName(attacker.owner)} brought ${before[attacker.id]} soldiers, ${partyName(defender.owner)} ${before[defender.id]}; ${why}. The beaten army withdrew.`, {}, 3);
+  const host = (armies) => [...new Set(armies.map((x) => x.owner))].map(partyName).join(' and ');
+  const men = (armies) => armies.reduce((s, x) => s + before[x.id], 0);
+  record(state, 'diplomacy', `The ${name} (Year ${battle.year}): ${host(winners)} ${battle.decisive ? 'decisively defeated' : 'defeated'} ${host(losers)} at ${place}. ${host(attackers)} brought ${men(attackers)} soldiers, ${host(defenders)} ${men(defenders)}; ${why}. The beaten army withdrew.`, {}, 3);
   return battle;
 }
 
@@ -105,7 +128,7 @@ export function explain(battle) {
   if (w.before < l.before) reasons.push(`though outnumbered, ${partyName(w.party)} had the better of ${['training', 'equipment', 'morale', 'supply'].filter((k) => w.factors[k] > l.factors[k]).join(' and ') || 'the day'}`);
   else reasons.push(`${partyName(w.party)} had the larger force`);
   if (l.factors.supply < 1) reasons.push(`${partyName(l.party)}'s soldiers were going hungry`);
-  if (w.role === 'defender' && w.factors.ground > 1) reasons.push(`the ground favoured the defenders`);
+  if (w.factors.ground > 1) reasons.push(w.role === 'defender' ? `the ground favoured the defenders` : `${partyName(w.party)} had chosen the ground`);
   return reasons.join('; ');
 }
 
