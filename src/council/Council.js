@@ -4,7 +4,7 @@ import { sendGift } from '../diplomacy/Diplomacy.js';
 import { leaveJob } from '../economy/Employment.js';
 import { needsCourthouse } from '../law/Courts.js';
 import { byId } from '../core/EntityRegistry.js';
-import { COUNCIL, ECONOMY, FOOD_GOODS, GOODS, TIME, DAYS_PER_YEAR } from '../core/Config.js';
+import { COUNCIL, ECONOMY, FOOD_GOODS, GOODS, TIME, DAYS_PER_YEAR, LIFE, NEEDS } from '../core/Config.js';
 import { transfer, balance } from '../economy/Transactions.js';
 import { qty, moveGoods, addGoods } from '../economy/Inventory.js';
 import { isTrading, BUSINESS_TYPES, wholesalePrice, createBusiness, businessName } from '../economy/Businesses.js';
@@ -272,13 +272,16 @@ export function councilDaily(state) {
     if (b) { b.lastGrantDay = state.day; COUNCIL_ACTIONS.supportBusiness(state, b.id); }
   }
   // The hungriest are fed first when the pantry runs short (not whoever has lived here longest):
-  // the penniless and hungry, and anyone already starving with no food in hand (the sick, the
-  // frail), who pays the pantry price if they can. Someone starving gets a second portion.
+  // the penniless and hungry, and anyone close to starving with no food in hand (the sick, the
+  // frail), who pays the pantry price if they can. The starving and hungry children come first
+  // and get a day's food (two portions); others get one.
   const hasFood = (c) => FOOD_GOODS.some((g) => qty(c.inventory, g) > 0);
-  const destitute = state.citizens.filter((c) => c.needs.hunger <= 30 && !c.away && (balance(state, c.id) < 3 || (c.health?.starvingDays > 0 && !hasFood(c))))
-    .sort((a, b) => (b.health?.starvingDays ?? 0) - (a.health?.starvingDays ?? 0) || a.needs.hunger - b.needs.hunger || a.id.localeCompare(b.id));
+  const child = (c) => state.day - c.birthDay < LIFE.adultAge * DAYS_PER_YEAR;
+  const starving = (c) => c.needs.hunger <= NEEDS.criticalHunger || (c.health?.starvingDays ?? 0) > 0;
+  const destitute = state.citizens.filter((c) => c.needs.hunger <= 30 && !c.away && (balance(state, c.id) < 3 || (starving(c) && !hasFood(c))))
+    .sort((a, b) => (b.health?.starvingDays ?? 0) - (a.health?.starvingDays ?? 0) || child(b) - child(a) || a.needs.hunger - b.needs.hunger || a.id.localeCompare(b.id));
   for (const c of destitute) {
-    const portions = c.health?.starvingDays > 0 ? 2 : 1;
+    const portions = starving(c) || child(c) ? 2 : 1;
     for (let i = 0; i < portions; i++) {
       const good = FOOD_GOODS.find((g) => qty(state.council.pantry, g) > 0);
       if (!good) break;
