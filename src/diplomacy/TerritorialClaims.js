@@ -22,6 +22,9 @@ export function ensureDisputes(state) {
   const m = ensureMilitary(state);
   if (!m.disputes.length) {
     for (const land of DISPUTED_LANDS) m.disputes.push({ id: land.id, name: land.name, claimants: [...land.claimants], controller: land.controller, tension: 2, status: 'DORMANT', failures: 0, history: [], causes: [] });
+    // Whoever holds a land at the founding collects the tolls on its road.
+    const d = ensureDiplomacy(state);
+    d.territory = { ...(d.territory ?? {}), ...Object.fromEntries(DISPUTED_LANDS.map((l) => [l.route, l.controller])) };
   }
   return m.disputes;
 }

@@ -164,14 +164,39 @@ function inspections(state) {
     }
   }
   if (lawInForce(state, 'licensing')) {
+    const took = [];
     for (const b of state.businesses) {
       if (!isTrading(b) || b.licensed || b.ownerId === 'council' || law.claims.some((c) => c.kind === 'licence' && c.defendantId === b.id && !c.filed) || law.cases.some((c) => c.kind === 'licence' && c.defendant.id === b.id && c.status !== 'JUDGED')) continue;
-      claim(state, { kind: 'licence', law: 'licensing', claimantId: 'council', defendantId: b.id, amount: 10, evidence: [{ type: 'registry', text: `${b.name} trading on day ${state.day} with no licence on the council's register.` }] });
+      // The inspector first orders an unlicensed shop to take out a licence (a shop that
+      // opened before the law had no chance to); it takes one out at once if it can pay.
+      if (b.licenceOrderDay === undefined || b.licenceOrderDay < lawStart(state, 'licensing')) {
+        b.licenceOrderDay = state.day;
+        if (buyLicence(state, b)) { took.push(b.name); continue; }
+      }
+      if (buyLicence(state, b)) continue;
+      // Only an order ignored past its grace period goes to court.
+      if (state.day - b.licenceOrderDay <= LICENCE_GRACE_DAYS) continue;
+      claim(state, { kind: 'licence', law: 'licensing', claimantId: 'council', defendantId: b.id, amount: 10, evidence: [
+        { type: 'inspection', text: `${b.name} was ordered to take out a licence on day ${b.licenceOrderDay}.` },
+        { type: 'registry', text: `${b.name} trading on day ${state.day} with no licence on the council's register.` }] });
     }
+    if (took.length) record(state, 'law', `${took.length === 1 ? took[0] : `${took.length} shops`} took out ${took.length === 1 ? 'a licence' : 'licences'} when the council's inspector called.`, {}, 1);
   }
 }
 
 const lawStart = (state, key) => ensureLaw(state).laws.find((l) => l.key === key)?.effectiveDay ?? state.day;
+
+export const LICENCE_FEE = 6;
+export const LICENCE_GRACE_DAYS = 6;
+
+/** A trading business takes out a licence, paid from its till (or its owner's purse). Returns true when licensed. */
+export function buyLicence(state, b) {
+  if (b.licensed) return true;
+  for (const acct of [b.id, b.ownerId].filter((a) => a && a !== 'council')) {
+    if (balance(state, acct) >= LICENCE_FEE && transfer(state, acct, 'treasury', LICENCE_FEE, 'tax', `Licence for ${b.name}`)) { b.licensed = true; return true; }
+  }
+  return false;
+}
 
 // --- Judges and hearings --------------------------------------------------------
 
@@ -187,14 +212,34 @@ export function appointJudge(state) {
   return pick;
 }
 
+/**
+ * Hearings a day: one in the hall (two in a courthouse), and as cases pile up
+ * the judge sits longer and councillors hear the lesser cases in the hall,
+ * up to MAX_EXTRA_HEARINGS more.
+ */
+export const MAX_EXTRA_HEARINGS = 4;
+export const CASES_PER_EXTRA_HEARING = 5;
+/** Seats for hearings: one in the hall, two in a courthouse. */
 export const courtCapacity = (state) => (state.plots.some((p) => p.building?.type === 'courthouse') ? 2 : 1);
+export function hearingsPerDay(state) {
+  const base = courtCapacity(state);
+  const waiting = (state.law?.cases ?? []).filter((c) => c.status === 'FILED' || c.status === 'SCHEDULED').length;
+  return base + Math.min(MAX_EXTRA_HEARINGS, Math.floor(waiting / CASES_PER_EXTRA_HEARING));
+}
+
+/** Unpaid wages are heard first (a worker cannot wait for their pay), then the rest in filing order. */
+const PRIORITY = { wages: 0 };
+const caseNo = (c) => Number(c.id.slice(4));
 
 function schedule(state) {
   const law = ensureLaw(state);
-  const cap = courtCapacity(state);
+  const cap = hearingsPerDay(state);
   const booked = {};
-  for (const c of law.cases) if (c.status === 'SCHEDULED') booked[c.hearingDay] = (booked[c.hearingDay] ?? 0) + 1;
-  for (const c of law.cases.filter((x) => x.status === 'FILED')) {
+  // Today's hearings stand; everything later is re-planned each day, so new wage claims go ahead of the queue.
+  for (const c of law.cases) if (c.status === 'SCHEDULED' && c.hearingDay <= state.day) booked[c.hearingDay] = (booked[c.hearingDay] ?? 0) + 1;
+  const queue = law.cases.filter((x) => x.status === 'FILED' || (x.status === 'SCHEDULED' && x.hearingDay > state.day))
+    .sort((a, b) => (PRIORITY[a.kind] ?? 1) - (PRIORITY[b.kind] ?? 1) || a.filedDay - b.filedDay || caseNo(a) - caseNo(b));
+  for (const c of queue) {
     let day = state.day + 1;
     while ((booked[day] ?? 0) >= cap) day++;
     booked[day] = (booked[day] ?? 0) + 1;

@@ -1,7 +1,7 @@
 import { dateLabel } from '../core/Calendar.js';
 import { byId } from '../core/EntityRegistry.js';
 import { LAWS } from '../law/LegalCode.js';
-import { courtCapacity } from '../law/Courts.js';
+import { courtCapacity, hearingsPerDay } from '../law/Courts.js';
 import { esc, capital } from './util.js';
 
 // Politics → Laws & courts: the code in force, bills, the court's docket and
@@ -19,7 +19,7 @@ export function lawPanel(sim) {
   const html = `
   <div class="card"><dl class="kv">
     <dt>Judge</dt><dd>${judge ? esc(`${judge.firstName} ${judge.lastName}`) : 'none yet'}</dd>
-    <dt>Court sits</dt><dd>${courtCapacity(s) > 1 ? 'in the courthouse, two cases a day' : 'in the hall, one case a day'}</dd>
+    <dt>Court sits</dt><dd>${courtCapacity(s) > 1 ? 'in the courthouse' : 'in the hall'}, ${hearingsPerDay(s) === 1 ? 'one case a day' : `${hearingsPerDay(s)} cases a day`}${hearingsPerDay(s) > courtCapacity(s) ? ' (extra sittings while cases wait)' : ''}</dd>
     <dt>Cases waiting</dt><dd>${docket.length}</dd>
     <dt>Judged</dt><dd>${L.stats.judged} (${L.stats.dismissed} dismissed)</dd>
     <dt>Fines / restitution</dt><dd>${L.stats.fines}🪙 / ${L.stats.restitution}🪙</dd>

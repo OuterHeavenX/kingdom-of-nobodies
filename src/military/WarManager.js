@@ -36,6 +36,12 @@ export const besieged = (state, p) => (siegeAt(state, p) ? p : null);
 /** Combined strength of a coalition, as a ruler weighing war would reckon it. */
 const coalition = (state, parties) => parties.reduce((s, p) => s + potentialStrength(state, p), 0);
 
+/** The strength ratio over the enemy a ruler of this temper (plus need) wants before going to war. */
+export const warOdds = (drive) => Math.max(0.95, Math.min(1.15, 1.15 - (drive - 0.75) * 0.4));
+
+/** A side's standing in a war: the points won by every party fighting on it, allies included. */
+export const sideScore = (war, side) => war[side].reduce((s, p) => s + (war.score[p] ?? 0), 0);
+
 /**
  * Talks over a dispute have failed: does the claimant go to war? Returns the war or null.
  * The decision is explained in the Chronicle either way when it is close.
@@ -55,9 +61,11 @@ export function considerWar(state, dispute) {
   const mine = coalition(state, [aggressor, ...friends]);
   const theirs = coalition(state, [target, ...shield]);
   const rich = balance(state, partyAccount(aggressor)) > 600;
-  const go = temper + need > 0.75 && rich && mine > theirs * 1.15;
+  // A cautious ruler wants clearly better odds; a bold or desperate one gambles on a closer fight.
+  const odds = warOdds(temper + need);
+  const go = temper + need > 0.75 && rich && mine > theirs * odds;
   if (!go) {
-    if (temper + need > 0.75 && shield.length && mine <= theirs * 1.15) {
+    if (temper + need > 0.75 && shield.length && mine <= theirs * odds) {
       diplomacyNote(state, `${name(aggressor)} weighed war over ${dispute.name} but held back: ${name(target)}'s alliance with ${shield.map(name).join(' and ')} made the odds too poor.`, 2);
       dispute.deterred = (dispute.deterred ?? 0) + 1;
     }
@@ -133,22 +141,29 @@ export function dailyWar(state) {
     for (const a of armies.filter((x) => x.status === 'READY')) orderMarch(state, a, war.field, 'campaign');
     // Battles in the field.
     const camp = armies.filter((a) => a.status === 'ENCAMPED' && a.field === war.field.route);
-    const att = camp.filter((a) => war.attackers.includes(a.owner)).sort((x, y) => y.soldiers - x.soldiers);
-    const def = camp.filter((a) => war.defenders.includes(a.owner)).sort((x, y) => y.soldiers - x.soldiers);
+    const att = camp.filter((a) => war.attackers.includes(a.owner)).sort((x, y) => y.soldiers - x.soldiers || x.id.localeCompare(y.id));
+    const def = camp.filter((a) => war.defenders.includes(a.owner)).sort((x, y) => y.soldiers - x.soldiers || x.id.localeCompare(y.id));
     if (att.length && def.length) {
-      const battle = resolveBattle(state, att[0], def[0], { routeId: war.field.route, war });
-      const loser = battle.winner === att[0].owner ? def[0] : att[0];
-      orderMarch(state, loser, { kind: 'settlement', id: loser.owner }, 'retreat');
-      for (const other of (loser === att[0] ? att : def).slice(1)) if (other.morale < 0.4) orderMarch(state, other, { kind: 'settlement', id: other.owner }, 'retreat');
+      // Every army encamped on the field fights: allies stand together. The side that
+      // reached the field first chose its position and has the ground; arriving together, neither has.
+      const first = (xs) => Math.min(...xs.map((x) => x.arrivedDay ?? state.day));
+      const ground = first(att) < first(def) ? 'attacker' : first(def) < first(att) ? 'defender' : 'none';
+      const battle = resolveBattle(state, att[0], def[0], { routeId: war.field.route, war, attackerAllies: att.slice(1), defenderAllies: def.slice(1), ground });
+      const beaten = war.attackers.includes(battle.loser) ? att : def;
+      for (const x of beaten) orderMarch(state, x, { kind: 'settlement', id: x.owner }, 'retreat');
       // The beaten side raises a fresh army if it still can.
-      if (loser.owner === (war.attackers.includes(loser.owner) ? war.attackers[0] : war.defenders[0])) mobilise(state, war, loser.owner);
+      const lead = beaten === att ? war.attackers[0] : war.defenders[0];
+      if (beaten.some((x) => x.owner === lead)) mobilise(state, war, lead);
     } else if (att.length && !def.length && state.day - (att[0].arrivedDay ?? state.day) >= 3) {
       // Holding the field unopposed: the land is occupied; a strong host marches on the enemy capital.
       if (!war.occupied) { war.occupied = state.day; war.score[att[0].owner] = (war.score[att[0].owner] ?? 0) + 2; record(state, 'diplomacy', `${name(att[0].owner)}'s army occupied ${war.field.name}.`, {}, 2); }
       const capital = war.defenders[0];
       if (!siegeAt(state, capital) && potentialStrength(state, capital) * 0.6 < att[0].soldiers && !armies.some((a) => war.defenders.includes(a.owner) && a.status !== 'HOME')) orderMarch(state, att[0], { kind: 'settlement', id: capital }, 'campaign');
-    } else if (def.length && !att.length && armies.every((a) => !war.attackers.includes(a.owner) || ['RETREATING', 'HOME'].includes(a.status))) {
-      war.score[def[0].owner] = (war.score[def[0].owner] ?? 0) + 0.5;
+    } else if (def.length && !att.length && !war.held && state.day - (def[0].arrivedDay ?? state.day) >= 3 && armies.every((a) => !war.attackers.includes(a.owner) || ['RETREATING', 'HOME'].includes(a.status))) {
+      // Holding the field after the invaders have fallen back counts once, as an occupation does for the attacker.
+      war.held = state.day;
+      war.score[def[0].owner] = (war.score[def[0].owner] ?? 0) + 2;
+      record(state, 'diplomacy', `${name(def[0].owner)}'s army held ${war.field.name} after the invaders fell back.`, {}, 2);
     }
     // An attacking army that reaches the enemy's town besieges it.
     for (const a of armies.filter((x) => x.status === 'ENCAMPED' && x.at && enemiesOf(war, x.owner).includes(x.at))) beginSiege(state, a, war);
@@ -188,7 +203,7 @@ function considerPeace(state, war) {
   if (war.spent) return makePeace(state, war, { reason: 'neither side could field another army' });
   if (!isNewSeason(state.day) || days < 3) return null;
   const tired = Math.max(...sides(war).map((p) => exhaustion(state, war, p)));
-  const lead = Math.abs((war.score[war.attackers[0]] ?? 0) - (war.score[war.defenders[0]] ?? 0));
+  const lead = Math.abs(sideScore(war, 'attackers') - sideScore(war, 'defenders'));
   const odds = Math.min(0.9, tired * 0.6 + lead * 0.05);
   if (nextRandom(state) < odds) return makePeace(state, war, { reason: lead >= 3 ? 'the losing side sued for peace' : 'envoys found terms both could accept' });
   return null;
@@ -203,7 +218,8 @@ function considerPeace(state, war) {
 export function makePeace(state, war, { winner = null, reason }) {
   if (war.status !== 'ACTIVE') return null;
   const a = war.attackers[0], d = war.defenders[0];
-  const sa = war.score[a] ?? 0, sd = war.score[d] ?? 0;
+  // Allies' victories count for the side they fought on.
+  const sa = sideScore(war, 'attackers'), sd = sideScore(war, 'defenders');
   winner = winner ?? (sa - sd >= 2 ? a : sd - sa >= 2 ? d : null);
   const dispute = disputeById(state, war.disputeId);
   const terms = [];
