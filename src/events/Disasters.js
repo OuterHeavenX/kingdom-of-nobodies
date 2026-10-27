@@ -11,6 +11,7 @@ import { ageOf } from '../citizens/Citizen.js';
 import { record } from '../society/Chronicle.js';
 import { remember } from '../ai/MemorySystem.js';
 import { achieve } from '../citizens/Citizen.js';
+import { seedOf } from '../civilization/ArchitectureData.js';
 
 
 /** Later medicine and sanitation lower disease and infant deaths; set by civilization/. */
@@ -56,7 +57,8 @@ export function dailyDisasters(state) {
     if (!p.building || p.building.type === 'ruins' || p.building.type === 'well' || p.projectId || state.fires.some((f) => f.plotId === p.id)) continue;
     // Brick, concrete and steel burn far less readily than timber and thatch.
     let risk = EVENTS.fireDailyPerBuilding * (FLAMMABLE[p.building.type] ?? 1) * ([1, 1, 0.6, 0.3, 0.18, 0.12][p.building.era ?? 1] ?? 1) * (winter ? 1.6 : 1) * (s.harshWinter ? 1.3 : 1) * (nearWell(state, p) ? 0.6 : 1) * ((p.building.condition ?? 100) < 50 ? 1.5 : 1) * (lawInForce(state, 'safety') ? 0.8 : 1) * fireWeather(state);
-    if (chance(state, risk)) igniteFire(state, p);
+    // A fire breaks out at some hour of the day, not all at midnight when everyone is asleep.
+    if (chance(state, risk) && !state.fireSchedule?.some((f) => f.plotId === p.id)) (state.fireSchedule ?? (state.fireSchedule = [])).push({ plotId: p.id, day: state.day, hour: intRange(state, 0, 23) });
   }
   maybeOutbreak(state);
   for (const p of state.plots) if (p.building) p.building.condition = p.building.condition ?? 100;
@@ -71,14 +73,38 @@ export function igniteFire(state, plot, spreadFrom = null) {
   plotHistory(state, plot, 'A fire broke out.');
 }
 
+/** Hourly: start the fires due this hour (if the building is still there to burn). */
+function igniteScheduled(state) {
+  if (!state.fireSchedule?.length) return;
+  const hour = Math.floor(state.minute / 60);
+  const due = state.fireSchedule.filter((f) => f.day < state.day || f.hour <= hour);
+  if (!due.length) return;
+  state.fireSchedule = state.fireSchedule.filter((f) => !due.includes(f));
+  if (!state.fireSchedule.length) delete state.fireSchedule;
+  state.fires = state.fires ?? [];
+  for (const f of due) {
+    const p = state.plots.find((x) => x.id === f.plotId);
+    if (!p?.building || p.building.type === 'ruins' || p.building.type === 'well' || p.projectId || state.fires.some((x) => x.plotId === p.id)) continue;
+    igniteFire(state, p);
+  }
+}
+
+/** Everyone who fought a fire: those who finished a turn at it and those still at it now. */
+export function fireResponders(state, fire) {
+  const ids = new Set(fire.responders);
+  for (const c of state.citizens) if (c.activity?.kind === 'fight_fire' && c.activity.phase === 'perform' && c.activity.plotId === fire.plotId) ids.add(c.id);
+  return [...ids].filter((id) => state.citizens.some((c) => c.id === id));
+}
+
 /** Hourly: resolve fires that have burned long enough, given how many people fought them. */
 export function updateFires(state) {
+  igniteScheduled(state);
   for (const fire of [...(state.fires ?? [])]) {
     if (state.tick - fire.startTick < EVENTS.fireDurationTicks) continue;
     state.fires = state.fires.filter((f) => f !== fire);
     const plot = state.plots.find((p) => p.id === fire.plotId);
     if (!plot?.building) continue;
-    const responders = [...new Set(fire.responders)].filter((id) => state.citizens.some((c) => c.id === id));
+    const responders = fireResponders(state, fire);
     const protection = Math.min(0.85, responders.length * 0.14 + (nearWell(state, plot) ? 0.2 : 0));
     const damage = Math.round(fire.severity * (1 - protection));
     plot.building.condition = Math.max(0, (plot.building.condition ?? 100) - damage);
@@ -113,7 +139,8 @@ function destroyBuilding(state, plot, heroes) {
     if (c) { c.homePlotId = null; remember(state, c, `Lost my home to fire.`, 3, 'loss'); c.mood = Math.max(0, c.mood - 20); }
   }
   plot.residents = [];
-  plot.building = { type: 'ruins', name: `Ruins of ${label.replace(/^Empty /, '')}`, builtDay: state.day, condition: 0, was: old.type };
+  // Ruins keep the burned building's architectural era, so Then & Now compares like with like.
+  plot.building = { type: 'ruins', name: `Ruins of ${label.replace(/^Empty /, '')}`, builtDay: state.day, condition: 0, was: old.type, era: old.era ?? 1, seed: seedOf(`${plot.id}:ruins:${state.day}`) };
   plot.businessId = null;
   plot.constructionStatus = 'COMPLETE';
   season(state).troubledUntil = state.day + DAYS_PER_YEAR / 2;
@@ -153,7 +180,10 @@ function maybeOutbreak(state) {
   const crowding = state.citizens.length / Math.max(1, beds);
   const risk = EVENTS.diseaseDailyChance * (0.5 + crowding) * (wells(state).length ? 0.6 : 1.2) * (state.discoveries?.sanitation ? 0.5 : 1) * (healthHooks.disease?.(state) ?? 1) * (seasonOf(state.day) === 'Winter' ? 1.5 : 1);
   if (state.citizens.length < 8 || !chance(state, risk)) return;
-  const victims = state.citizens.filter((c) => c.health.immuneUntil <= state.day).sort(() => nextRandom(state) - 0.5).slice(0, 2);
+  // A partial Fisher–Yates draw: unbiased, and the same number of random draws on every engine.
+  const pool = state.citizens.filter((c) => c.health.immuneUntil <= state.day);
+  for (let i = 0; i < Math.min(2, pool.length - 1); i++) { const j = i + Math.floor(nextRandom(state) * (pool.length - i)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  const victims = pool.slice(0, 2);
   if (!victims.length) return;
   s.outbreak = { startDay: state.day, cases: 0, deaths: 0 };
   for (const v of victims) infect(state, v);

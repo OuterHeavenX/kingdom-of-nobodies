@@ -38,6 +38,7 @@ export function sweepPanels(sim, { limit = 4000 } = {}) {
   }
   for (const p of s.plots) add('plot', p.id);
   for (const b of s.businesses) add('business', b.id);
+  for (const id of Object.keys(s.businessArchive ?? {})) add('business', id);
   for (const c of s.citizens) add('citizen', c.id);
   while (queue.length && pages < limit) {
     const [kind, id] = queue.shift();

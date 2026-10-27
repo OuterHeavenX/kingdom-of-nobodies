@@ -207,11 +207,14 @@ export function generateCandidates(state, c, plan) {
   // --- Helping others ------------------------------------------------------
   const generous = trait(c, 'generous');
   if (!minor && generous > 0.3 && money >= 22 && !isNight(state)) {
-    const needy = state.citizens.filter((o) => o.id !== c.id && balance(state, o.id) < 4 && o.needs.hunger < 45)
+    // A hungry child's meals come out of the guardian's purse, so help goes to the guardian.
+    const purseOf = (o) => (o.needs.hunger >= 45 ? null : ageOf(state, o) >= LIFE.adultAge ? o : guardianOf(state, o));
+    const needy = state.citizens.filter((o) => { const w = o.id !== c.id && purseOf(o); return w && w.id !== c.id && balance(state, w.id) < 4; })
       .sort((a, b) => (peekRel(state, c.id, b.id)?.friendship ?? 0) - (peekRel(state, c.id, a.id)?.friendship ?? 0))[0];
     if (needy) {
       const s = 32 + generous * 40;
-      out.push(candidate('help', s, [[`${needy.firstName} is hungry and nearly penniless`, 32], ['I believe in helping neighbours', generous * 40]], { citizenId: needy.id }));
+      const payee = purseOf(needy);
+      out.push(candidate('help', s, [[payee === needy ? `${needy.firstName} is hungry and nearly penniless` : `${needy.firstName} is hungry and ${payee.firstName} cannot afford to feed them`, 32], ['I believe in helping neighbours', generous * 40]], { citizenId: needy.id, payeeId: payee.id }));
     }
   }
 

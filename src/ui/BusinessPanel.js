@@ -48,7 +48,7 @@ export function economyOverview(sim) {
 
 export function businessDetail(sim, id) {
   const s = sim.state;
-  const b = s.businesses.find((x) => x.id === id);
+  const b = s.businesses.find((x) => x.id === id) ?? s.businessArchive?.[id]; // long-closed ones are archived
   if (!b) return { title: 'Business', html: '<p class="empty">Not found.</p>' };
   const def = BUSINESS_TYPES[b.type];
   const owner = s.citizens.find((c) => c.id === b.ownerId);

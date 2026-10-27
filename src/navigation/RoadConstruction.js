@@ -53,6 +53,7 @@ export function estimate(kind, w, d) {
 
 function propose(state, spec) {
   state.roadProjects = state.roadProjects ?? [];
+  trimRoadRecords(state);
   const open = state.roadProjects.filter((p) => p.status === 'PROPOSED' || p.status === 'BUILDING' || p.status === 'APPROVED');
   if (open.length >= MAX_PROPOSALS && !spec.preApproved) return null;
   const rect = roadRect(spec);
@@ -245,9 +246,17 @@ function completeRoad(state, p) {
   for (const fn of roadCompletionHooks) fn(state, p);
   const names = (p.crew ?? []).map((id) => byId(state.citizens, id)?.firstName).filter(Boolean);
   record(state, 'construction', `${p.name} is finished after ${state.day - p.startDay} days of work${names.length ? ` by ${names.join(', ')}` : ''}, costing the council ${p.paid} coins.`, { citizens: p.crew ?? [] }, p.kind === 'bridge' ? 3 : 2);
-  // Keep the record list bounded.
-  const done = state.roadProjects.filter((x) => (x.status === 'COMPLETE' || x.status === 'REJECTED') && x !== p);
-  if (done.length > 30) state.roadProjects = state.roadProjects.filter((x) => !done.slice(0, done.length - 30).includes(x));
+  trimRoadRecords(state, p);
+}
+
+/**
+ * Keep the record list bounded: the 30 most recent finished or rejected
+ * projects are kept (plus `keep`). Called on completion and on every
+ * proposal, so rejections pile up no further when no road is being finished.
+ */
+function trimRoadRecords(state, keep = null) {
+  const done = state.roadProjects.filter((x) => (x.status === 'COMPLETE' || x.status === 'REJECTED') && x !== keep);
+  if (done.length > 30) { const drop = new Set(done.slice(0, done.length - 30)); state.roadProjects = state.roadProjects.filter((x) => !drop.has(x)); }
 }
 
 /** Where a works-crew member stands while building the active road. */

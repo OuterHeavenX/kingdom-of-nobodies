@@ -21,7 +21,7 @@ import { archiveCitizen } from '../history/Archive.js';
 import { villageFood } from '../economy/Marketplace.js';
 import { record } from '../society/Chronicle.js';
 import { remember } from '../ai/MemorySystem.js';
-import { invalidateIds } from '../core/EntityRegistry.js';
+import { invalidateIds, byId } from '../core/EntityRegistry.js';
 import { ageOn } from '../core/Calendar.js';
 import { KINGDOMS, HEARTH } from '../region/RegionData.js';
 import { relationScore, noteMigration } from '../diplomacy/Diplomacy.js';
@@ -169,6 +169,9 @@ export function maybeEmigrate(state) {
     c.unhappyDays = struggling ? (c.unhappyDays ?? 0) + 1 : 0;
     c.joblessDays = !c.employment && !c.retired ? (c.joblessDays ?? 0) + 1 : 0;
     if (leaver || c.founder || state.government?.leaderId === c.id) continue;
+    // Nobody leaves who would take a founder or the village's leader with them.
+    const sp = c.family.spouseId ? byId(state.citizens, c.family.spouseId) : null;
+    if (sp && (sp.founder || state.government?.leaderId === sp.id)) continue;
     if (c.unhappyDays >= 6 && chance(state, 0.15)) { leaver = { c, why: 'hard times' }; continue; }
     let push = (c.joblessDays > 5 ? 0.35 : 0) + (!c.homePlotId ? 0.3 : 0) + (c.mood < 45 ? 0.2 : 0) + ((state.government?.approval ?? 60) < 30 ? 0.15 : 0) + (age < 35 ? 0.1 : 0);
     if (push < 0.3) continue;
@@ -192,12 +195,19 @@ export function maybeEmigrate(state) {
 export function maybeReturn(state) {
   if (!state.region) return null;
   const candidates = Object.values(state.archive).filter((p) => p.status === 'emigrated' && p.destination && !p.diedAbroad && ageOn(p.birthDay, state.day) < 65 && state.day - p.leftDay >= 6);
+  // Life goes on abroad: some who left die there (a season of the same mortality as at home) and never return.
   for (const p of candidates) {
+    const age = ageOn(p.birthDay, state.day);
+    if (chance(state, (LIFE.gompertzA * Math.exp(LIFE.gompertzB * age)) / 4)) { p.diedAbroad = true; p.diedAbroadDay = state.day; }
+  }
+  const alive = candidates.filter((p) => !p.diedAbroad);
+  for (const p of alive) {
     const k = state.region.settlements[p.destination];
     const kinHome = [...p.family.parentIds, ...p.family.childIds].some((id) => state.citizens.some((c) => c.id === id));
     const odds = 0.02 + (k.hunger > 0.1 ? 0.12 : 0) + (k.prosperity < 0.85 ? 0.08 : 0) + (kinHome ? 0.05 : 0);
     if (attractiveness(state).score < 0.3 || !chance(state, odds)) continue;
-    const group = candidates.filter((x) => x.destination === p.destination && x.leftDay === p.leftDay);
+    // Only the household that left together comes back together.
+    const group = alive.filter((x) => x.destination === p.destination && x.leftDay === p.leftDay && (x.householdId ?? null) === (p.householdId ?? null));
     return returnHome(state, group, k);
   }
   return null;
@@ -272,6 +282,7 @@ export function emigrate(state, c, { why = 'hard times', destination = null } = 
     for (const key of Object.keys(state.relationships)) if (key.startsWith(m.id + '|') || key.endsWith('|' + m.id)) delete state.relationships[key];
     const rec = archiveCitizen(state, m, 'emigrated', why);
     rec.destination = destination;
+    rec.householdId = c.id;
   }
   for (const m of household) { onCitizenGone(state, m); onMerchantGone(state, m, household.map((x) => x.id)); }
   const ids = new Set(household.map((m) => m.id));
@@ -280,6 +291,7 @@ export function emigrate(state, c, { why = 'hard times', destination = null } = 
   for (const o of state.citizens) {
     if (ids.has(o.romance.partnerId)) { o.romance.partnerId = null; o.family.partnerId = null; }
     if (ids.has(o.romance.courtingId)) o.romance.courtingId = null;
+    if (ids.has(o.romance.engagedTo)) o.romance.engagedTo = null; // a fiancé(e) left behind is free to marry
     if (ids.has(o.education.masterId)) o.education.masterId = null;
   }
   state.stats.emigrants += household.length;

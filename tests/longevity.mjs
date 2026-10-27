@@ -302,7 +302,7 @@ function runSeed(seed) {
     peakPopulation: peak, minPopulation: minPop, finalPopulation: s.citizens.length,
     births: s.stats.births, deaths: s.stats.deaths, immigrants: s.stats.immigrants, emigrants: s.stats.emigrants, marriages: s.stats.marriages,
     generations, elections: s.stats.elections,
-    businessesCreated: s.businesses.length, businessesClosed: s.businesses.filter((b) => !isTrading(b)).length,
+    businessesCreated: s.businesses.length + Object.keys(s.businessArchive ?? {}).length, businessesClosed: s.businesses.filter((b) => !isTrading(b)).length + Object.keys(s.businessArchive ?? {}).length,
     propertyTransfers: chron.filter((e) => /purchased|Inherited|passed to/.test(e.text)).length + s.estates.length,
     buildingsDestroyed: (s.eventLog ?? []).filter((e) => e.type === 'buildingDestroyed').length + chron.filter((e) => /burned to the ground/.test(e.text)).length,
     fires: s.stats.fires, discoveries: Object.keys(s.discoveries ?? {}).length,

@@ -61,7 +61,7 @@ export function citizenDetail(sim, id) {
   const steps = c.plan.steps ?? [];
   const firstOpen = steps.findIndex((x) => !x.done);
   const owned = ownedPlots(s, c.id);
-  const businesses = s.businesses.filter((b) => b.ownerId === c.id);
+  const businesses = [...s.businesses, ...Object.values(s.businessArchive ?? {})].filter((b) => b.ownerId === c.id);
   const relations = closestRelations(s, c.id, 5);
   const beliefs = Object.entries(c.beliefs).map(([rid, b]) => ({ rumor: s.rumors.find((r) => r.id === rid), ...b })).filter((b) => b.rumor).slice(-6).reverse();
   const carrying = Object.entries(c.inventory).filter(([, n]) => n > 0).map(([g, n]) => `${GOODS[g]?.icon ?? ''} ${n}`).join('  ');

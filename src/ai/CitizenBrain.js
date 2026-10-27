@@ -1,7 +1,7 @@
 import { enjoyFestival } from '../culture/Festivals.js';
 import { celebrationSpot, celebrated, holidayNow } from '../culture/Holidays.js';
 import { byId } from '../core/EntityRegistry.js';
-import { NEEDS, MOVE, GOODS, FOOD_GOODS, ECONOMY } from '../core/Config.js';
+import { NEEDS, MOVE, GOODS, FOOD_GOODS, ECONOMY, LIFE } from '../core/Config.js';
 import { range, chance } from '../core/Random.js';
 import { balance, transfer } from '../economy/Transactions.js';
 import { qty, removeGoods, addGoods, moveGoods } from '../economy/Inventory.js';
@@ -12,7 +12,7 @@ import { buyPlot, reservePlot } from '../property/Ownership.js';
 import { startProject, projectById, addWork, joinCrew, needsLabour, openBusiness, moveHome } from '../property/Construction.js';
 import { householdOf } from '../population/Housing.js';
 import { raiseCash } from '../finance/BankAccounts.js';
-import { plotById, plotHistory, frontOf } from '../property/LandRegistry.js';
+import { plotById, plotHistory, frontOf, bedsAt } from '../property/LandRegistry.js';
 import { socialize, adjust } from '../citizens/Relationships.js';
 import { shareGossip, createFact } from '../society/Gossip.js';
 import { bump } from '../society/Reputation.js';
@@ -175,9 +175,34 @@ function tickNeeds(state, c) {
   c.mood = clamp(c.mood + (target - c.mood) * 0.09);
 }
 
+/** Who pays for this citizen's food: their own wallet, or a minor's guardian (the council for its wards). */
+function foodPayer(state, c) {
+  if (ageOf(state, c) >= LIFE.adultAge) return c.id;
+  return guardianOf(state, c)?.id ?? 'treasury';
+}
+
+/**
+ * A fire close enough that this citizen should drop what they are doing (or
+ * wake) to fight it. Each person is alerted once per fire, so someone who
+ * decides not to go is not pulled out of every later activity.
+ */
+function fireAlarm(state, c, radius) {
+  if (!(state.fires?.length > 0) || c.health?.sickUntil > state.day || ageOf(state, c) < 14) return null;
+  const fire = state.fires.find((f) => {
+    if (f.responders.length >= 8 || f.responders.includes(c.id) || f.alerted?.includes(c.id)) return false;
+    const p = plotById(state, f.plotId);
+    return p && Math.hypot(p.x - c.x, p.z - c.z) < radius;
+  });
+  if (fire) (fire.alerted ?? (fire.alerted = [])).push(c.id);
+  return fire ?? null;
+}
+
 function shouldInterrupt(state, c, a) {
-  if (a.kind === 'eat_own' || a.kind === 'eat_stock' || a.kind === 'buy_food' || a.kind === 'sleep' || a.kind === 'cradle' || a.kind === 'rest_sick') return false;
-  if (c.needs.hunger < NEEDS.criticalHunger && (FOOD_GOODS.some((g) => qty(c.inventory, g) > 0) || balance(state, c.id) > 0)) return true;
+  // Sleepers near a fire are woken by the commotion (the very tired sleep through it).
+  if (a.kind === 'sleep') return a.phase === 'perform' && c.needs.energy > 25 && !!fireAlarm(state, c, 20);
+  if (a.kind === 'eat_own' || a.kind === 'eat_stock' || a.kind === 'buy_food' || a.kind === 'cradle' || a.kind === 'rest_sick') return false;
+  // A minor's meals are bought from the guardian's purse, not their own.
+  if (c.needs.hunger < NEEDS.criticalHunger && (FOOD_GOODS.some((g) => qty(c.inventory, g) > 0) || balance(state, foodPayer(state, c)) > 0)) return true;
   if (c.needs.energy < NEEDS.criticalEnergy) return true;
   if (a.kind === 'work') {
     const b = businessById(state, a.businessId);
@@ -185,10 +210,7 @@ function shouldInterrupt(state, c, a) {
   }
   if (a.kind === 'build' && !projectById(state, a.projectId)) return true;
   // Neighbours drop what they are doing to fight a nearby fire.
-  if (a.kind !== 'fight_fire' && (state.fires?.length ?? 0) > 0 && ageOf(state, c) >= 14 && !c.health?.sickUntil > state.day) {
-    const fire = state.fires.find((f) => { const p = plotById(state, f.plotId); return p && Math.hypot(p.x - c.x, p.z - c.z) < 30; });
-    if (fire && fire.responders.length < 8 && !fire.responders.includes(c.id)) return true;
-  }
+  if (a.kind !== 'fight_fire' && fireAlarm(state, c, 30)) return true;
   return false;
 }
 
@@ -287,7 +309,8 @@ function begin(state, c, k) {
     }
     case 'help': {
       const t = byId(state.citizens, k.citizenId);
-      return activity('help', `Helping ${t.firstName}`, { x: t.x, z: t.z }, 2, { citizenId: t.id });
+      const payee = byId(state.citizens, k.payeeId) ?? t;
+      return activity('help', `Helping ${payee.firstName}`, { x: payee.x, z: payee.z }, 2, { citizenId: payee.id, ...(payee !== t ? { forId: t.id } : {}) });
     }
     case 'celebrate': {
       const now = holidayNow(state);
@@ -298,7 +321,7 @@ function begin(state, c, k) {
     case 'festival': return activity('festival', k.seasonal ? `At the ${state.culture?.current?.name ?? 'festival'}` : 'Celebrating at the festival', square(state), 10, { seasonal: !!k.seasonal });
     case 'buy_plot': {
       if (!reservePlot(state, k.plotId, c.id)) return null;
-      return activity('buy_plot', `Buying ${plotById(state, k.plotId).name}`, hallDoor(state), 3, { plotId: k.plotId, home: !!k.home });
+      return activity('buy_plot', `Buying ${plotById(state, k.plotId).name}`, hallDoor(state), 3, { plotId: k.plotId, home: !!k.home, moveIn: !!k.moveIn });
     }
     case 'start_project': {
       const plot = plotById(state, k.plotId);
@@ -473,12 +496,13 @@ function finish(state, c) {
       const res = buyPlot(state, a.plotId, c.id);
       if (res.ok) {
         if (a.home) (c.homeVenture ?? (c.homeVenture = {})).plotId = a.plotId;
+        else if (c.venture) c.venture.plotId = a.plotId; // land bought for a home is never a business site
         if (a.moveIn) {
           const plot = plotById(state, a.plotId);
-          for (const m of householdOf(state, c)) moveHome(state, m, plot);
+          // The buyer moves in, and as much of the household as the beds allow.
+          for (const m of householdOf(state, c)) if (m === c || bedsAt(state, plot) > plot.residents.length) moveHome(state, m, plot);
           record(state, 'property', `${c.firstName} ${c.lastName} moved the household into the cottage on ${plot.name}.`, { citizens: [c.id], plot: plot.id }, 2);
         }
-        else if (c.venture) c.venture.plotId = a.plotId;
       }
       else if (!res.ok) c.decision.reason = `Could not buy: ${res.reason}.`;
       break;
