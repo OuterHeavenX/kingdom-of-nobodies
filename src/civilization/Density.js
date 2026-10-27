@@ -120,7 +120,9 @@ export function considerSchemes(state, finance = {}) {
       if (!site) break;
       site.buyerId = d.c.id;
       const cost = schemeCost(state, site, type, era);
-      if (!cost || d.money < cost.total * (type === 'tower' ? 0.6 : 0.75)) continue;
+      // A developer applies only with the whole cost in hand (cash and savings): approved schemes
+      // used to lapse when a loan for the rest was refused, after savings had been drawn out for nothing.
+      if (!cost || d.money < cost.total) continue;
       if (!chance(state, Math.min(0.7, 0.25 + d.appetite * 0.3))) continue;
       return applyForPlanning(state, { kind: 'scheme', type, era, applicantId: d.c.id, plotIds: [site.main.id], annexId: site.annex?.id ?? null, cost, purpose: 'rental' });
     }
@@ -161,8 +163,12 @@ applicationExecutors.scheme = (state, app, finance = {}) => {
   const c = byId(state.citizens, buyer);
   const cost = schemeCost(state, { main, annex, buyerId: buyer }, app.type, app.era);
   if (!cost) return 'the land is no longer available';
+  // Check the financing before touching savings: borrow any shortfall first, and draw on
+  // deposits only once the whole cost is covered.
+  const funds = () => (c && finance.funds ? finance.funds(c) : balance(state, acct));
+  if (c && funds() < cost.total && finance.borrow) finance.borrow(state, c, cost.total - funds() + 2, main);
+  if (funds() < cost.total) return 'the money could not be raised';
   if (c && balance(state, acct) < cost.total && finance.raise) finance.raise(state, c.id, cost.total);
-  if (c && balance(state, acct) < cost.total && finance.borrow) finance.borrow(state, c, cost.total - balance(state, acct) + 2, main);
   if (balance(state, acct) < cost.total) return 'the money could not be raised';
   for (const p of [main, annex].filter(Boolean)) {
     const price = acquirable(state, p, buyer);
