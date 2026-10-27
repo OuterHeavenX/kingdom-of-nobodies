@@ -94,7 +94,8 @@ test('malformed, tampered and oversized saves are rejected by the service', asyn
   const { checksum } = await import('../src/persistence/SaveValidation.js');
   bad.checksum = checksum(bad.data);
   assert.equal((await call(e, 'PUT', '/api/saves/main', t, { envelope: JSON.stringify(bad), baseRevision: 0 })).status, 400, 'invalid world');
-  const huge = 'x'.repeat(7.5 * 1024 * 1024);
+  const { MAX_SAVE_BYTES } = await import('../src/persistence/SaveValidation.js');
+  const huge = 'x'.repeat(MAX_SAVE_BYTES + 1.5 * 1024 * 1024);
   assert.equal((await call(e, 'PUT', '/api/saves/main', t, { envelope: huge, baseRevision: 0 })).status, 413);
   assert.equal((await call(e, 'PUT', '/api/saves/../etc', t, { envelope: serialize(createKingdom(3)), baseRevision: 0 })).status, 404, 'slot names are restricted');
 });

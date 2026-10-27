@@ -6,7 +6,9 @@
 // `sync` is the device's record of the last successful exchange:
 //   { revision, checksum, lastSyncedAt }
 // `local` is the summary of the save on this device, `cloud` the summary
-// stored with the cloud slot (with its `revision`), or null if none.
+// stored with the cloud slot (with its `revision`), or null if none. A local
+// save that exists but cannot be summarised never reaches here as null:
+// CloudSaveClient.plan reports it as an error instead.
 
 export function compareSaves(local, cloud, sync) {
   if (!cloud) return local ? { action: 'upload', reason: 'There is no cloud backup yet.' } : { action: 'none', reason: 'Nothing to sync.' };
@@ -15,7 +17,9 @@ export function compareSaves(local, cloud, sync) {
   const knewCloud = sync && sync.revision === cloud.revision;
   const localChanged = !sync || sync.checksum !== local.checksum;
   if (knewCloud && localChanged) return { action: 'upload', reason: 'Only this device has moved on since the last sync.' };
-  if (!localChanged && sync && cloud.revision > sync.revision) return { action: 'download', reason: 'Only the cloud has moved on (another device saved).' };
+  // Only a known revision counts: after restoring an older revision the record
+  // holds none (null), and `cloud.revision > null` must not read as "moved on".
+  if (!localChanged && Number.isInteger(sync?.revision) && cloud.revision > sync.revision) return { action: 'download', reason: 'Only the cloud has moved on (another device saved).' };
   return { action: 'conflict', reason: 'Both this device and the cloud have changed since they were last in step.', local, cloud };
 }
 

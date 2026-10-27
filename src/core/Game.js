@@ -1,7 +1,7 @@
 import { Simulation } from '../sim/Simulation.js';
 import { createKingdom } from '../sim/Setup.js';
 import { GameClock } from './GameClock.js';
-import { TIME } from './Config.js';
+import { TIME, SAVE_VERSION } from './Config.js';
 import { SaveManager } from './SaveManager.js';
 import { World, WebGLUnavailableError } from '../world/World.js';
 import { HUD } from '../ui/HUD.js';
@@ -46,7 +46,11 @@ export class Game {
 
   async start(progress = () => {}) {
     progress('Reading your saved kingdom…', 0.45);
-    const { state, source, upgradedFrom } = await this.saves.load();
+    const { state, source, upgradedFrom, future } = await this.saves.load();
+    // The newest kingdom on this device was saved by a newer version of the
+    // game. Founding a new kingdom here would bury it under fresh saves, so the
+    // game stops and asks for the update instead (reloading fetches it).
+    if (future && !state) throw new Error(`Your kingdom was saved by a newer version of the game (save format ${future.version}; this copy reads up to ${SAVE_VERSION}). It is kept safe on this device. Reload to update the game and continue it.`);
     this.loadSource = source;
     this.upgradedFrom = upgradedFrom ?? null;
     progress(source ? 'Bringing the centuries back to life…' : 'Founding a new kingdom…', 0.65);
@@ -68,6 +72,7 @@ export class Game {
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.saves.saveNow(this.sim.state); });
     window.addEventListener('pagehide', () => this.saves.saveNow(this.sim.state));
     if (source) this.hud.toasts.show(source.includes('Milestone 1') ? 'Your First Hearth village has been brought into the Living Society.' : upgradedFrom ? `Your kingdom joins the Evolution of Civilization: the ${this.sim.state.civ?.age >= 2 ? 'ages its calendar has reached are open' : 'Age of Foundations'}. A copy from before the upgrade is kept on this device.` : `Welcome back. Day ${this.sim.state.day} continues.`, { ms: 10000 });
+    if (future) this.hud.toasts.show(`A kingdom saved by a newer version of the game (format ${future.version}) is kept on this device. Update the game to open it.`, { bad: true, ms: 12000 });
     if (!state) this.save();
   }
 
