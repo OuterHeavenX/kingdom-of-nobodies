@@ -1,6 +1,7 @@
 import { farmWeather } from '../events/Weather.js';
 import { seasonIndex } from '../core/Calendar.js';
-import { ECONOMY, GOODS } from '../core/Config.js';
+import { ECONOMY, GOODS, WAGES } from '../core/Config.js';
+import { PROFESSION_FOR_BUSINESS } from '../citizens/Careers.js';
 import { openAccount } from './Transactions.js';
 import { byId } from '../core/EntityRegistry.js';
 import { harvestMultiplier } from '../events/Disasters.js';
@@ -60,6 +61,30 @@ export const producedHooks = [];
 
 export const businessById = (state, id) => byId(state.businesses, id);
 export const isTrading = (b) => b.status === 'OPEN' || b.status === 'STRUGGLING';
+
+/** Days after opening during which a business is not yet judged on its takings. */
+export const NEW_BUSINESS_GRACE_DAYS = 8;
+
+const unitCost = (good) => (good === 'ore' ? ECONOMY.oreImportPrice : Math.max(1, Math.round(GOODS[good].base * ECONOMY.wholesaleFactor)));
+
+/**
+ * Working capital a new business of this type needs to trade: its first
+ * restock of inputs (or half a shelf of resale stock), a tool if it uses one,
+ * three days of one worker's wage and the cash reserve it keeps.
+ */
+export function workingCapital(type) {
+  const def = BUSINESS_TYPES[type];
+  if (!def || def.civic) return 0;
+  let n = 3;
+  for (const [g, perBatch] of Object.entries(def.inputs)) n += perBatch * def.batchesPerShift * 3 * unitCost(g);
+  if (def.resale) for (const g of def.sells) n += Math.ceil(def.target / 2) * unitCost(g);
+  if (def.usesTools) n += unitCost('tools');
+  n += 3 * (WAGES[PROFESSION_FOR_BUSINESS[type]] ?? ECONOMY.minWage);
+  return Math.max(ECONOMY.startingCapital, Math.min(60, n));
+}
+
+/** How many businesses of one type the market supports: three in a village, more as it grows. */
+export const maxOpenOfType = (state) => ECONOMY.maxOpenPerType + Math.floor(Math.max(0, state.citizens.length - 60) / 30);
 
 export function createBusiness(state, { type, ownerId, plotId, name }) {
   const def = BUSINESS_TYPES[type];

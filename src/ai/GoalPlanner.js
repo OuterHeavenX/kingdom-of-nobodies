@@ -1,7 +1,6 @@
 import { byId } from '../core/EntityRegistry.js';
-import { ECONOMY } from '../core/Config.js';
 import { spendable } from '../finance/BankAccounts.js';
-import { BUSINESS_TYPES, businessById, isTrading } from '../economy/Businesses.js';
+import { BUSINESS_TYPES, businessById, isTrading, workingCapital, maxOpenOfType } from '../economy/Businesses.js';
 import { plotById, plotsForSale, buildingClass, BUILDING_INFO, bedsAt } from '../property/LandRegistry.js';
 import { projectById, estimateMaterialsCost, canStart } from '../property/Construction.js';
 import { ownedPlots } from '../property/Ownership.js';
@@ -91,7 +90,7 @@ const PLANNERS = {
     const ownPlot = v.plotId ? plotById(state, v.plotId) : null;
     // Never treat one's own home as a business site.
     if (ownPlot && (ownPlot.ownerId !== c.id || ownPlot.id === c.homePlotId || ownPlot.building?.type === 'cottage')) { v.plotId = null; }
-    const saturated = state.businesses.filter((x) => x.type === type && isTrading(x)).length >= ECONOMY.maxOpenPerType;
+    const saturated = state.businesses.filter((x) => x.type === type && isTrading(x)).length >= maxOpenOfType(state);
     const steps = [step('Find employment', hasEarned(c))];
     if (project) {
       const what = project.kind === 'demolition' ? 'Clear the old building' : `Build the ${label}`;
@@ -114,12 +113,18 @@ const PLANNERS = {
       return { goal: blocked ? `Wait to start work on ${ownPlot.name} (${blocked})` : steps.at(-1).label, need: 0, steps, actions };
     }
     if (saturated) {
-      steps.push(step(`Wait for room in the market (${ECONOMY.maxOpenPerType} ${label}s already)`, false));
+      steps.push(step(`Wait for room in the market (${maxOpenOfType(state)} ${label}s already)`, false));
       return { goal: 'Keep working while the market is crowded', need: 0, steps, actions };
     }
     const options = premisesOptions(state, c, type);
     const best = options[0];
-    const required = best ? best.cost + ECONOMY.startingCapital - Math.round(trait(c, 'riskTaking') * 12) : 999;
+    // Budget for the premises, fees and the working capital the business opens with. Premises
+    // that open at once (an empty shop to reopen or refit) need all of it now; a new building
+    // takes days to raise, so half is saved up front and the rest earned while it goes up.
+    // A risk-taker starts leaner, but never without most of that capital.
+    const capital = workingCapital(type);
+    const upFront = best && (best.kind === 'reopen' || best.kind === 'refit') ? capital : Math.ceil(capital / 2);
+    const required = best ? best.cost + 6 + upFront - Math.round(Math.max(0, trait(c, 'riskTaking')) * upFront * 0.25) : 999;
     steps.push(step(best ? `Save ${required} coins (have ${money})` : 'Find available land', money >= required));
     steps.push(step('Acquire premises', false), step(`Build the ${label}`, false), step('Open for business', false));
     if (best && money >= required) {

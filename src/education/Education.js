@@ -4,7 +4,7 @@ import { byId } from '../core/EntityRegistry.js';
 import { EDUCATION, LIFE } from '../core/Config.js';
 import { nextRandom, pick } from '../core/Random.js';
 import { transfer, balance } from '../economy/Transactions.js';
-import { isTrading, produce, BUSINESS_TYPES } from '../economy/Businesses.js';
+import { isTrading, produce, BUSINESS_TYPES, staffCap } from '../economy/Businesses.js';
 import { offeredWage, hire } from '../economy/Employment.js';
 import { ageOf, achieve } from '../citizens/Citizen.js';
 import { adjustBoth } from '../citizens/Relationships.js';
@@ -131,7 +131,9 @@ export function onAdulthood(state, c) {
   achieve(state, c, 'trained', `Trained as a ${t.profession.toLowerCase()}`);
   if (master?.employment) {
     const b = state.businesses.find((x) => x.id === master.employment.businessId);
-    if (b && isTrading(b) && balance(state, b.id) > offeredWage(c, b) * 3) hire(state, c, b, offeredWage(c, b));
+    // Kept on only if the premises have room for another pair of hands (the owner counts as one).
+    const room = b && b.employees.length + (b.ownerId === 'council' ? 0 : 1) < staffCap(b);
+    if (b && isTrading(b) && room && balance(state, b.id) > offeredWage(c, b) * 3) hire(state, c, b, offeredWage(c, b));
   }
 }
 
