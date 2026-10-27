@@ -45,20 +45,50 @@ export function alignment(prio, policies) {
   return s;
 }
 
-/** A voter's score for a candidate: policy match, personal ties, trust, endorsements, record. */
-export function candidateAppeal(state, voter, cand, prio) {
+/** How a voter feels about someone personally: friendship, trust, respect and rivalry (0 for a stranger). */
+export function personalTie(state, voter, person) {
+  const r = peekRel(state, voter.id, person.id);
+  return ((r?.friendship ?? 20) - 20) / 18 + ((r?.trust ?? 45) - 45) / 22 + ((r?.respect ?? 35) - 35) / 18 - (r?.rivalry ?? 0) / 15;
+}
+
+/** Personal ties count only as far as they set one candidate apart from the others, and never without limit. */
+export const TIE_WEIGHT = 1.5;
+export const tieTerm = (tie, mean) => TIE_WEIGHT * Math.tanh((tie - mean) / 4);
+
+/** Leadership shows, but with diminishing returns: a seasoned leader is not unbeatable. */
+export const leadershipTerm = (skill) => Math.sqrt(Math.max(0, Math.min(1, skill ?? 0))) * 0.8;
+
+/** Voters tire of the same leader: each consecutive term already served costs an incumbent. */
+export const FATIGUE_PER_TERM = 1.3;
+
+/**
+ * A voter's score for a candidate: policy match, personal ties (relative to
+ * the other candidates), honesty, standing, endorsements and, for the
+ * incumbent, their record in office. The record is the government's
+ * performance without the relationship terms (those are counted once, here).
+ * `tieMean` is the voter's average tie to the candidates on the ballot.
+ */
+export function candidateAppeal(state, voter, cand, prio, tieMean = null) {
   const person = state.citizens.find((c) => c.id === cand.id);
   if (!person) return -Infinity;
   if (person.id === voter.id) return 1000;
-  const r = peekRel(state, voter.id, person.id);
+  if (tieMean === null) {
+    const others = (state.government?.campaign?.candidates ?? [cand]).map((x) => state.citizens.find((c) => c.id === x.id)).filter(Boolean);
+    tieMean = others.reduce((s, c) => s + personalTie(state, voter, c), 0) / Math.max(1, others.length);
+  }
   let s = alignment(prio, cand.platform) * 2.2;
-  s += ((r?.friendship ?? 20) - 20) / 18 + ((r?.trust ?? 45) - 45) / 22 + ((r?.respect ?? 35) - 35) / 18 - (r?.rivalry ?? 0) / 15;
+  s += tieTerm(personalTie(state, voter, person), tieMean);
   s += (perceivedHonesty(state, voter, person) - 50) / 12;
-  s += (person.reputation.standing - 50) / 20 + (person.skills.leadership ?? 0) * 2;
+  // Standing is itself built from how the village regards a person, so it weighs lightly beside the ties above.
+  s += (person.reputation.standing - 50) / 40 + leadershipTerm(person.skills.leadership);
   if (cand.endorsedBy?.includes(voter.faction)) s += 2.5;
   const guild = guildOf(state, voter);
   if (guild && cand.guildBacking?.includes(guild.id)) s += guild.leaderId === cand.id ? 3 : 1.8;
-  if (cand.incumbent) s += ((state.government.approval ?? 50) - 50) / 10;
+  if (cand.incumbent) {
+    const gov = state.government;
+    s += ((gov.performance ?? gov.approval ?? 50) - 50) / 8;
+    s -= FATIGUE_PER_TERM * Math.max(1, gov.terms ?? 1);
+  }
   return s;
 }
 

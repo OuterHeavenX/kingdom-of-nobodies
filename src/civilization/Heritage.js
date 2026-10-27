@@ -12,6 +12,7 @@ import { fileClaim, judgmentHandlers } from '../law/Courts.js';
 import { plotById, BUILDING_INFO } from '../property/LandRegistry.js';
 import { landDemand } from '../city/LandDemand.js';
 import { formOf, formLabel } from './ArchitectureData.js';
+import { validOwner } from '../institutions/Registry.js';
 
 // Historic preservation. Buildings gather historic importance as they age,
 // house long-lived businesses, belong to the founders' generation or are the
@@ -156,7 +157,7 @@ export function applyForPlanning(state, app, finance = null) {
   const campaigners = state.citizens.filter((c) => ageOf(state, c) >= LIFE.adultAge && c.id !== a.applicantId && heritageAffinity(state, c, site) >= 0.45)
     .sort((x, y) => heritageAffinity(state, y, site) - heritageAffinity(state, x, site) || x.id.localeCompare(y.id));
   if (campaigners.length < 3) return approve(state, a, `only ${campaigners.length} villager${campaigners.length === 1 ? '' : 's'} objected`, finance);
-  const d = { id: 'hd' + h.nextId, appId: a.id, day: state.day, voteDay: state.day + CALENDAR.daysPerSeason, concerns: concerns.map((c) => c.why), campaigners: campaigners.slice(0, 12).map((c) => c.id), leadId: campaigners[0].id, status: 'OPEN' };
+  const d = { id: 'hd' + h.nextId, appId: a.id, day: state.day, voteDay: state.day + CALENDAR.daysPerSeason, concerns: concerns.map((c) => c.why), campaigners: campaigners.slice(0, 12).map((c) => c.id), support: campaigners.length, leadId: campaigners[0].id, status: 'OPEN' };
   h.disputes.push(d);
   if (h.disputes.length > 30) h.disputes.shift();
   a.status = 'DISPUTED';
@@ -189,7 +190,9 @@ function refuse(state, a, why) {
 
 function execute(state, a, finance) {
   const run = applicationExecutors[a.kind];
-  const err = run ? run(state, a, finance ?? state.civ.financeHook?.(state) ?? {}) : 'nobody can carry it out';
+  // Permission belongs to the applicant: if they are gone, it lapses (the executors check land and money).
+  const err = !validOwner(state, a.applicantId) ? 'the applicant is no longer here'
+    : run ? run(state, a, finance ?? state.civ.financeHook?.(state) ?? {}) : 'nobody can carry it out';
   if (err) { a.status = 'LAPSED'; a.decision = `${a.decision}; then lapsed because ${err}`; return a; }
   a.status = 'BUILDING';
   // A notable building being pulled down is remembered (and may move the council to pass a heritage law).
@@ -230,8 +233,9 @@ function councilVote(state, d, finance) {
   for (const v of panel) {
     const p = priorities(state, v);
     const rel = byId(state.citizens, a.applicantId) ? peekRel(state, v.id, a.applicantId) : null;
-    const forHeritage = heritageAffinity(state, v, site) + (d.campaigners.length / Math.max(8, state.citizens.length)) * 3;
-    const forGrowth = (p.business ?? 0) * 0.4 + (p.works ?? 0) * 0.3 + shortage * 0.08 + ((rel?.friendship ?? 20) - 20) / 80 + (a.applicantId === 'council' ? 0.3 : 0);
+    // The council weighs its own schemes like anyone else's: no thumb on the scale for itself.
+    const forHeritage = heritageAffinity(state, v, site) + ((d.support ?? d.campaigners.length) / Math.max(8, state.citizens.length)) * 3;
+    const forGrowth = (p.business ?? 0) * 0.4 + (p.works ?? 0) * 0.3 + shortage * 0.08 + ((rel?.friendship ?? 20) - 20) / 80;
     const keep = forHeritage > forGrowth;
     votes[v.id] = keep ? 'save' : 'build';
     if (keep) save++; else build++;
@@ -251,8 +255,8 @@ function councilVote(state, d, finance) {
   a.decision = `the council approved it (${names('build')} to build; ${names('save')} to save)`;
   a.decidedDay = state.day;
   const lead = byId(state.citizens, d.leadId);
-  // Under the Heritage Act the campaigners may go to court.
-  if (lawInForce(state, 'heritage') && lead && byId(state.citizens, a.applicantId)) {
+  // Under the Heritage Act the campaigners may go to court, whoever the applicant is (the council and institutions included).
+  if (lawInForce(state, 'heritage') && lead && validOwner(state, a.applicantId)) {
     const cl = fileClaim(state, { kind: 'heritage', law: 'heritage', claimantId: lead.id, defendantId: a.applicantId, amount: 0, plotId: site.id,
       evidence: [{ type: 'registry', text: `${d.concerns.join('; ')}.` }, ...d.campaigners.slice(0, 4).map((id) => ({ type: 'witness', text: `${byId(state.citizens, id)?.firstName ?? 'A villager'} objected.` }))] });
     a.status = 'IN_COURT';

@@ -14,6 +14,8 @@ import { qty, addGoods, removeGoods } from '../economy/Inventory.js';
 // government's policies decide First Hearth's own stance.
 
 export const PARTIES = [HEARTH, ...Object.keys(KINGDOMS)];
+/** Where relations settle when nothing renews them, from either side. */
+export const RELATION_BASELINE = 0;
 const nameOf = (id) => (id === HEARTH ? 'First Hearth' : KINGDOMS[id]?.name ?? id);
 const pairKey = (a, b) => [a, b].sort().join('|');
 
@@ -264,12 +266,15 @@ function seasonalDiplomacy(state) {
     }
     d.tradeLog[pairKey(a, b)] = Math.round(volume * 0.5);
   }
-  // Time softens old grudges: bitter relations drift back toward indifference.
+  // Time moves every relationship back toward its baseline: old grudges soften, and
+  // old warmth cools unless trade, treaties and favours keep renewing it.
   for (const [key, r] of Object.entries(d.relations)) {
-    if (r.score >= 0) continue;
+    const gap = RELATION_BASELINE - r.score;
+    if (Math.abs(gap) < 1) continue;
     const [a, b] = key.split('|');
-    if (embargoBetween(state, a, b)) continue;
-    adjustRelation(state, a, b, Math.max(1, Math.round(-r.score * 0.08)), 'old grievances fading with time');
+    if (gap > 0 && embargoBetween(state, a, b)) continue;
+    const step = Math.min(Math.abs(gap), Math.max(1, Math.round(Math.abs(gap) * 0.06)));
+    adjustRelation(state, a, b, Math.sign(gap) * step, gap > 0 ? 'old grievances fading with time' : 'old warmth cooling with time');
   }
   // Embargoes: protectionist leaders punish bitter rivals; they lift when tempers cool.
   for (const e of d.embargoes.filter((x) => x.status === 'ACTIVE')) {

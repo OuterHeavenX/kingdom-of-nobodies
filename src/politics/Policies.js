@@ -53,19 +53,47 @@ export function issueStance(policies) {
   return s;
 }
 
+// Programmes cost money, so a platform cannot promise every programme and low
+// taxes at once: each tax level funds a number of the costly programmes, and a
+// candidate keeps the ones they value most. The safety net (food assistance
+// and the public works crew, which keep the poorest fed and employed) and
+// licensing (which raises revenue) are not counted against it.
+export const PROGRAMME_COST = { housingSupport: 1, unemploymentAid: 1, reducedFees: 1, constructionGrants: 1, publicSchooling: 1, apprenticeshipGrants: 1 };
+export const TAX_BUDGET = { low: 1, normal: 3, high: 5 };
+const PROGRAMME_ISSUE = { housingSupport: ['welfare', 1 / 1.5], unemploymentAid: ['welfare', 1 / 1.5], reducedFees: ['business', 1], constructionGrants: ['business', 1], publicSchooling: ['education', 1], apprenticeshipGrants: ['education', 1] };
+const TAX_STANCE = { low: 1, normal: 0, high: -1 };
+
+/** Programmes switched on in a set of policies, counted against what the tax level can fund. */
+export const programmeLoad = (policies) => Object.keys(PROGRAMME_COST).reduce((n, k) => n + (policies[k] ? PROGRAMME_COST[k] : 0), 0);
+
 /** Turn a set of issue priorities (weights) into a concrete platform. */
 export function platformFor(priorities, current) {
   const p = { ...current };
-  p.taxLevel = priorities.taxes > 0.5 ? 'low' : priorities.taxes < -0.3 || priorities.welfare > 0.8 ? 'high' : 'normal';
+  const wants = {
+    housingSupport: priorities.welfare > -0.1,
+    unemploymentAid: priorities.welfare > 0.55,
+    reducedFees: priorities.business > 0.45,
+    constructionGrants: priorities.business > 0.7,
+    publicSchooling: priorities.education > 0.3,
+    apprenticeshipGrants: priorities.education > 0.6,
+  };
+  // The programmes this candidate wants, most valued first (ties in a fixed order).
+  const ranked = Object.keys(PROGRAMME_COST).filter((k) => wants[k])
+    .map((k) => ({ k, v: (priorities[PROGRAMME_ISSUE[k][0]] ?? 0) * PROGRAMME_ISSUE[k][1] }))
+    .sort((a, b) => b.v - a.v);
+  // Weigh each tax level against the programmes it could fund, and take the best bargain.
+  const lean = priorities.taxes > 0.5 ? 'low' : priorities.taxes < -0.3 || priorities.welfare > 0.8 ? 'high' : 'normal';
+  let best = null;
+  for (const level of ['low', 'normal', 'high']) {
+    const funded = ranked.slice(0, TAX_BUDGET[level]);
+    const value = (priorities.taxes ?? 0) * TAX_STANCE[level] + funded.reduce((s, x) => s + Math.max(0, x.v), 0) + (level === lean ? 0.05 : 0);
+    if (!best || value > best.value + 1e-9) best = { level, funded: new Set(funded.map((x) => x.k)), value };
+  }
+  p.taxLevel = best.level;
+  for (const k of Object.keys(PROGRAMME_COST)) p[k] = best.funded.has(k);
   p.foodAssistance = priorities.welfare > -0.85;
-  p.housingSupport = priorities.welfare > -0.1;
-  p.unemploymentAid = priorities.welfare > 0.55;
   p.publicWorks = priorities.works > -0.6;
-  p.reducedFees = priorities.business > 0.45;
-  p.constructionGrants = priorities.business > 0.7;
   p.businessLicensing = priorities.trust > 0.35;
-  p.publicSchooling = priorities.education > 0.3;
-  p.apprenticeshipGrants = priorities.education > 0.6;
   p.tariffLevel = (priorities.trade ?? 0) > 0.5 ? 'low' : (priorities.trade ?? 0) < -0.3 ? 'high' : 'normal';
   p.openDiplomacy = (priorities.trade ?? 0) > -0.45;
   return p;

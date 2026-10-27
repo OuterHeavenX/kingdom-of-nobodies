@@ -539,7 +539,8 @@ function finish(state, c) {
     }
     case 'govern': {
       c.governedDay = state.day;
-      gainSkill(c, 'leadership', 0.012);
+      // Experience in office teaches, with diminishing returns (no one masters it in one term).
+      gainSkill(c, 'leadership', 0.006 * (1 - (c.skills.leadership ?? 0)));
       gainSkill(c, 'diplomacy', 0.004);
       break;
     }
